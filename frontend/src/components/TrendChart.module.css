@@ -1,0 +1,13 @@
+.chart { height: 250px; position: relative; }
+.legend { position: absolute; z-index: 2; left: 48px; top: 10px; display: flex; gap: 18px; color: var(--text-muted); text-transform: uppercase; font: 600 .6rem/1 var(--font-display); letter-spacing: .08em; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.legend i { width: 19px; height: 3px; display: block; }
+.collisionSwatch { background: var(--selection); box-shadow: 0 4px 0 color-mix(in srgb, var(--selection) 26%, transparent); }
+.severitySwatch { background: var(--support); }
+.selectionMarker { position: absolute; z-index: 3; top: 9px; left: 31px; width: 7px; height: 7px; border: 2px solid var(--selection); background: var(--panel); animation: trend-marker-pulse 600ms 360ms ease-out both; }
+.partialMarker { position: absolute; top: 12px; right: 8px; color: var(--caution); font: 600 .65rem/1 var(--font-display); letter-spacing: .1em; }
+@keyframes trend-marker-pulse {
+  0% { opacity: 0; transform: scale(.5); box-shadow: 0 0 0 0 color-mix(in srgb, var(--selection) 70%, transparent); }
+  45% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 8px transparent; }
+  100% { opacity: 0; transform: scale(1); }
+}

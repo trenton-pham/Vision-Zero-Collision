@@ -1,0 +1,11 @@
+.frame { height: 570px; position: relative; border: 1px solid var(--border); background: #07131f; overflow: hidden; }
+.map { height: 100%; background: #07131f; }
+.frame :global(.leaflet-tile-pane) { filter: invert(1) hue-rotate(180deg) brightness(.42) contrast(1.18) saturate(.45); }
+.frame :global(.leaflet-control-zoom a) { background: var(--panel-raised); color: var(--text-primary); border-color: var(--border); border-radius: 0 !important; }
+.frame :global(.leaflet-control-attribution) { background: rgba(6,17,28,.88); color: var(--text-muted); }
+.legend { position: absolute; z-index: 450; left: 14px; bottom: 14px; padding: 10px 12px; border: 1px solid var(--border); background: rgba(6,17,28,.93); display: grid; grid-template-columns: auto auto; gap: 7px 16px; color: var(--text-muted); text-transform: uppercase; font: 500 .6rem/1 var(--font-display); letter-spacing: .08em; }
+.legend strong { grid-column: 1 / -1; color: var(--text-secondary); }
+.legend span { display: flex; align-items: center; gap: 6px; }
+.legend i { width: 14px; height: 5px; display: block; background: var(--selection); }
+.legend span:last-child i { background: var(--caution); }
+@media (max-width: 760px) { .frame { height: 390px; } }

@@ -1,12 +1,31 @@
-# Data
+# Source data exclusions
 data/cleaned/
 data/raw
 data/processed/Collision_Processed.geojson
+data/dashboard/
 
-# Streamlit app
+# Historical local backup
 app_backup.py
 
 .venv/
+.venv*/
+
+# Frontend outputs
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+frontend/.impeccable/
+
+# Python outputs
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Review captures
+.impeccable/review/
 
 # macOS
 .DS_Store

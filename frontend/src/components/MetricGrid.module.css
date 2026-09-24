@@ -1,0 +1,12 @@
+.grid { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--border); border-left: 1px solid var(--border); }
+.cell { min-height: 84px; padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.cell dt { color: var(--text-muted); text-transform: uppercase; font: 500 .67rem/1.2 var(--font-display); letter-spacing: .1em; }
+.cell dd { margin: 8px 0 0; color: var(--text-primary); font: 600 1.75rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.caution dd { color: var(--caution); }
+.fatal dd { color: var(--fatal); }
+.support dd { color: var(--support); }
+.compact { grid-template-columns: repeat(5, minmax(110px, 1fr)); }
+.compact .cell { min-height: 72px; }
+.compact .cell dd { font-size: 1.45rem; }
+@media (max-width: 900px) { .compact { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
