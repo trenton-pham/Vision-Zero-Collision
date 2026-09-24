@@ -24,6 +24,7 @@ def test_neighborhood_context_and_invalid_id() -> None:
     assert response.status_code == 200
     assert response.json()["metrics"]["name"] == "Ballard"
     assert response.json()["annual"][-1]["isPartial"] is True
+    assert response.json()["monthly"][-1]["period"] == "2026-08"
 
     invalid = client.get("/api/neighborhoods/not-a-place/context?start_year=2015&end_year=2026")
     assert invalid.status_code == 404
@@ -40,9 +41,35 @@ def test_year_validation_and_empty_citywide_filter() -> None:
     assert empty.json()["metrics"]["collisionCount"] >= 0
 
 
+def test_citywide_neighborhood_trend_contract_and_range_validation() -> None:
+    response = client.get("/api/neighborhoods/citywide-trend?start_year=2015&end_year=2026")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["scope"] == {"id": "citywide", "name": "Seattle citywide"}
+    assert body["metrics"]["collisionCount"] == 106_050
+    assert body["metrics"]["id"] == "citywide"
+    assert body["monthly"][0]["period"] == "2015-01"
+    assert body["monthly"][-1]["period"] == "2026-08"
+    assert sum(item["collisionCount"] for item in body["monthly"]) == 106_050
+    assert body["annual"][-1]["isPartial"] is True
+
+    narrow = client.get("/api/neighborhoods/citywide-trend?start_year=2025&end_year=2025")
+    assert narrow.status_code == 200
+    assert narrow.json()["metrics"]["collisionCount"] == sum(
+        item["collisionCount"] for item in narrow.json()["annual"]
+    )
+    assert len(narrow.json()["monthly"]) == 12
+    assert narrow.json()["comparison"]["status"] == "insufficient_years"
+
+    invalid = client.get("/api/neighborhoods/citywide-trend?start_year=2026&end_year=2015")
+    assert invalid.status_code == 422
+
+    parameters = client.get("/openapi.json").json()["paths"]["/api/neighborhoods/citywide-trend"]["get"]["parameters"]
+    assert "severity" not in {parameter["name"] for parameter in parameters}
+
+
 def test_all_citywide_routes() -> None:
     base = "start_year=2024&end_year=2026&severity=serious-injury&severity=fatal"
     for path in ["summary", "heatmap", "kde", "spatial-shift", "downtown-comparison"]:
         response = client.get(f"/api/citywide/{path}?{base}")
         assert response.status_code == 200, response.text
-

@@ -23,6 +23,12 @@
 .trendSection { margin-top: 18px; border: 1px solid var(--border); background: var(--panel); }
 .trendHead { min-height: 90px; padding: 16px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
 .trendHead h2 { font-size: 1.65rem; }
+.trendTitle { min-width: 0; display: flex; align-items: center; gap: 18px; }
+.grainControl { height: 38px; display: flex; flex: 0 0 auto; border: 1px solid var(--border-strong); }
+.grainControl button { min-width: 76px; height: 100%; padding: 0 12px; border: 0; border-right: 1px solid var(--border-strong); background: transparent; color: var(--text-muted); cursor: pointer; text-transform: uppercase; font: 600 .64rem/1 var(--font-display); letter-spacing: .08em; }
+.grainControl button:last-child { border-right: 0; }
+.grainControl button[aria-pressed="true"] { background: var(--panel-active); color: var(--focus); box-shadow: inset 0 -2px var(--selection); }
+.grainControl button:hover { color: var(--text-primary); }
 .comparison { display: grid; grid-template-columns: repeat(2, auto); gap: 5px 18px; text-align: right; font: 600 .76rem/1.2 var(--font-display); letter-spacing: .05em; text-transform: uppercase; }
 .comparison span { grid-column: 1 / -1; color: var(--text-muted); font-size: .62rem; letter-spacing: .1em; }
 .comparison strong { color: var(--support); }
@@ -50,5 +56,8 @@
   .inspector { border-left: 1px solid var(--border); border-top: 0; }
   .inspectorHead { min-height: 112px; }
   .trendHead { display: block; }
+  .trendTitle { display: block; }
+  .grainControl { width: 100%; margin-top: 14px; }
+  .grainControl button { flex: 1; }
   .comparison { margin-top: 18px; text-align: left; }
 }

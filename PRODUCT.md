@@ -25,6 +25,8 @@ The product joins deterministic neighborhood assignment with transparent, route-
 ## Operating Context
 
 - Neighborhood Explorer is the primary planner workspace. Map and searchable selector share one URL-backed selection state.
+- With no neighborhood selected, Neighborhood Explorer shows all-severity Seattle citywide summary statistics and trends; selecting a neighborhood replaces the inspector with local context.
+- Inspector metric grids omit the Night and Weekend distribution shares while retaining those measures in the API and other analytical views.
 - Citywide Analysis preserves the research project's heatmap, KDE, spatial-shift, and downtown-versus-outer investigations with its own year and severity controls.
 - The application is public, read-only, stateless, and served from one Docker container and one FastAPI origin.
 - Reproducible analytical artifacts are generated from the processed Parquet and neighborhood GeoJSON during the build. They are not a mutable production database.
@@ -37,9 +39,9 @@ The product joins deterministic neighborhood assignment with transparent, route-
 - The current regression baseline is 104,579 direct assignments, 1,193 nearest assignments, and 278 unassigned collisions across 106,050 spatial records.
 - Neighborhood metrics are collision count; injuries; serious injuries; fatalities; total and mean composite severity; pedestrian-involved collisions; and intersection, night, and weekend shares. Composite severity is `INJURIES + 3 × SERIOUSINJURIES + 5 × FATALITIES`.
 - Neighborhood calculations accept a selected year range and never accept or inherit citywide severity filters.
-- Annual series are zero-filled. The 2026 period is labeled “Partial through August 31, 2026” and excluded from comparisons. Trend comparison uses non-overlapping first and last three-year complete-period averages only when six complete years exist.
+- Annual and monthly series are zero-filled through the latest observed period. Annual is the default; an explicit URL-backed toggle reveals monthly observations from January 2015 through August 2026. The 2026 period is labeled as partial records received through August 31, 2026 and excluded from comparisons. Trend comparison uses non-overlapping first and last three-year complete-period averages only when six complete years exist.
 - There is no MongoDB, Express service, Streamlit UI, Folium iframe, RAG, chat, model serving, account system, or shipped model-training path.
-- URL state includes route, selected neighborhood, year range, and map metric.
+- URL state includes route, selected neighborhood, year range, map metric, and trend grain.
 
 ## Brand Commitments
 

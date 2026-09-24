@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from .data import ArtifactError, DataStore, get_store
 from .schemas import (
     CitywideSummary,
+    CitywideTrendContext,
     DatasetMeta,
     DowntownComparisonResponse,
     HeatmapResponse,
@@ -78,6 +79,11 @@ def resolve_neighborhood(
     store: Store,
 ) -> ResolveResponse:
     return store.resolve(lat, lng)
+
+
+@app.get("/api/neighborhoods/citywide-trend", response_model=CitywideTrendContext, tags=["neighborhoods"])
+def citywide_neighborhood_trend(start_year: int, end_year: int, store: Store) -> CitywideTrendContext:
+    return safe_year_call(store.citywide_trend, start_year, end_year)
 
 
 @app.get("/api/neighborhoods/{neighborhood_id}/context", response_model=NeighborhoodContext, tags=["neighborhoods"])

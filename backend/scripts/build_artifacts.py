@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 COLLISIONS = ROOT / "data/processed/Collision_Processed.parquet"
 NEIGHBORHOODS = ROOT / "data/processed/Neighborhood_Map_Atlas_Neighborhoods.geojson"
 OUTPUT = ROOT / "data/dashboard"
-VERSION = "neighborhood-context-v1"
+VERSION = "neighborhood-context-v2"
 EXPECTED_TOTAL = 106_050
 EXPECTED_NEIGHBORHOODS = 94
 EXPECTED_ASSIGNMENTS = {"direct": 104_579, "nearest": 1_193, "unassigned": 278}
@@ -95,21 +95,22 @@ def assign(points: gpd.GeoDataFrame, polygons: gpd.GeoDataFrame) -> pd.DataFrame
     return assigned
 
 
-def aggregate_annual(frame: pd.DataFrame, polygons: gpd.GeoDataFrame) -> pd.DataFrame:
-    years = range(int(frame["YEAR"].min()), int(frame["YEAR"].max()) + 1)
-    index = pd.MultiIndex.from_product([polygons["id"], years], names=["neighborhood_id", "YEAR"])
-    assigned = frame[frame["neighborhood_id"].notna()].copy()
-    assigned["severity_score"] = (
-        assigned["INJURIES"].fillna(0)
-        + 3 * assigned["SERIOUSINJURIES"].fillna(0)
-        + 5 * assigned["FATALITIES"].fillna(0)
+def add_metric_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    enriched = frame.copy()
+    enriched["severity_score"] = (
+        enriched["INJURIES"].fillna(0)
+        + 3 * enriched["SERIOUSINJURIES"].fillna(0)
+        + 5 * enriched["FATALITIES"].fillna(0)
     )
-    assigned["pedestrian_collision"] = assigned["PEDCOUNT"].fillna(0).gt(0)
-    assigned["intersection"] = assigned["JUNCTIONTYPE"].fillna("").str.startswith("At Intersection")
-    assigned["night"] = assigned["HOUR"].lt(6) | assigned["HOUR"].ge(20)
-    assigned["weekend"] = assigned["Day_of_Week"].isin(["Saturday", "Sunday"])
+    enriched["pedestrian_collision"] = enriched["PEDCOUNT"].fillna(0).gt(0)
+    enriched["intersection"] = enriched["JUNCTIONTYPE"].fillna("").str.startswith("At Intersection")
+    enriched["night"] = enriched["HOUR"].lt(6) | enriched["HOUR"].ge(20)
+    enriched["weekend"] = enriched["Day_of_Week"].isin(["Saturday", "Sunday"])
+    return enriched
 
-    annual = assigned.groupby(["neighborhood_id", "YEAR"], observed=True).agg(
+
+def aggregate_metrics(frame: pd.DataFrame, groups: list[str]) -> pd.DataFrame:
+    return frame.groupby(groups, observed=True).agg(
         collision_count=("INCKEY", "size"),
         injuries=("INJURIES", "sum"),
         serious_injuries=("SERIOUSINJURIES", "sum"),
@@ -120,9 +121,50 @@ def aggregate_annual(frame: pd.DataFrame, polygons: gpd.GeoDataFrame) -> pd.Data
         night_collisions=("night", "sum"),
         weekend_collisions=("weekend", "sum"),
     )
-    annual = annual.reindex(index, fill_value=0).reset_index()
-    annual["mean_severity"] = annual["total_severity"].div(annual["collision_count"].replace(0, pd.NA))
+
+
+def add_mean_severity(frame: pd.DataFrame) -> pd.DataFrame:
+    frame = frame.copy()
+    frame["mean_severity"] = frame["total_severity"].div(frame["collision_count"].replace(0, pd.NA))
+    return frame
+
+
+def aggregate_annual(frame: pd.DataFrame, polygons: gpd.GeoDataFrame) -> pd.DataFrame:
+    years = range(int(frame["YEAR"].min()), int(frame["YEAR"].max()) + 1)
+    enriched = add_metric_columns(frame)
+    assigned = enriched[enriched["neighborhood_id"].notna()]
+    index = pd.MultiIndex.from_product([polygons["id"], years], names=["neighborhood_id", "YEAR"])
+    neighborhoods = aggregate_metrics(assigned, ["neighborhood_id", "YEAR"])
+    neighborhoods = neighborhoods.reindex(index, fill_value=0).reset_index()
+
+    citywide = aggregate_metrics(enriched, ["YEAR"]).reset_index()
+    citywide.insert(0, "neighborhood_id", "citywide")
+    annual = pd.concat([neighborhoods, citywide], ignore_index=True)
+    annual = add_mean_severity(annual).sort_values(["neighborhood_id", "YEAR"]).reset_index(drop=True)
     return annual
+
+
+def aggregate_monthly(frame: pd.DataFrame, polygons: gpd.GeoDataFrame) -> pd.DataFrame:
+    enriched = add_metric_columns(frame)
+    enriched["period"] = pd.to_datetime({
+        "year": enriched["YEAR"].astype(int),
+        "month": enriched["MONTH"].astype(int),
+        "day": 1,
+    }).dt.to_period("M")
+    periods = pd.period_range(enriched["period"].min(), enriched["period"].max(), freq="M")
+    assigned = enriched[enriched["neighborhood_id"].notna()]
+    index = pd.MultiIndex.from_product([polygons["id"], periods], names=["neighborhood_id", "period"])
+    neighborhoods = aggregate_metrics(assigned, ["neighborhood_id", "period"])
+    neighborhoods = neighborhoods.reindex(index, fill_value=0).reset_index()
+
+    citywide = aggregate_metrics(enriched, ["period"]).reset_index()
+    citywide.insert(0, "neighborhood_id", "citywide")
+    monthly = pd.concat([neighborhoods, citywide], ignore_index=True)
+    monthly = add_mean_severity(monthly).sort_values(["neighborhood_id", "period"]).reset_index(drop=True)
+    monthly["YEAR"] = monthly["period"].dt.year.astype(int)
+    monthly["MONTH"] = monthly["period"].dt.month.astype(int)
+    monthly["period"] = monthly["period"].astype(str)
+    return monthly
 
 
 def build(output: Path, enforce_baseline: bool = True) -> dict[str, object]:
@@ -137,6 +179,7 @@ def build(output: Path, enforce_baseline: bool = True) -> dict[str, object]:
     output.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(output / "collisions_assigned.parquet", index=False)
     aggregate_annual(frame, polygons).to_parquet(output / "neighborhood_annual.parquet", index=False)
+    aggregate_monthly(frame, polygons).to_parquet(output / "context_monthly.parquet", index=False)
 
     clean_geojson = json.loads(polygons[["id", "name", "L_HOOD", "geometry"]].to_json())
     for feature in clean_geojson["features"]:
@@ -173,4 +216,3 @@ if __name__ == "__main__":
     args = parser.parse_args()
     result = build(args.output, enforce_baseline=not args.allow_baseline_drift)
     print(json.dumps(result, indent=2))
-

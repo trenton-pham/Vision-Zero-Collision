@@ -6,7 +6,7 @@ import { useDashboardParams } from '../lib/useUrlState'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodMap } from '../components/NeighborhoodMap'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
-import { EmptyState, ErrorState, LoadingState } from '../components/States'
+import { ErrorState, LoadingState } from '../components/States'
 import { TrendChart } from '../components/TrendChart'
 import styles from './NeighborhoodExplorer.module.css'
 
@@ -33,12 +33,17 @@ export function NeighborhoodExplorer() {
     queryFn: ({ signal }) => api.neighborhoodContext(state.neighborhood!, state.startYear, state.endYear, signal),
     enabled: Boolean(state.neighborhood),
   })
+  const citywideTrend = useQuery({
+    queryKey: ['citywide-neighborhood-trend', state.startYear, state.endYear],
+    queryFn: ({ signal }) => api.citywideNeighborhoodTrend(state.startYear, state.endYear, signal),
+    enabled: !state.neighborhood,
+  })
 
   function select(id: string | null, name?: string | null) {
     queryClient.removeQueries({ queryKey: ['neighborhood-context'] })
     state.setNeighborhood(id)
     setSelectionPulse((value) => value + 1)
-    setAnnouncement(id ? `${name ?? id} selected. Neighborhood statistics updated.` : 'Neighborhood selection cleared.')
+    setAnnouncement(id ? `${name ?? id} selected. Neighborhood statistics updated.` : 'Neighborhood selection cleared. Seattle citywide statistics restored.')
   }
 
   async function resolve(lat: number, lng: number) {
@@ -56,6 +61,20 @@ export function NeighborhoodExplorer() {
 
   const initialLoading = geo.isLoading || summary.isLoading
   const initialError = geo.error ?? summary.error
+  const trendData = state.neighborhood ? context.data : citywideTrend.data
+  const trendLoading = state.neighborhood ? context.isLoading : citywideTrend.isLoading
+  const trendError = state.neighborhood ? context.error : citywideTrend.error
+  const trendScope = context.data?.neighborhood.name ?? citywideTrend.data?.scope.name ?? (state.neighborhood ? 'Selected neighborhood' : 'Seattle citywide')
+  const inspectorData = state.neighborhood ? context.data : citywideTrend.data
+  const inspectorLoading = state.neighborhood ? context.isLoading : citywideTrend.isLoading
+  const inspectorError = state.neighborhood ? context.error : citywideTrend.error
+  const inspectorName = state.neighborhood ? context.data?.neighborhood.name : citywideTrend.data?.scope.name
+
+  function setTrendGrain(grain: 'annual' | 'monthly') {
+    state.setTrendGrain(grain)
+    setAnnouncement(`${grain === 'monthly' ? 'Monthly' : 'Annual'} trend displayed for ${trendScope}.`)
+  }
+
   return (
     <div className={styles.page}>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
@@ -83,46 +102,59 @@ export function NeighborhoodExplorer() {
             <div className={styles.panelLabel}><span>94 S_HOOD POLYGONS</span><strong>{MAP_METRICS.find(([value]) => value === state.mapMetric)?.[1]}</strong></div>
             <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedId={state.neighborhood} pulseKey={selectionPulse} onResolve={resolve} busy={resolving}/>
           </section>
-          <aside className={`${styles.inspector} ${selectionPulse > 0 ? styles.selectionPulse : ''}`} key={`inspector-${selectionPulse}`} aria-label="Selected neighborhood context">
-            {!state.neighborhood && <EmptyState title="Select a neighborhood" body="Use the map or searchable selector to open observed burden, outcomes, situational shares, and annual trends."/>}
-            {state.neighborhood && context.isLoading && <LoadingState label="Loading neighborhood context"/>}
-            {context.error && <ErrorState error={context.error} onRetry={() => void context.refetch()}/>} 
-            {context.data && (
+          <aside
+            className={`${styles.inspector} ${selectionPulse > 0 ? styles.selectionPulse : ''}`}
+            key={`inspector-${selectionPulse}`}
+            aria-label={state.neighborhood ? 'Selected neighborhood context' : 'Seattle citywide context'}
+          >
+            {inspectorLoading && <LoadingState label={state.neighborhood ? 'Loading neighborhood context' : 'Loading Seattle citywide context'}/>}
+            {inspectorError && <ErrorState error={inspectorError} onRetry={() => void (state.neighborhood ? context.refetch() : citywideTrend.refetch())}/>}
+            {inspectorData && inspectorName && (
               <>
                 <div className={styles.inspectorHead}>
-                  <span>ACTIVE NEIGHBORHOOD</span>
-                  <h2>{context.data.neighborhood.name}</h2>
+                  <span>{state.neighborhood ? 'ACTIVE NEIGHBORHOOD' : 'CITYWIDE BASELINE'}</span>
+                  <h2>{inspectorName}</h2>
                   <p>{state.startYear}—{state.endYear} · all severity levels</p>
                 </div>
-                {context.data.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning}</div>)}
+                {inspectorData.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning}</div>)}
                 <div className={styles.primaryBurden}>
                   <span>SEVERITY BURDEN</span>
-                  <strong>{context.data.metrics.totalSeverity.toLocaleString()}</strong>
-                  <small>Mean {metricValue(context.data.metrics.meanSeverity, 'decimal')} per collision</small>
+                  <strong>{inspectorData.metrics.totalSeverity.toLocaleString()}</strong>
+                  <small>Mean {metricValue(inspectorData.metrics.meanSeverity, 'decimal')} per collision</small>
                 </div>
-                <MetricGrid metrics={context.data.metrics} variant="inspector"/>
-                <div className={styles.methodNote}>Neighborhood results deliberately ignore Citywide Analysis severity filters.</div>
+                <MetricGrid metrics={inspectorData.metrics} variant="inspector"/>
+                <div className={styles.methodNote}>
+                  {state.neighborhood
+                    ? 'Neighborhood results deliberately ignore Citywide Analysis severity filters.'
+                    : 'Seattle totals include every collision record, including records not assigned to a neighborhood. Select a neighborhood to compare local conditions.'}
+                </div>
               </>
             )}
           </aside>
         </div>
       )}
 
-      {context.data && (
-        <section className={styles.trendSection}>
+      <section className={styles.trendSection} aria-label={`${trendScope} collision trend`}>
           <div className={styles.trendHead}>
-            <div><h2>Annual collisions and severity burden</h2></div>
-            <div className={styles.comparison}>
-              {context.data.comparison.status === 'available' ? <>
-                <span>FIRST VS LAST COMPLETE 3-YEAR AVERAGE</span>
-                <strong className={(context.data.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(context.data.comparison.collisionChangePercent)} collisions</strong>
-                <strong className={(context.data.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(context.data.comparison.severityChangePercent)} burden</strong>
-              </> : <><span>TREND COMPARISON</span><strong>Insufficient complete years</strong></>}
+            <div className={styles.trendTitle}>
+              <h2>{trendScope} · {state.trendGrain} collisions and severity burden</h2>
+              <div className={styles.grainControl} role="group" aria-label="Trend time interval">
+                <button type="button" aria-pressed={state.trendGrain === 'annual'} onClick={() => setTrendGrain('annual')}>Annual</button>
+                <button type="button" aria-pressed={state.trendGrain === 'monthly'} onClick={() => setTrendGrain('monthly')}>Monthly</button>
+              </div>
             </div>
+            {trendData && <div className={styles.comparison}>
+              {trendData.comparison.status === 'available' ? <>
+                <span>FIRST VS LAST COMPLETE 3-YEAR AVERAGE</span>
+                <strong className={(trendData.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(trendData.comparison.collisionChangePercent)} collisions</strong>
+                <strong className={(trendData.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(trendData.comparison.severityChangePercent)} burden</strong>
+              </> : <><span>TREND COMPARISON</span><strong>Insufficient complete years</strong></>}
+            </div>}
           </div>
-          <TrendChart annual={context.data.annual} pulseKey={selectionPulse}/>
+          {trendLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
+          {trendError && <ErrorState error={trendError} onRetry={() => void (state.neighborhood ? context.refetch() : citywideTrend.refetch())}/>}
+          {trendData && <TrendChart annual={trendData.annual} monthly={trendData.monthly} grain={state.trendGrain} pulseKey={selectionPulse}/>}
         </section>
-      )}
     </div>
   )
 }

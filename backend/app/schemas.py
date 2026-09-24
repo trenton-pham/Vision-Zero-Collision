@@ -52,6 +52,19 @@ class AnnualMetric(ApiModel):
     isPartial: bool
 
 
+class MonthlyMetric(ApiModel):
+    period: str
+    year: int
+    month: int
+    collisionCount: int
+    injuries: int
+    seriousInjuries: int
+    fatalities: int
+    totalSeverity: int
+    meanSeverity: float | None
+    isPartial: bool
+
+
 class TrendPeriod(ApiModel):
     years: list[int]
     averageCollisions: float
@@ -72,6 +85,17 @@ class NeighborhoodContext(ApiModel):
     selectedYears: list[int]
     metrics: NeighborhoodMetricSet
     annual: list[AnnualMetric]
+    monthly: list[MonthlyMetric]
+    comparison: TrendComparison
+    warnings: list[str]
+
+
+class CitywideTrendContext(ApiModel):
+    scope: dict[str, str]
+    selectedYears: list[int]
+    metrics: NeighborhoodMetricSet
+    annual: list[AnnualMetric]
+    monthly: list[MonthlyMetric]
     comparison: TrendComparison
     warnings: list[str]
 
@@ -151,4 +175,3 @@ class ErrorResponse(ApiModel):
 
 
 GeoJson = dict[str, Any]
-

@@ -18,7 +18,7 @@ export function MetricGrid({ metrics, compact = false, variant = 'default' }: Pr
     ['Weekend', metricValue(metrics.weekendShare, 'percent'), ''],
   ]
   const cells = variant === 'inspector'
-    ? allCells.filter(([label]) => label !== 'Severity burden' && label !== 'Mean severity')
+    ? allCells.filter(([label]) => !['Severity burden', 'Mean severity', 'Night', 'Weekend'].includes(label))
     : allCells
   return (
     <dl className={`${styles.grid} ${compact ? styles.compact : ''}`}>

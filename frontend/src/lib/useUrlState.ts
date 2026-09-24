@@ -17,6 +17,7 @@ export function useDashboardParams() {
   const endYear = Math.max(rawStart, rawEnd)
   const neighborhood = searchParams.get('neighborhood')
   const mapMetric = searchParams.get('metric') ?? 'collisionCount'
+  const trendGrain: 'annual' | 'monthly' = searchParams.get('grain') === 'monthly' ? 'monthly' : 'annual'
   const cityLayer: 'kde' | 'heatmap' = searchParams.get('layer') === 'kde' ? 'kde' : 'heatmap'
   const severities = useMemo(
     () => (searchParams.get('severity') ?? '').split(',').filter(Boolean),
@@ -42,11 +43,13 @@ export function useDashboardParams() {
     endYear,
     neighborhood,
     mapMetric,
+    trendGrain,
     cityLayer,
     severities,
     setYears: (start: number, end: number) => update({ start, end }),
     setNeighborhood: (id: string | null) => update({ neighborhood: id }),
     setMapMetric: (metric: string) => update({ metric }),
+    setTrendGrain: (grain: 'annual' | 'monthly') => update({ grain: grain === 'annual' ? null : grain }),
     setCityLayer: (layer: string) => update({ layer }),
     setSeverities: (values: string[]) => update({ severity: values.join(',') }),
   }

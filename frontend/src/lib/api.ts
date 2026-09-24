@@ -1,5 +1,6 @@
 import type {
   CitywideSummary,
+  CitywideTrendContext,
   DatasetMeta,
   DowntownComparisonResponse,
   HeatmapResponse,
@@ -43,6 +44,8 @@ export const api = {
     request<NeighborhoodMetricSet[]>(`/api/neighborhoods/summary?${years(startYear, endYear)}`, signal),
   neighborhoodContext: (id: string, startYear: number, endYear: number, signal?: AbortSignal) =>
     request<NeighborhoodContext>(`/api/neighborhoods/${encodeURIComponent(id)}/context?${years(startYear, endYear)}`, signal),
+  citywideNeighborhoodTrend: (startYear: number, endYear: number, signal?: AbortSignal) =>
+    request<CitywideTrendContext>(`/api/neighborhoods/citywide-trend?${years(startYear, endYear)}`, signal),
   resolveNeighborhood: (lat: number, lng: number, signal?: AbortSignal) =>
     request<ResolveResponse>(`/api/neighborhoods/resolve?${new URLSearchParams({ lat: String(lat), lng: String(lng) })}`, signal),
   citywideSummary: (startYear: number, endYear: number, severities: string[], signal?: AbortSignal) =>
@@ -56,4 +59,3 @@ export const api = {
   downtownComparison: (startYear: number, endYear: number, severities: string[], signal?: AbortSignal) =>
     request<DowntownComparisonResponse>(`/api/citywide/downtown-comparison?${citywideParams(startYear, endYear, severities)}`, signal),
 }
-

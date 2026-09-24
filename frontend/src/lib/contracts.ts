@@ -41,6 +41,19 @@ export type AnnualMetric = {
   isPartial: boolean
 }
 
+export type MonthlyMetric = {
+  period: string
+  year: number
+  month: number
+  collisionCount: number
+  injuries: number
+  seriousInjuries: number
+  fatalities: number
+  totalSeverity: number
+  meanSeverity: number | null
+  isPartial: boolean
+}
+
 export type TrendComparison = {
   status: 'available' | 'insufficient_years'
   firstPeriod: { years: number[]; averageCollisions: number; averageSeverityBurden: number } | null
@@ -55,6 +68,17 @@ export type NeighborhoodContext = {
   selectedYears: number[]
   metrics: NeighborhoodMetricSet
   annual: AnnualMetric[]
+  monthly: MonthlyMetric[]
+  comparison: TrendComparison
+  warnings: string[]
+}
+
+export type CitywideTrendContext = {
+  scope: { id: 'citywide'; name: string }
+  selectedYears: number[]
+  metrics: NeighborhoodMetricSet
+  annual: AnnualMetric[]
+  monthly: MonthlyMetric[]
   comparison: TrendComparison
   warnings: string[]
 }
@@ -122,4 +146,3 @@ export type DowntownComparisonResponse = {
     isPartial: boolean
   }[]
 }
-

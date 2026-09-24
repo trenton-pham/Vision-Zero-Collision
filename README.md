@@ -8,7 +8,10 @@ The old Streamlit, RAG, chat, and model-serving runtime has been removed. Histor
 
 - Neighborhood metrics always include every severity level. Citywide severity filters cannot enter neighborhood API requests.
 - Composite severity is `INJURIES + 3 × SERIOUSINJURIES + 5 × FATALITIES`.
-- 2026 is visible as **Partial through August 31, 2026** and excluded from trend comparisons and spatial-shift comparisons.
+- With no neighborhood selected, Neighborhood Explorer shows all-severity Seattle citywide summary statistics and trends. Selecting a neighborhood replaces the inspector with local statistics; clearing it restores the citywide baseline.
+- Neighborhood Explorer inspector grids omit Night and Weekend distribution shares without removing those measures from the API or Citywide Analysis.
+- Annual trend is the default; `grain=monthly` shows zero-filled monthly observations from January 2015 through the latest received month.
+- 2026 is visible as **partial records received through August 31, 2026** and excluded from trend comparisons and spatial-shift comparisons.
 - Trend comparisons use non-overlapping first and last three-year averages only when at least six complete years are present.
 - No database, accounts, runtime model, RAG, or mutable production data store is required.
 
@@ -54,7 +57,7 @@ Run:
 .venv/bin/python -m backend.scripts.build_artifacts
 ```
 
-The build hashes the processed collision Parquet and neighborhood GeoJSON, assigns all spatial records, writes the assigned record and zero-filled annual Parquet artifacts, and creates a manifest. API startup fails clearly if the artifacts are absent or their source hashes are stale.
+The build hashes the processed collision Parquet and neighborhood GeoJSON, assigns all spatial records, writes assigned-record, zero-filled annual, and zero-filled monthly Parquet artifacts, and creates a manifest. Monthly artifacts cover 94 neighborhoods plus a citywide scope and stop at the latest observed month rather than fabricating future partial-year zeroes. API startup fails clearly if the artifacts are absent or their source hashes are stale.
 
 The current regression baseline is:
 

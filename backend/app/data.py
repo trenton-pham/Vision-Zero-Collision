@@ -16,6 +16,7 @@ from shapely.geometry import Point
 from .schemas import (
     AnnualMetric,
     CitywideSummary,
+    CitywideTrendContext,
     DatasetMeta,
     DowntownAnnual,
     DowntownComparisonResponse,
@@ -24,6 +25,7 @@ from .schemas import (
     KdeCell,
     KdeResponse,
     MetricDefinition,
+    MonthlyMetric,
     NeighborhoodContext,
     NeighborhoodMetricSet,
     ResolveResponse,
@@ -36,7 +38,7 @@ from .schemas import (
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ARTIFACT_DIR = ROOT / "data/dashboard"
-PARTIAL_LABEL = "Partial through August 31, 2026"
+PARTIAL_LABEL = "2026 partial · records received through August 31, 2026"
 DOWNTOWN_BBOX = {"yMin": 47.595, "yMax": 47.620, "xMin": -122.345, "xMax": -122.320}
 SEVERITY_KEYS = {
     "property-damage": "Property Damage Only Collision",
@@ -67,6 +69,7 @@ class DataStore:
             self._validate_sources()
         self.collisions = pd.read_parquet(self.artifact_dir / "collisions_assigned.parquet")
         self.annual = pd.read_parquet(self.artifact_dir / "neighborhood_annual.parquet")
+        self.monthly = pd.read_parquet(self.artifact_dir / "context_monthly.parquet")
         self.geojson = json.loads((self.artifact_dir / "neighborhoods.geojson").read_text())
         self.neighborhoods = gpd.read_file(self.artifact_dir / "neighborhoods.geojson").sort_values("id")
         self.neighborhoods_projected = self.neighborhoods.to_crs("EPSG:26910")
@@ -88,6 +91,7 @@ class DataStore:
             path,
             self.artifact_dir / "collisions_assigned.parquet",
             self.artifact_dir / "neighborhood_annual.parquet",
+            self.artifact_dir / "context_monthly.parquet",
             self.artifact_dir / "neighborhoods.geojson",
         ]
         missing = [str(item) for item in required if not item.exists()]
@@ -203,15 +207,8 @@ class DataStore:
             message="Compares non-overlapping first and last three-year averages, excluding partial years.",
         )
 
-    def neighborhood_context(self, neighborhood_id: str, start_year: int, end_year: int) -> NeighborhoodContext:
-        self.validate_year_range(start_year, end_year)
-        if neighborhood_id not in self.name_by_id:
-            raise KeyError(neighborhood_id)
-        rows = self.annual[
-            (self.annual["neighborhood_id"] == neighborhood_id)
-            & self.annual["YEAR"].between(start_year, end_year)
-        ].sort_values("YEAR")
-        annual = [
+    def _annual_metrics(self, rows: pd.DataFrame) -> list[AnnualMetric]:
+        return [
             AnnualMetric(
                 year=int(row.YEAR),
                 collisionCount=int(row.collision_count),
@@ -224,14 +221,69 @@ class DataStore:
             )
             for row in rows.itertuples(index=False)
         ]
-        warnings = [PARTIAL_LABEL] if any(year in self.partial_years for year in range(start_year, end_year + 1)) else []
+
+    def _monthly_metrics(self, rows: pd.DataFrame) -> list[MonthlyMetric]:
+        return [
+            MonthlyMetric(
+                period=str(row.period),
+                year=int(row.YEAR),
+                month=int(row.MONTH),
+                collisionCount=int(row.collision_count),
+                injuries=int(row.injuries),
+                seriousInjuries=int(row.serious_injuries),
+                fatalities=int(row.fatalities),
+                totalSeverity=int(row.total_severity),
+                meanSeverity=round(float(row.mean_severity), 3) if pd.notna(row.mean_severity) else None,
+                isPartial=int(row.YEAR) in self.partial_years,
+            )
+            for row in rows.itertuples(index=False)
+        ]
+
+    def _warnings(self, start_year: int, end_year: int) -> list[str]:
+        includes_partial = any(year in self.partial_years for year in range(start_year, end_year + 1))
+        return [PARTIAL_LABEL] if includes_partial else []
+
+    def neighborhood_context(self, neighborhood_id: str, start_year: int, end_year: int) -> NeighborhoodContext:
+        self.validate_year_range(start_year, end_year)
+        if neighborhood_id not in self.name_by_id:
+            raise KeyError(neighborhood_id)
+        rows = self.annual[
+            (self.annual["neighborhood_id"] == neighborhood_id)
+            & self.annual["YEAR"].between(start_year, end_year)
+        ].sort_values("YEAR")
+        monthly_rows = self.monthly[
+            (self.monthly["neighborhood_id"] == neighborhood_id)
+            & self.monthly["YEAR"].between(start_year, end_year)
+        ].sort_values(["YEAR", "MONTH"])
         return NeighborhoodContext(
             neighborhood={"id": neighborhood_id, "name": self.name_by_id[neighborhood_id]},
             selectedYears=[start_year, end_year],
             metrics=self._metric_set_from_annual(neighborhood_id, rows),
-            annual=annual,
+            annual=self._annual_metrics(rows),
+            monthly=self._monthly_metrics(monthly_rows),
             comparison=self._trend(rows),
-            warnings=warnings,
+            warnings=self._warnings(start_year, end_year),
+        )
+
+    def citywide_trend(self, start_year: int, end_year: int) -> CitywideTrendContext:
+        self.validate_year_range(start_year, end_year)
+        annual_rows = self.annual[
+            (self.annual["neighborhood_id"] == "citywide")
+            & self.annual["YEAR"].between(start_year, end_year)
+        ].sort_values("YEAR")
+        metrics = self._metric_set_from_annual("citywide", annual_rows)
+        monthly_rows = self.monthly[
+            (self.monthly["neighborhood_id"] == "citywide")
+            & self.monthly["YEAR"].between(start_year, end_year)
+        ].sort_values(["YEAR", "MONTH"])
+        return CitywideTrendContext(
+            scope={"id": "citywide", "name": "Seattle citywide"},
+            selectedYears=[start_year, end_year],
+            metrics=metrics,
+            annual=self._annual_metrics(annual_rows),
+            monthly=self._monthly_metrics(monthly_rows),
+            comparison=self._trend(annual_rows),
+            warnings=self._warnings(start_year, end_year),
         )
 
     def resolve(self, lat: float, lng: float) -> ResolveResponse:
@@ -391,4 +443,3 @@ class DataStore:
 @lru_cache(maxsize=1)
 def get_store() -> DataStore:
     return DataStore()
-

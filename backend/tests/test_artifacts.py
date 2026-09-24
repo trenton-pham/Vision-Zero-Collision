@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import geopandas as gpd
+import pandas as pd
 
 from backend.app.data import DataStore
 
@@ -20,8 +21,34 @@ def test_assignment_regression_baseline(store: DataStore) -> None:
 
 
 def test_manifest_sources_are_current(store: DataStore) -> None:
+    assert store.manifest["artifactVersion"] == "neighborhood-context-v2"
     assert store.manifest["dataAsOf"] == "2026-08-31"
     assert store.manifest["partialYears"] == [2026]
+
+
+def test_monthly_artifact_is_zero_filled_bounded_and_reconciled(store: DataStore) -> None:
+    assert len(store.monthly) == 95 * 140
+    assert store.monthly.groupby("neighborhood_id").size().eq(140).all()
+    assert store.monthly["period"].min() == "2015-01"
+    assert store.monthly["period"].max() == "2026-08"
+    assert not store.monthly["period"].isin(["2026-09", "2026-10", "2026-11", "2026-12"]).any()
+    assert (
+        store.monthly[
+            (store.monthly["neighborhood_id"] == "north-beach-blue-ridge")
+            & (store.monthly["collision_count"] == 0)
+        ].shape[0]
+        > 0
+    )
+
+    additive = ["collision_count", "injuries", "serious_injuries", "fatalities", "total_severity"]
+    monthly_totals = store.monthly.groupby(["neighborhood_id", "YEAR"], as_index=False)[additive].sum()
+    annual_totals = store.annual[["neighborhood_id", "YEAR", *additive]].sort_values(["neighborhood_id", "YEAR"])
+    pd.testing.assert_frame_equal(
+        monthly_totals.sort_values(["neighborhood_id", "YEAR"]).reset_index(drop=True),
+        annual_totals.reset_index(drop=True),
+        check_dtype=False,
+    )
+    assert int(store.annual[store.annual["neighborhood_id"] == "citywide"]["collision_count"].sum()) == 106_050
 
 
 def test_resolver_interior_nearest_and_outside(store: DataStore) -> None:
@@ -57,4 +84,3 @@ def test_shared_boundary_is_deterministic(store: DataStore) -> None:
     second = store.resolve(boundary_point.y, boundary_point.x)
     assert first == second
     assert first.method in {"boundary", "contains"}
-

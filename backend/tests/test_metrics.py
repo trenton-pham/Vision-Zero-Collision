@@ -38,10 +38,26 @@ def test_metric_formula_and_null_safe_shares(store: DataStore) -> None:
 def test_annual_series_is_zero_filled_and_partial_excluded_from_trend(store: DataStore) -> None:
     context = store.neighborhood_context("ballard", 2015, 2026)
     assert [item.year for item in context.annual] == list(range(2015, 2027))
+    assert len(context.monthly) == 140
+    assert context.monthly[0].period == "2015-01"
+    assert context.monthly[-1].period == "2026-08"
+    assert all(item.isPartial for item in context.monthly if item.year == 2026)
+    assert sum(item.collisionCount for item in context.monthly) == context.metrics.collisionCount
     assert context.annual[-1].isPartial is True
     assert context.comparison.status == "available"
     assert 2026 not in context.comparison.lastPeriod.years
-    assert context.warnings == ["Partial through August 31, 2026"]
+    assert context.warnings == ["2026 partial · records received through August 31, 2026"]
+
+
+def test_citywide_trend_uses_all_records_and_complete_year_comparison(store: DataStore) -> None:
+    trend = store.citywide_trend(2015, 2026)
+    assert trend.scope == {"id": "citywide", "name": "Seattle citywide"}
+    assert trend.metrics.collisionCount == 106_050
+    assert sum(item.collisionCount for item in trend.monthly) == 106_050
+    assert sum(item.collisionCount for item in trend.annual) == 106_050
+    assert trend.monthly[-1].period == "2026-08"
+    assert trend.comparison.status == "available"
+    assert 2026 not in trend.comparison.lastPeriod.years
 
 
 def test_short_range_returns_explicit_insufficient_years(store: DataStore) -> None:
@@ -63,4 +79,3 @@ def test_spatial_shift_excludes_partial_year(store: DataStore) -> None:
     shift = store.spatial_shift(2018, 2026, [])
     assert shift.excludedYears == [2026]
     assert 2026 not in shift.after.years
-
