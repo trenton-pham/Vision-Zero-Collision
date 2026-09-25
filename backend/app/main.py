@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import suppress
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .data import ArtifactError, DataStore, get_store, get_store_manager
@@ -28,6 +29,7 @@ from .schemas import (
 
 ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_DIST = ROOT / "frontend/dist"
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -35,10 +37,10 @@ async def lifespan(_: FastAPI):
     manager = get_store_manager()
     try:
         await asyncio.to_thread(manager.get)
-    except Exception:
+    except Exception as error:
         # Keep liveness available while readiness remains false. This lets the
         # service recover automatically when Atlas or the initial dataset does.
-        pass
+        logger.error("Initial dataset load failed; readiness remains false: %s", error)
     polling_task: asyncio.Task[None] | None = None
 
     async def poll_for_updates() -> None:
@@ -99,10 +101,13 @@ def health() -> HealthResponse:
 def readiness() -> HealthResponse:
     manager = get_store_manager()
     if not manager.ready:
-        try:
-            manager.get()
-        except Exception as error:
-            raise HTTPException(status_code=503, detail=str(error)) from error
+        # Startup and the background poll own connection attempts. Responding
+        # from cached state keeps Render's five-second health probe from timing
+        # out while PyMongo is waiting on an unreachable Atlas host.
+        raise HTTPException(
+            status_code=503,
+            detail=manager.last_error or "No validated dataset snapshot is loaded",
+        )
     store = manager.get()
     return HealthResponse(
         status="ok",
@@ -186,6 +191,11 @@ if FRONTEND_DIST.exists():
     assets = FRONTEND_DIST / "assets"
     if assets.exists():
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+    @app.head("/", include_in_schema=False)
+    def root_head() -> Response:
+        # Render probes the root with HEAD while detecting the bound HTTP port.
+        return Response(status_code=204)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str, request: Request):
