@@ -2,8 +2,6 @@
 
 A public, read-only React + FastAPI dashboard for observed Seattle collision patterns. The product provides a map-led Neighborhood Explorer for all 94 `S_HOOD` polygons and a separate Citywide Analysis route for heatmap, KDE, spatial-shift, and downtown-versus-outer analysis.
 
-The old Streamlit, RAG, chat, and model-serving runtime has been removed. Production reads versioned datasets from MongoDB Atlas; historical notebooks and checked-in processed source data remain available for local regression tests.
-
 ## Product rules
 
 - Neighborhood metrics always include every severity level. Citywide severity filters cannot enter neighborhood API requests.
