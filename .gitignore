@@ -9,6 +9,9 @@ app_backup.py
 
 .venv/
 .venv*/
+.env
+.env.*
+!.env.example
 
 # Frontend outputs
 frontend/node_modules/

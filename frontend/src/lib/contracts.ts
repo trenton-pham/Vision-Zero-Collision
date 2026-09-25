@@ -13,6 +13,8 @@ export type DatasetMeta = {
   neighborhoodCount: number
   collisionCount: number
   artifactVersion: string
+  datasetVersion: string
+  lastPublishedAt: string | null
 }
 
 export type NeighborhoodMetricSet = {

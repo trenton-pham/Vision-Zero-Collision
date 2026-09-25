@@ -1,18 +1,20 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useDatasetMeta } from './dataset'
 
-const MIN_YEAR = 2015
-const MAX_YEAR = 2026
-
-function toYear(value: string | null, fallback: number) {
+function toYear(value: string | null, fallback: number, minimum: number, maximum: number) {
+  if (value === null || value.trim() === '') return fallback
   const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed >= MIN_YEAR && parsed <= MAX_YEAR ? parsed : fallback
+  return Number.isInteger(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback
 }
 
 export function useDashboardParams() {
+  const meta = useDatasetMeta()
+  const minimumYear = Math.min(...meta.availableYears)
+  const maximumYear = Math.max(...meta.availableYears)
   const [searchParams, setSearchParams] = useSearchParams()
-  const rawStart = toYear(searchParams.get('start'), MIN_YEAR)
-  const rawEnd = toYear(searchParams.get('end'), MAX_YEAR)
+  const rawStart = toYear(searchParams.get('start'), minimumYear, minimumYear, maximumYear)
+  const rawEnd = toYear(searchParams.get('end'), maximumYear, minimumYear, maximumYear)
   const startYear = Math.min(rawStart, rawEnd)
   const endYear = Math.max(rawStart, rawEnd)
   const neighborhood = searchParams.get('neighborhood')
@@ -46,6 +48,8 @@ export function useDashboardParams() {
     trendGrain,
     cityLayer,
     severities,
+    minimumYear,
+    maximumYear,
     setYears: (start: number, end: number) => update({ start, end }),
     setNeighborhood: (id: string | null) => update({ neighborhood: id }),
     setMapMetric: (metric: string) => update({ metric }),

@@ -7,6 +7,7 @@ import re
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import geopandas as gpd
 import pandas as pd
@@ -190,17 +191,26 @@ def build(output: Path, enforce_baseline: bool = True) -> dict[str, object]:
         }
     (output / "neighborhoods.geojson").write_text(json.dumps(clean_geojson, separators=(",", ":")))
 
-    data_as_of = pd.to_datetime(points["INCDATE"], utc=True).max().date().isoformat()
+    data_as_of_date = pd.to_datetime(points["INCDATE"], utc=True).max().date()
+    data_as_of = data_as_of_date.isoformat()
+    built_at = datetime.now(timezone.utc).isoformat()
+    collision_hash = sha256(COLLISIONS)
     manifest = {
         "artifactVersion": VERSION,
-        "builtAt": datetime.now(timezone.utc).isoformat(),
+        "datasetVersion": f"artifact-{collision_hash[:16]}",
+        "builtAt": built_at,
+        "lastPublishedAt": built_at,
         "dataAsOf": data_as_of,
         "sourceHashes": {
-            str(COLLISIONS.relative_to(ROOT)): sha256(COLLISIONS),
+            str(COLLISIONS.relative_to(ROOT)): collision_hash,
             str(NEIGHBORHOODS.relative_to(ROOT)): sha256(NEIGHBORHOODS),
         },
         "availableYears": sorted(int(v) for v in frame["YEAR"].dropna().unique()),
-        "partialYears": [2026],
+        "partialYears": (
+            [data_as_of_date.year]
+            if data_as_of_date.year == datetime.now(ZoneInfo("America/Los_Angeles")).year
+            else []
+        ),
         "collisionCount": len(frame),
         "neighborhoodCount": len(polygons),
         "assignmentCounts": counts,

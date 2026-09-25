@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from contextlib import suppress
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
@@ -8,13 +10,14 @@ from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .data import ArtifactError, DataStore, get_store
+from .data import ArtifactError, DataStore, get_store, get_store_manager
 from .schemas import (
     CitywideSummary,
     CitywideTrendContext,
     DatasetMeta,
     DowntownComparisonResponse,
     HeatmapResponse,
+    HealthResponse,
     KdeResponse,
     NeighborhoodContext,
     NeighborhoodMetricSet,
@@ -29,8 +32,34 @@ FRONTEND_DIST = ROOT / "frontend/dist"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    get_store()
-    yield
+    manager = get_store_manager()
+    try:
+        await asyncio.to_thread(manager.get)
+    except Exception:
+        # Keep liveness available while readiness remains false. This lets the
+        # service recover automatically when Atlas or the initial dataset does.
+        pass
+    polling_task: asyncio.Task[None] | None = None
+
+    async def poll_for_updates() -> None:
+        while True:
+            await asyncio.sleep(manager.settings.dataset_refresh_seconds)
+            try:
+                await asyncio.to_thread(manager.refresh)
+            except Exception:
+                # Keep serving the last fully validated in-memory snapshot.
+                continue
+
+    if manager.backend == "mongodb":
+        polling_task = asyncio.create_task(poll_for_updates())
+    try:
+        yield
+    finally:
+        if polling_task is not None:
+            polling_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await polling_task
+        manager.close()
 
 
 app = FastAPI(
@@ -52,14 +81,48 @@ def safe_year_call(callable_, *args):
         raise HTTPException(status_code=422, detail=str(error)) from error
 
 
-@app.get("/healthz", tags=["system"])
-def health(store: Store) -> dict[str, str]:
-    return {"status": "ok", "artifactVersion": store.manifest["artifactVersion"]}
+@app.get("/healthz", response_model=HealthResponse, tags=["system"])
+def health() -> HealthResponse:
+    manager = get_store_manager()
+    store = manager.current
+    return HealthResponse(
+        status="ok" if store is not None else "degraded",
+        backend=manager.backend,
+        artifactVersion=str(store.manifest["artifactVersion"]) if store else None,
+        datasetVersion=str(store.manifest["datasetVersion"]) if store else None,
+        dataAsOf=str(store.manifest["dataAsOf"]) if store else None,
+        detail=manager.last_error,
+    )
+
+
+@app.get("/readyz", response_model=HealthResponse, tags=["system"])
+def readiness() -> HealthResponse:
+    manager = get_store_manager()
+    if not manager.ready:
+        try:
+            manager.get()
+        except Exception as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+    store = manager.get()
+    return HealthResponse(
+        status="ok",
+        backend=manager.backend,
+        artifactVersion=str(store.manifest["artifactVersion"]),
+        datasetVersion=str(store.manifest["datasetVersion"]),
+        dataAsOf=str(store.manifest["dataAsOf"]),
+    )
 
 
 @app.get("/api/meta", response_model=DatasetMeta, tags=["metadata"])
-def meta(store: Store) -> DatasetMeta:
-    return store.meta()
+def meta() -> DatasetMeta:
+    manager = get_store_manager()
+    if manager.backend == "mongodb":
+        try:
+            manager.refresh()
+        except Exception:
+            # A metadata poll must never displace the last valid snapshot.
+            pass
+    return manager.get().meta()
 
 
 @app.get("/api/neighborhoods/geojson", tags=["neighborhoods"])

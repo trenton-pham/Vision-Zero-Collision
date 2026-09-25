@@ -1,13 +1,22 @@
-import { useQuery } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
 import { NavLink, Outlet } from 'react-router-dom'
 import { api } from '../lib/api'
+import { DatasetMetaProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
 import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
 
 function YearRangeControl() {
-  const { startYear, endYear, setYears } = useDashboardParams()
+  const { startYear, endYear, minimumYear, maximumYear, setYears } = useDashboardParams()
+  const meta = useDatasetMeta()
+  const partial = meta.partialYears.includes(endYear)
+  const receivedThrough = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${meta.dataAsOf}T00:00:00Z`)).toUpperCase()
   return (
     <div className={styles.yearControl} aria-label="Observed year range">
       <div className={styles.yearMeta}>
@@ -16,8 +25,8 @@ function YearRangeControl() {
       </div>
       <Slider.Root
         className={styles.slider}
-        min={2015}
-        max={2026}
+        min={minimumYear}
+        max={maximumYear}
         step={1}
         minStepsBetweenThumbs={0}
         value={[startYear, endYear]}
@@ -28,13 +37,12 @@ function YearRangeControl() {
         <Slider.Thumb className={styles.thumb} aria-label="Start year" />
         <Slider.Thumb className={`${styles.thumb} ${styles.partialThumb}`} aria-label="End year" />
       </Slider.Root>
-      {endYear === 2026 && <span className={styles.partial}>PARTIAL THROUGH AUG 31</span>}
+      {partial && <span className={styles.partial}>PARTIAL THROUGH {receivedThrough}</span>}
     </div>
   )
 }
 
-export function AppShell() {
-  const meta = useQuery({ queryKey: ['meta'], queryFn: ({ signal }) => api.meta(signal), staleTime: Infinity })
+function ShellContent({ dataAsOf }: { dataAsOf?: string }) {
   return (
       <div className={styles.shell}>
         <aside className={styles.rail} aria-label="Primary navigation">
@@ -53,7 +61,7 @@ export function AppShell() {
           <div className={styles.dataStatus}>
             <span className={styles.statusDot}/>
             <span>DATA AS OF</span>
-            <strong>{meta.data?.dataAsOf ?? 'LOADING'}</strong>
+            <strong>{dataAsOf ?? 'LOADING'}</strong>
           </div>
         </aside>
         <header className={styles.header}>
@@ -66,5 +74,33 @@ export function AppShell() {
         </header>
         <main id="main-content" className={styles.main}><Outlet/></main>
       </div>
+  )
+}
+
+export function AppShell() {
+  const queryClient = useQueryClient()
+  const previousVersion = useRef<string | null>(null)
+  const meta = useQuery({
+    queryKey: ['meta'],
+    queryFn: ({ signal }) => api.meta(signal),
+    staleTime: 300_000,
+    refetchInterval: 300_000,
+  })
+
+  useEffect(() => {
+    const nextVersion = meta.data?.datasetVersion
+    if (!nextVersion) return
+    if (previousVersion.current && previousVersion.current !== nextVersion) {
+      void queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey[0] !== 'meta',
+      })
+    }
+    previousVersion.current = nextVersion
+  }, [meta.data?.datasetVersion, queryClient])
+
+  return (
+    <DatasetMetaProvider meta={meta.data}>
+      <ShellContent dataAsOf={meta.data?.dataAsOf}/>
+    </DatasetMetaProvider>
   )
 }

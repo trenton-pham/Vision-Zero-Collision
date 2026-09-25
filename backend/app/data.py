@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
+from zoneinfo import ZoneInfo
 
 import geopandas as gpd
 import numpy as np
@@ -13,6 +16,8 @@ from pyproj import Transformer
 from scipy.stats import gaussian_kde
 from shapely.geometry import Point
 
+from .config import Settings
+from .repository import ArtifactDatasetRepository, DatasetBundle, MongoDatasetRepository
 from .schemas import (
     AnnualMetric,
     CitywideSummary,
@@ -38,7 +43,6 @@ from .schemas import (
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ARTIFACT_DIR = ROOT / "data/dashboard"
-PARTIAL_LABEL = "2026 partial · records received through August 31, 2026"
 DOWNTOWN_BBOX = {"yMin": 47.595, "yMax": 47.620, "xMin": -122.345, "xMax": -122.320}
 SEVERITY_KEYS = {
     "property-damage": "Property Damage Only Collision",
@@ -62,16 +66,33 @@ class ArtifactError(RuntimeError):
 
 
 class DataStore:
-    def __init__(self, artifact_dir: Path = DEFAULT_ARTIFACT_DIR, validate_sources: bool = True):
+    def __init__(
+        self,
+        artifact_dir: Path = DEFAULT_ARTIFACT_DIR,
+        validate_sources: bool = True,
+        bundle: DatasetBundle | None = None,
+    ):
         self.artifact_dir = Path(artifact_dir)
-        self.manifest = self._read_manifest()
-        if validate_sources:
-            self._validate_sources()
-        self.collisions = pd.read_parquet(self.artifact_dir / "collisions_assigned.parquet")
-        self.annual = pd.read_parquet(self.artifact_dir / "neighborhood_annual.parquet")
-        self.monthly = pd.read_parquet(self.artifact_dir / "context_monthly.parquet")
-        self.geojson = json.loads((self.artifact_dir / "neighborhoods.geojson").read_text())
-        self.neighborhoods = gpd.read_file(self.artifact_dir / "neighborhoods.geojson").sort_values("id")
+        if bundle is None:
+            self.manifest = self._read_manifest()
+            if validate_sources:
+                self._validate_sources()
+            self.collisions = pd.read_parquet(self.artifact_dir / "collisions_assigned.parquet")
+            self.annual = pd.read_parquet(self.artifact_dir / "neighborhood_annual.parquet")
+            self.monthly = pd.read_parquet(self.artifact_dir / "context_monthly.parquet")
+            self.geojson = json.loads((self.artifact_dir / "neighborhoods.geojson").read_text())
+            self.neighborhoods = gpd.read_file(self.artifact_dir / "neighborhoods.geojson").sort_values("id")
+        else:
+            self.manifest = dict(bundle.manifest)
+            self.collisions = bundle.collisions.copy()
+            self.annual = bundle.annual.copy()
+            self.monthly = bundle.monthly.copy()
+            self.geojson = bundle.geojson
+            self.neighborhoods = gpd.GeoDataFrame.from_features(self.geojson, crs="EPSG:4326").sort_values("id")
+
+        self.manifest.setdefault("datasetVersion", self.manifest["artifactVersion"])
+        self.manifest.setdefault("lastPublishedAt", self.manifest.get("builtAt"))
+        self._validate_bundle()
         self.neighborhoods_projected = self.neighborhoods.to_crs("EPSG:26910")
         self.name_by_id = dict(zip(self.neighborhoods["id"], self.neighborhoods["name"], strict=True))
 
@@ -84,6 +105,115 @@ class DataStore:
         self.collisions["intersection"] = self.collisions["JUNCTIONTYPE"].fillna("").str.startswith("At Intersection")
         self.collisions["night"] = self.collisions["HOUR"].lt(6) | self.collisions["HOUR"].ge(20)
         self.collisions["weekend"] = self.collisions["Day_of_Week"].isin(["Saturday", "Sunday"])
+
+    def _validate_bundle(self) -> None:
+        collision_columns = {
+            "INCKEY", "COLDETKEY", "MAXSEVERITYDESC", "INJURIES", "SERIOUSINJURIES",
+            "FATALITIES", "PEDCOUNT", "INCDATE", "JUNCTIONTYPE", "HOUR", "Day_of_Week",
+            "YEAR", "MONTH", "X", "Y",
+        }
+        annual_columns = {
+            "neighborhood_id", "YEAR", "collision_count", "injuries", "serious_injuries",
+            "fatalities", "total_severity", "pedestrian_collisions", "intersection_collisions",
+            "night_collisions", "weekend_collisions", "mean_severity",
+        }
+        monthly_columns = annual_columns | {"period", "MONTH"}
+        missing = {
+            "collisions": sorted(collision_columns - set(self.collisions.columns)),
+            "annual": sorted(annual_columns - set(self.annual.columns)),
+            "monthly": sorted(monthly_columns - set(self.monthly.columns)),
+        }
+        missing = {key: value for key, value in missing.items() if value}
+        if missing:
+            raise ArtifactError(f"Dataset is missing required columns: {missing}")
+        if self.collisions.empty or self.annual.empty or self.monthly.empty:
+            raise ArtifactError("Dataset collections must not be empty")
+        if len(self.collisions) != int(self.manifest["collisionCount"]):
+            raise ArtifactError("Dataset collision count does not match its manifest")
+        if len(self.neighborhoods) != int(self.manifest["neighborhoodCount"]):
+            raise ArtifactError("Dataset neighborhood count does not match its manifest")
+
+        for key in ("INCKEY", "COLDETKEY"):
+            if self.collisions[key].isna().any():
+                raise ArtifactError(f"Dataset contains missing {key} values")
+        if self.collisions["COLDETKEY"].duplicated().any():
+            raise ArtifactError("Dataset contains duplicate COLDETKEY values")
+        if "OBJECTID" in self.collisions:
+            if self.collisions["OBJECTID"].isna().any() or self.collisions["OBJECTID"].duplicated().any():
+                raise ArtifactError("Dataset contains missing or duplicate OBJECTID values")
+
+        count_columns = ["INJURIES", "SERIOUSINJURIES", "FATALITIES", "PEDCOUNT"]
+        if self.collisions[count_columns].lt(0).any().any():
+            raise ArtifactError("Dataset contains negative collision counts")
+        metric_columns = [
+            "collision_count", "injuries", "serious_injuries", "fatalities", "total_severity",
+            "pedestrian_collisions", "intersection_collisions", "night_collisions",
+            "weekend_collisions",
+        ]
+        if self.annual[metric_columns].lt(0).any().any() or self.monthly[metric_columns].lt(0).any().any():
+            raise ArtifactError("Dataset contains negative aggregate metrics")
+
+        incident_dates = pd.to_datetime(self.collisions["INCDATE"], utc=True, errors="coerce")
+        if incident_dates.isna().any():
+            raise ArtifactError("Dataset contains invalid incident dates")
+        newest_incident = incident_dates.max().date()
+        if newest_incident.isoformat() != str(self.manifest["dataAsOf"]):
+            raise ArtifactError("Dataset newest incident date does not match its manifest")
+        if newest_incident > datetime.now(ZoneInfo("America/Los_Angeles")).date():
+            raise ArtifactError("Dataset contains incident dates in the future")
+
+        minimum_year = min(int(value) for value in self.manifest["availableYears"])
+        maximum_year = max(int(value) for value in self.manifest["availableYears"])
+        scopes = {str(value) for value in self.neighborhoods["id"]} | {"citywide"}
+        expected_annual = {
+            (scope, year)
+            for scope in scopes
+            for year in range(minimum_year, maximum_year + 1)
+        }
+        annual_keys = set(zip(
+            self.annual["neighborhood_id"].astype(str),
+            self.annual["YEAR"].astype(int),
+            strict=True,
+        ))
+        if len(self.annual) != len(annual_keys) or annual_keys != expected_annual:
+            raise ArtifactError("Annual aggregates are not uniquely zero-filled for every scope and year")
+
+        periods = pd.period_range(f"{minimum_year}-01", newest_incident.strftime("%Y-%m"), freq="M")
+        expected_monthly = {(scope, str(period)) for scope in scopes for period in periods}
+        monthly_keys = set(zip(
+            self.monthly["neighborhood_id"].astype(str),
+            self.monthly["period"].astype(str),
+            strict=True,
+        ))
+        if len(self.monthly) != len(monthly_keys) or monthly_keys != expected_monthly:
+            raise ArtifactError("Monthly aggregates are not uniquely zero-filled through dataAsOf")
+
+        raw_count = len(self.collisions)
+        annual_citywide = int(
+            self.annual.loc[self.annual["neighborhood_id"] == "citywide", "collision_count"].sum()
+        )
+        monthly_citywide = int(
+            self.monthly.loc[self.monthly["neighborhood_id"] == "citywide", "collision_count"].sum()
+        )
+        if annual_citywide != raw_count or monthly_citywide != raw_count:
+            raise ArtifactError("Citywide aggregates do not reconcile with collision records")
+
+        monthly_by_year = self.monthly.groupby(
+            ["neighborhood_id", "YEAR"], as_index=False
+        )[metric_columns].sum()
+        annual_totals = self.annual[["neighborhood_id", "YEAR", *metric_columns]]
+        comparison = annual_totals.merge(
+            monthly_by_year,
+            on=["neighborhood_id", "YEAR"],
+            how="outer",
+            suffixes=("_annual", "_monthly"),
+            indicator=True,
+        )
+        if not comparison["_merge"].eq("both").all() or any(
+            not comparison[f"{column}_annual"].eq(comparison[f"{column}_monthly"]).all()
+            for column in metric_columns
+        ):
+            raise ArtifactError("Annual and monthly aggregates do not reconcile")
 
     def _read_manifest(self) -> dict:
         path = self.artifact_dir / "manifest.json"
@@ -147,6 +277,8 @@ class DataStore:
             neighborhoodCount=int(self.manifest["neighborhoodCount"]),
             collisionCount=int(self.manifest["collisionCount"]),
             artifactVersion=self.manifest["artifactVersion"],
+            datasetVersion=self.manifest["datasetVersion"],
+            lastPublishedAt=self.manifest.get("lastPublishedAt"),
         )
 
     @staticmethod
@@ -240,8 +372,13 @@ class DataStore:
         ]
 
     def _warnings(self, start_year: int, end_year: int) -> list[str]:
-        includes_partial = any(year in self.partial_years for year in range(start_year, end_year + 1))
-        return [PARTIAL_LABEL] if includes_partial else []
+        if not any(year in self.partial_years for year in range(start_year, end_year + 1)):
+            return []
+        received = date.fromisoformat(self.manifest["dataAsOf"])
+        return [
+            f"{received.year} partial · records received through "
+            f"{received.strftime('%B')} {received.day}, {received.year}"
+        ]
 
     def neighborhood_context(self, neighborhood_id: str, start_year: int, end_year: int) -> NeighborhoodContext:
         self.validate_year_range(start_year, end_year)
@@ -342,12 +479,11 @@ class DataStore:
 
     def citywide_summary(self, start_year: int, end_year: int, severities: list[str]) -> CitywideSummary:
         frame = self._filter_citywide(start_year, end_year, severities)
-        warnings = [PARTIAL_LABEL] if 2026 in range(start_year, end_year + 1) else []
         return CitywideSummary(
             selectedYears=[start_year, end_year],
             severities=severities,
             metrics=self._metric_set_from_collisions(frame),
-            warnings=warnings,
+            warnings=self._warnings(start_year, end_year),
         )
 
     def heatmap(self, start_year: int, end_year: int, severities: list[str]) -> HeatmapResponse:
@@ -440,6 +576,71 @@ class DataStore:
         return DowntownComparisonResponse(bbox=DOWNTOWN_BBOX, annual=result)
 
 
+class DataStoreManager:
+    def __init__(self, settings: Settings | None = None):
+        self.settings = settings or Settings.from_env()
+        if self.settings.data_backend == "mongodb":
+            assert self.settings.mongodb_uri is not None
+            self.repository = MongoDatasetRepository(
+                self.settings.mongodb_uri,
+                self.settings.mongodb_database,
+            )
+        else:
+            self.repository = ArtifactDatasetRepository(DEFAULT_ARTIFACT_DIR)
+        self._store: DataStore | None = None
+        self._lock = threading.RLock()
+        self.last_error: str | None = None
+
+    @property
+    def backend(self) -> str:
+        return self.settings.data_backend
+
+    @property
+    def ready(self) -> bool:
+        return self._store is not None
+
+    @property
+    def current(self) -> DataStore | None:
+        with self._lock:
+            return self._store
+
+    def get(self) -> DataStore:
+        with self._lock:
+            if self._store is None:
+                self.refresh(force=True)
+            assert self._store is not None
+            return self._store
+
+    def refresh(self, force: bool = False) -> bool:
+        try:
+            active_version = self.repository.active_version()
+            with self._lock:
+                current_version = (
+                    str(self._store.manifest["datasetVersion"])
+                    if self._store is not None
+                    else None
+                )
+            if not force and active_version == current_version:
+                self.last_error = None
+                return False
+
+            candidate = DataStore(bundle=self.repository.load_active(), validate_sources=False)
+            with self._lock:
+                self._store = candidate
+                self.last_error = None
+            return True
+        except Exception as error:
+            self.last_error = str(error)
+            raise
+
+    def close(self) -> None:
+        self.repository.close()
+
+
 @lru_cache(maxsize=1)
+def get_store_manager() -> DataStoreManager:
+    return DataStoreManager()
+
+
 def get_store() -> DataStore:
-    return DataStore()
+    return get_store_manager().get()

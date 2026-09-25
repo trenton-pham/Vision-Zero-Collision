@@ -13,10 +13,21 @@ def test_meta_and_geojson_contracts() -> None:
     assert meta.status_code == 200
     assert meta.json()["neighborhoodCount"] == 94
     assert meta.json()["partialYears"] == [2026]
+    assert meta.json()["datasetVersion"].startswith("artifact-")
+    assert meta.json()["lastPublishedAt"]
 
     geojson = client.get("/api/neighborhoods/geojson")
     assert geojson.status_code == 200
     assert len(geojson.json()["features"]) == 94
+
+    ready = client.get("/readyz")
+    assert ready.status_code == 200
+    assert ready.json()["artifactVersion"] == meta.json()["artifactVersion"]
+    assert ready.json()["datasetVersion"] == meta.json()["datasetVersion"]
+
+    health = client.get("/healthz")
+    assert health.status_code == 200
+    assert health.json()["artifactVersion"] == meta.json()["artifactVersion"]
 
 
 def test_neighborhood_context_and_invalid_id() -> None:

@@ -24,6 +24,17 @@ class DatasetMeta(ApiModel):
     neighborhoodCount: int
     collisionCount: int
     artifactVersion: str
+    datasetVersion: str
+    lastPublishedAt: str | None
+
+
+class HealthResponse(ApiModel):
+    status: Literal["ok", "degraded"]
+    backend: Literal["artifacts", "mongodb"]
+    artifactVersion: str | None = None
+    datasetVersion: str | None = None
+    dataAsOf: str | None = None
+    detail: str | None = None
 
 
 class NeighborhoodMetricSet(ApiModel):
