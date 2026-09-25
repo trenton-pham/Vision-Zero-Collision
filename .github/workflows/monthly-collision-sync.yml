@@ -1,0 +1,117 @@
+name: Monthly collision sync
+
+on:
+  schedule:
+    - cron: "17 3 8 * *"
+      timezone: "America/Los_Angeles"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Validate the source without publishing it
+        type: boolean
+        default: false
+      allow_row_decrease:
+        description: Allow a source row decrease greater than one percent
+        type: boolean
+        default: false
+
+concurrency:
+  group: monthly-collision-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:8.2
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -e '.[test]'
+      - run: python -m backend.scripts.build_artifacts
+      - run: pytest backend/tests -q
+        env:
+          MONGODB_TEST_URI: mongodb://127.0.0.1:27017
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: mkdir -p ../.impeccable/review
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+
+  sync:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install .
+
+      - name: Temporarily allow this runner in Atlas
+        env:
+          ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
+          ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
+          ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
+        run: |
+          runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+          delete_after="$(date --utc --date='+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" '[{ipAddress: $ip, comment: "GitHub monthly collision sync", deleteAfterDate: $expires}]')"
+          curl --fail --silent --show-error --digest \
+            --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+            --header 'Accept: application/vnd.atlas.2023-01-01+json' \
+            --header 'Content-Type: application/json' \
+            --request POST \
+            --data "$payload" \
+            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList"
+          sleep 20
+
+      - name: Download, validate, and publish
+        env:
+          DASHBOARD_DATA_BACKEND: mongodb
+          MONGODB_URI: ${{ secrets.MONGODB_INGEST_URI }}
+          MONGODB_DATABASE: seattle_collision
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          ALLOW_ROW_DECREASE: ${{ inputs.allow_row_decrease || 'false' }}
+        run: |
+          flags=()
+          if [[ "$DRY_RUN" == "true" ]]; then flags+=(--dry-run); fi
+          if [[ "$ALLOW_ROW_DECREASE" == "true" ]]; then flags+=(--allow-row-decrease); fi
+          python -m backend.scripts.sync_collisions "${flags[@]}" --manifest-output "$RUNNER_TEMP/ingestion-manifest.json"
+
+      - name: Upload ingestion manifest
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collision-ingestion-manifest-${{ github.run_id }}
+          path: ${{ runner.temp }}/ingestion-manifest.json
+          if-no-files-found: warn
+          retention-days: 90

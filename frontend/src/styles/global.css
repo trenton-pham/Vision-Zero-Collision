@@ -1,0 +1,16 @@
+* { box-sizing: border-box; scrollbar-color: var(--border-strong) var(--canvas); scrollbar-width: thin; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--canvas); }
+*::-webkit-scrollbar-thumb { border: 2px solid var(--canvas); border-radius: 0; background: var(--border-strong); }
+html { color-scheme: dark; background: var(--canvas); }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: var(--canvas); color: var(--text-primary); font-family: var(--font-body); font-size: 15px; }
+a { color: inherit; text-decoration: none; text-underline-offset: 3px; }
+button, input, select { font: inherit; }
+input, select, textarea { caret-color: var(--selection); accent-color: var(--selection); }
+button, a, input, select, [tabindex] { outline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--focus); }
+::selection { color: #fff; background: #155ec6; }
+.skip-link { position: fixed; top: 8px; left: 8px; z-index: 9999; padding: 10px 14px; border: 1px solid var(--selection); background: var(--canvas); transform: translateY(-160%); }
+.skip-link:focus { transform: translateY(0); }
+.sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

@@ -1,0 +1,21 @@
+:root {
+  --canvas: #06111c;
+  --panel-deep: #07131f;
+  --panel: #0a1826;
+  --panel-raised: #0d1d2c;
+  --panel-active: #102742;
+  --text-primary: #f2f7fb;
+  --text-secondary: #b8c7d5;
+  --text-muted: #7890a8;
+  --border: #203247;
+  --border-strong: #36506a;
+  --selection: #2f84ff;
+  --support: #27d1df;
+  --caution: #f3a52b;
+  --caution-soft: #2a2111;
+  --fatal: #f05252;
+  --focus: #79b6ff;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, sans-serif;
+}
+

@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: seattle-collision-dashboard
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /readyz
+    autoDeploy: true
+    envVars:
+      - key: DASHBOARD_DATA_BACKEND
+        value: mongodb
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DATABASE
+        value: seattle_collision
+      - key: DATASET_REFRESH_SECONDS
+        value: "60"
+      - key: ARC_GIS_LAYER_URL
+        value: https://services.arcgis.com/ZOyb2t4B0UYuYNYH/arcgis/rest/services/SDOT_Collisions_All_Years_1/FeatureServer/0
+

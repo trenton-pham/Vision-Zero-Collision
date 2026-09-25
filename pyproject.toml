@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "seattle-collision-dashboard"
+version = "2.0.0"
+description = "Read-only Seattle collision analytics API"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "geopandas>=1.0,<2",
+  "httpx>=0.28,<1",
+  "numpy>=2.0,<3",
+  "pandas>=2.2,<3",
+  "pyarrow>=18,<23",
+  "dnspython>=2.7,<3",
+  "pymongo>=4.10,<5",
+  "scipy>=1.14,<2",
+  "shapely>=2.0,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3,<9",
+  "pytest-cov>=6,<8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+addopts = "-q"

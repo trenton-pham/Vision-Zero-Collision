@@ -1,0 +1,17 @@
+.frame { height: 100%; min-height: 560px; position: relative; overflow: hidden; border: 1px solid var(--border); background: #07131f; }
+.map { width: 100%; height: 100%; min-height: 560px; background: #07131f; }
+.frame :global(.leaflet-container) { font-family: var(--font-body); }
+.frame :global(.leaflet-tile-pane) { filter: invert(1) hue-rotate(180deg) brightness(.42) contrast(1.18) saturate(.45); }
+.frame :global(.leaflet-control-zoom a) { background: var(--panel-raised); color: var(--text-primary); border-color: var(--border); border-radius: 0 !important; }
+.frame :global(.leaflet-control-attribution) { background: rgba(6,17,28,.88); color: var(--text-muted); }
+.frame :global(.leaflet-control-attribution a) { color: var(--support); }
+.selectionPulsePath { animation: polygon-selection-pulse 720ms ease-out both; }
+.legend { position: absolute; z-index: 450; left: 14px; bottom: 14px; height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--border); background: rgba(6,17,28,.92); color: var(--text-muted); font: 500 .58rem/1 var(--font-display); letter-spacing: .09em; }
+.legend i { display: block; width: 72px; height: 5px; background: linear-gradient(90deg, #0b2840, #2f84ff); }
+.hint { position: absolute; z-index: 450; right: 14px; top: 14px; padding: 9px 10px; border: 1px solid var(--border); background: rgba(6,17,28,.92); color: var(--text-secondary); font: 500 .62rem/1 var(--font-display); letter-spacing: .09em; }
+@keyframes polygon-selection-pulse {
+  0% { stroke-width: 3; stroke-opacity: 1; fill-opacity: .72; }
+  42% { stroke-width: 7; stroke-opacity: 1; fill-opacity: .9; }
+  100% { stroke-width: 3; stroke-opacity: 1; fill-opacity: .72; }
+}
+@media (max-width: 760px) { .frame, .map { min-height: 390px; height: 390px; } .hint { display: none; } }

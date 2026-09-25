@@ -1,0 +1,9 @@
+.state { min-height: 180px; border: 1px solid var(--border); background: var(--panel); display: grid; place-items: center; align-content: center; gap: 10px; padding: 24px; text-align: center; color: var(--text-muted); }
+.state strong { color: var(--text-primary); font: 600 1.1rem/1.2 var(--font-display); letter-spacing: .05em; text-transform: uppercase; }
+.state svg { color: var(--fatal); }
+.state button { min-height: 42px; padding: 0 18px; border: 1px solid var(--fatal); background: transparent; color: var(--text-primary); text-transform: uppercase; font: 600 .72rem/1 var(--font-display); letter-spacing: .1em; cursor: pointer; }
+.loader { width: 28px; height: 28px; border: 2px solid var(--border-strong); border-top-color: var(--selection); animation: spin .8s linear infinite; }
+.error { border-color: color-mix(in srgb, var(--fatal) 70%, var(--border)); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .loader { animation: none; border-color: var(--selection); } }
+

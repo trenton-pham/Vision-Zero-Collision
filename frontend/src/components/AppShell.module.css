@@ -1,0 +1,42 @@
+.shell { min-height: 100vh; display: grid; grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: 68px minmax(0, 1fr); background: var(--canvas); color: var(--text-primary); }
+.rail { grid-row: 1 / -1; border-right: 1px solid var(--border); background: var(--panel-deep); display: flex; flex-direction: column; align-items: stretch; z-index: 20; }
+.brand { height: 68px; color: var(--selection); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font: 600 .65rem/1 var(--font-display); letter-spacing: .16em; }
+.brand svg { width: 28px; height: 28px; }
+.nav { padding-top: 18px; display: grid; gap: 8px; }
+.navItem { min-height: 72px; border-left: 2px solid transparent; color: var(--text-muted); display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; text-transform: uppercase; font: 500 .64rem/1 var(--font-display); letter-spacing: .1em; transition: color 140ms ease, background 140ms ease; }
+.navItem:hover, .navItem:focus-visible { color: var(--text-primary); background: var(--panel); }
+.navItem.active { color: var(--selection); border-left-color: var(--selection); background: var(--panel-active); }
+.navItem span { display: none; }
+.dataStatus { margin-top: auto; padding: 14px 8px 16px; border-top: 1px solid var(--border); color: var(--text-muted); display: grid; justify-items: center; gap: 5px; text-align: center; font: 500 .57rem/1.25 var(--font-display); letter-spacing: .09em; }
+.dataStatus strong { color: var(--text-secondary); font-size: .59rem; }
+.statusDot { width: 6px; height: 6px; background: var(--support); }
+.header { grid-column: 2; display: flex; align-items: center; justify-content: flex-end; border-bottom: 1px solid var(--border); background: var(--canvas); padding: 0 22px; z-index: 15; }
+.main { grid-column: 2; min-width: 0; min-height: 0; }
+.yearControl { display: grid; grid-template-columns: auto 190px auto; align-items: center; gap: 18px; min-width: 520px; }
+.yearMeta { display: grid; gap: 2px; text-align: right; color: var(--text-muted); font: 500 .63rem/1 var(--font-display); letter-spacing: .12em; }
+.yearMeta strong { color: var(--text-primary); font-size: 1rem; font-variant-numeric: tabular-nums; letter-spacing: .05em; }
+.slider { position: relative; display: flex; align-items: center; width: 190px; height: 28px; touch-action: none; }
+.track { height: 2px; flex: 1; background: var(--border-strong); position: relative; }
+.range { position: absolute; height: 100%; background: var(--selection); }
+.thumb { width: 44px; height: 44px; position: relative; border: 0; background: transparent; }
+.thumb::after { content: ''; position: absolute; inset: 50% auto auto 50%; width: 14px; height: 14px; border: 2px solid var(--selection); background: var(--canvas); box-shadow: 0 0 0 2px var(--canvas); transform: translate(-50%, -50%); }
+.thumb:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; }
+.partialThumb::after { border-color: var(--caution); }
+.partial { color: var(--caution); font: 600 .63rem/1 var(--font-display); letter-spacing: .1em; white-space: nowrap; }
+.tooltip { background: var(--panel-raised); border: 1px solid var(--border-strong); color: var(--text-primary); padding: 8px 10px; border-radius: 2px; font-size: .75rem; }
+.mobileNav, .mobileBrand { display: none; }
+
+@media (max-width: 760px) {
+  .shell { display: block; padding-top: 108px; }
+  .rail { display: none; }
+  .header { position: fixed; top: 0; left: 0; right: 0; height: 108px; padding: 0; display: grid; grid-template-columns: 1fr auto; grid-template-rows: 48px 60px; background: var(--canvas); }
+  .mobileBrand { display: flex; align-items: center; gap: 8px; padding-left: 14px; color: var(--selection); font: 600 .78rem/1 var(--font-display); letter-spacing: .13em; }
+  .mobileNav { display: flex; align-items: stretch; height: 48px; }
+  .mobileNav a { display: grid; place-items: center; padding: 0 12px; border-left: 1px solid var(--border); color: var(--text-muted); text-transform: uppercase; font: 500 .68rem/1 var(--font-display); letter-spacing: .09em; }
+  .mobileNav a[aria-current="page"] { color: var(--selection); border-bottom: 2px solid var(--selection); }
+  .yearControl { grid-column: 1 / -1; border-top: 1px solid var(--border); padding: 0 14px; min-width: 0; grid-template-columns: auto 1fr; gap: 14px; }
+  .slider { width: 100%; }
+  .partial { display: none; }
+  .yearMeta { text-align: left; }
+  .main { min-height: calc(100vh - 108px); }
+}
