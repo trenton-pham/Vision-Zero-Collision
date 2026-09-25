@@ -9,6 +9,12 @@ import backend.scripts.sync_collisions as sync_module
 from backend.scripts.sync_collisions import ArcGISClient, REQUIRED_FIELD_TYPES
 
 
+def request_params(request: httpx.Request) -> dict[str, list[str]]:
+    if request.method == "POST":
+        return parse_qs(request.content.decode())
+    return parse_qs(request.url.query.decode())
+
+
 def metadata(last_edit: int = 100) -> dict:
     return {
         "geometryType": "esriGeometryPoint",
@@ -23,14 +29,16 @@ def metadata(last_edit: int = 100) -> dict:
 def test_download_uses_id_batches_and_reconciles_more_than_transfer_limit() -> None:
     object_ids = list(range(1, 2_502))
     batch_sizes: list[int] = []
+    batch_methods: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        params = parse_qs(request.url.query.decode())
+        params = request_params(request)
         if request.url.path.endswith("/query") and params.get("returnIdsOnly") == ["true"]:
             return httpx.Response(200, json={"objectIdFieldName": "OBJECTID", "objectIds": object_ids})
         if request.url.path.endswith("/query"):
             batch = [int(value) for value in params["objectIds"][0].split(",")]
             batch_sizes.append(len(batch))
+            batch_methods.append(request.method)
             return httpx.Response(200, json={
                 "type": "FeatureCollection",
                 "features": [
@@ -44,6 +52,7 @@ def test_download_uses_id_batches_and_reconciles_more_than_transfer_limit() -> N
     collection, source = client.download_consistent_snapshot()
     assert len(collection["features"]) == 2_501
     assert batch_sizes == [1_000, 1_000, 501]
+    assert batch_methods == ["POST", "POST", "POST"]
     assert source["sourceFeatureCount"] == 2_501
 
 
@@ -52,7 +61,7 @@ def test_download_restarts_when_layer_changes_mid_fetch() -> None:
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal metadata_calls
-        params = parse_qs(request.url.query.decode())
+        params = request_params(request)
         if request.url.path.endswith("/query") and params.get("returnIdsOnly") == ["true"]:
             return httpx.Response(200, json={"objectIds": [1]})
         if request.url.path.endswith("/query"):
@@ -80,7 +89,7 @@ def test_transient_http_failure_is_retried(monkeypatch: pytest.MonkeyPatch) -> N
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal metadata_calls
-        params = parse_qs(request.url.query.decode())
+        params = request_params(request)
         if request.url.path.endswith("/query") and params.get("returnIdsOnly") == ["true"]:
             return httpx.Response(200, json={"objectIds": [1]})
         if request.url.path.endswith("/query"):

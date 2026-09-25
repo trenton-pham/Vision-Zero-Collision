@@ -81,10 +81,26 @@ class ArcGISClient:
             self.client.close()
 
     def _get_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+        return self._request_json("GET", url, params)
+
+    def _post_json(self, url: str, params: dict[str, Any]) -> dict[str, Any]:
+        return self._request_json("POST", url, params)
+
+    def _request_json(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, Any],
+    ) -> dict[str, Any]:
         last_error: Exception | None = None
         for attempt in range(5):
             try:
-                response = self.client.get(url, params=params)
+                response = self.client.request(
+                    method,
+                    url,
+                    params=params if method == "GET" else None,
+                    data=params if method == "POST" else None,
+                )
                 response.raise_for_status()
                 payload = response.json()
                 if "error" in payload:
@@ -143,7 +159,11 @@ class ArcGISClient:
         collections: list[dict[str, Any]] = []
         returned_ids: list[int] = []
         for batch in batched(object_ids):
-            payload = self._get_json(
+            # A 1,000-ID query exceeds the URL length accepted by the ArcGIS
+            # front end when encoded as GET parameters. ArcGIS query endpoints
+            # accept the same parameters as form data, so POST keeps batches
+            # deterministic without producing an oversized request URL.
+            payload = self._post_json(
                 f"{self.layer_url}/query",
                 {
                     "f": "geojson",
