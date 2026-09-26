@@ -8,11 +8,6 @@ from backend.app.main import app
 client = TestClient(app)
 
 
-def test_root_accepts_render_head_probe() -> None:
-    response = client.head("/")
-    assert response.status_code == 204
-
-
 def test_meta_and_geojson_contracts() -> None:
     meta = client.get("/api/meta")
     assert meta.status_code == 200

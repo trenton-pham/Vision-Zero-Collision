@@ -187,15 +187,16 @@ def citywide_downtown(start_year: int, end_year: int, store: Store, severity: Se
     return safe_year_call(store.downtown_comparison, start_year, end_year, severity or [])
 
 
+@app.head("/", include_in_schema=False)
+def root_head() -> Response:
+    # Keep the probe available even before the frontend has been built.
+    return Response(status_code=204)
+
+
 if FRONTEND_DIST.exists():
     assets = FRONTEND_DIST / "assets"
     if assets.exists():
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
-
-    @app.head("/", include_in_schema=False)
-    def root_head() -> Response:
-        # Render probes the root with HEAD while detecting the bound HTTP port.
-        return Response(status_code=204)
 
     @app.get("/{full_path:path}", include_in_schema=False)
     def spa_fallback(full_path: str, request: Request):
