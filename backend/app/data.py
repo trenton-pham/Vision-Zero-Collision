@@ -17,7 +17,10 @@ from scipy.stats import gaussian_kde
 from shapely.geometry import Point
 
 from .config import Settings
-from .repository import ArtifactDatasetRepository, DatasetBundle, MongoDatasetRepository
+from .repository import (
+    ArtifactDatasetRepository, DatasetBundle, MongoDatasetRepository,
+    compact_collisions, read_collisions,
+)
 from .schemas import (
     AnnualMetric,
     CitywideSummary,
@@ -77,14 +80,14 @@ class DataStore:
             self.manifest = self._read_manifest()
             if validate_sources:
                 self._validate_sources()
-            self.collisions = pd.read_parquet(self.artifact_dir / "collisions_assigned.parquet")
+            self.collisions = read_collisions(self.artifact_dir / "collisions_assigned.parquet")
             self.annual = pd.read_parquet(self.artifact_dir / "neighborhood_annual.parquet")
             self.monthly = pd.read_parquet(self.artifact_dir / "context_monthly.parquet")
             self.geojson = json.loads((self.artifact_dir / "neighborhoods.geojson").read_text())
             self.neighborhoods = gpd.read_file(self.artifact_dir / "neighborhoods.geojson").sort_values("id")
         else:
             self.manifest = dict(bundle.manifest)
-            self.collisions = bundle.collisions.copy()
+            self.collisions = compact_collisions(bundle.collisions)
             self.annual = bundle.annual.copy()
             self.monthly = bundle.monthly.copy()
             self.geojson = bundle.geojson
@@ -102,7 +105,7 @@ class DataStore:
             + 5 * self.collisions["FATALITIES"].fillna(0)
         )
         self.collisions["pedestrian_collision"] = self.collisions["PEDCOUNT"].fillna(0).gt(0)
-        self.collisions["intersection"] = self.collisions["JUNCTIONTYPE"].fillna("").str.startswith("At Intersection")
+        self.collisions["intersection"] = self.collisions["JUNCTIONTYPE"].str.startswith("At Intersection", na=False)
         self.collisions["night"] = self.collisions["HOUR"].lt(6) | self.collisions["HOUR"].ge(20)
         self.collisions["weekend"] = self.collisions["Day_of_Week"].isin(["Saturday", "Sunday"])
 
@@ -449,15 +452,15 @@ class DataStore:
         invalid = sorted(set(selected) - set(SEVERITY_KEYS))
         if invalid:
             raise ValueError(f"unknown severity filter: {', '.join(invalid)}")
-        frame = self.collisions[self.collisions["YEAR"].between(start_year, end_year)]
+        mask = self.collisions["YEAR"].between(start_year, end_year)
         if selected:
             include_null = "unknown" in selected
             labels = [SEVERITY_KEYS[item] for item in selected if item != "unknown"]
-            mask = frame["MAXSEVERITYDESC"].isin(labels)
+            severity_mask = self.collisions["MAXSEVERITYDESC"].isin(labels)
             if include_null:
-                mask |= frame["MAXSEVERITYDESC"].isna()
-            frame = frame[mask]
-        return frame
+                severity_mask |= self.collisions["MAXSEVERITYDESC"].isna()
+            mask &= severity_mask
+        return self.collisions[mask]
 
     def _metric_set_from_collisions(self, frame: pd.DataFrame) -> NeighborhoodMetricSet:
         count = len(frame)
@@ -589,6 +592,7 @@ class DataStoreManager:
             self.repository = ArtifactDatasetRepository(DEFAULT_ARTIFACT_DIR)
         self._store: DataStore | None = None
         self._lock = threading.RLock()
+        self._refresh_lock = threading.Lock()
         self.last_error: str | None = None
 
     @property
@@ -605,13 +609,20 @@ class DataStoreManager:
             return self._store
 
     def get(self) -> DataStore:
-        with self._lock:
-            if self._store is None:
-                self.refresh(force=True)
-            assert self._store is not None
-            return self._store
+        store = self.current
+        if store is None:
+            self.refresh()
+            store = self.current
+        assert store is not None
+        return store
 
     def refresh(self, force: bool = False) -> bool:
+        # Only one candidate may be loaded at a time. Readers and health probes
+        # can still use the previous snapshot while the replacement is built.
+        with self._refresh_lock:
+            return self._refresh(force)
+
+    def _refresh(self, force: bool) -> bool:
         try:
             active_version = self.repository.active_version()
             with self._lock:

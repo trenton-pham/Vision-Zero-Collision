@@ -98,7 +98,12 @@ def test_version_publication_loading_and_rollback() -> None:
             "type": "Point",
             "coordinates": [-122.33, 47.60],
         }
-        assert len(repository.load_active().collisions) == 1
+        loaded = repository.load_active().collisions
+        assert len(loaded) == 1
+        assert loaded.loc[0, "X"] == -122.33
+        assert loaded.loc[0, "MAXSEVERITYDESC"] == "Property Damage Only Collision"
+        assert loaded["MAXSEVERITYDESC"].dtype == "category"
+        assert not {"_id", "datasetVersion", "geometry", "MODDTTM"}.intersection(loaded.columns)
 
         second = bundle("v2", collision_count=2)
         assert writer.publish(second, "v2", "hash-v2", {})["status"] == "published"

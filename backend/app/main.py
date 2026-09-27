@@ -121,12 +121,7 @@ def readiness() -> HealthResponse:
 @app.get("/api/meta", response_model=DatasetMeta, tags=["metadata"])
 def meta() -> DatasetMeta:
     manager = get_store_manager()
-    if manager.backend == "mongodb":
-        try:
-            manager.refresh()
-        except Exception:
-            # A metadata poll must never displace the last valid snapshot.
-            pass
+    # The background poll owns refreshes; browser visits only read the snapshot.
     return manager.get().meta()
 
 

@@ -7,6 +7,33 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import pandas as pd
+import pyarrow.parquet as pq
+
+
+# Keep the runtime snapshot small; source-only descriptions are not used by the API.
+COLLISION_COLUMNS = (
+    "OBJECTID", "INCKEY", "COLDETKEY", "MAXSEVERITYDESC", "INJURIES",
+    "SERIOUSINJURIES", "FATALITIES", "PEDCOUNT", "INCDATE", "JUNCTIONTYPE",
+    "YEAR", "MONTH", "HOUR", "Day_of_Week", "X", "Y", "neighborhood_id",
+    "neighborhood_name", "assignment_method", "assignment_distance_m",
+)
+COLLISION_CATEGORIES = frozenset({
+    "MAXSEVERITYDESC", "JUNCTIONTYPE", "Day_of_Week", "neighborhood_id",
+    "neighborhood_name", "assignment_method",
+})
+
+
+def compact_collisions(frame: pd.DataFrame) -> pd.DataFrame:
+    frame = frame.loc[:, [column for column in COLLISION_COLUMNS if column in frame]].copy()
+    for column in COLLISION_CATEGORIES.intersection(frame.columns):
+        frame[column] = frame[column].astype("category")
+    return frame
+
+
+def read_collisions(path: Path) -> pd.DataFrame:
+    available = set(pq.read_schema(path).names)
+    columns = [column for column in COLLISION_COLUMNS if column in available]
+    return compact_collisions(pd.read_parquet(path, columns=columns))
 
 
 @dataclass(frozen=True)
@@ -32,7 +59,7 @@ class ArtifactDatasetRepository:
         manifest.setdefault("lastPublishedAt", manifest.get("builtAt"))
         return DatasetBundle(
             manifest=manifest,
-            collisions=pd.read_parquet(self.artifact_dir / "collisions_assigned.parquet"),
+            collisions=read_collisions(self.artifact_dir / "collisions_assigned.parquet"),
             annual=pd.read_parquet(self.artifact_dir / "neighborhood_annual.parquet"),
             monthly=pd.read_parquet(self.artifact_dir / "context_monthly.parquet"),
             geojson=json.loads((self.artifact_dir / "neighborhoods.geojson").read_text()),
@@ -65,14 +92,27 @@ class MongoDatasetRepository:
         return str(self.active_state()["activeVersion"])
 
     @staticmethod
-    def _frame(documents: Iterable[dict[str, Any]]) -> pd.DataFrame:
-        rows = []
-        for document in documents:
-            row = dict(document)
-            row.pop("_id", None)
-            row.pop("datasetVersion", None)
-            rows.append(row)
-        return pd.DataFrame(rows)
+    def _frame(
+        documents: Iterable[dict[str, Any]],
+        categories: frozenset[str] = frozenset(),
+    ) -> pd.DataFrame:
+        # Decode directly into columns instead of retaining every Mongo document.
+        # Share repeated labels immediately, before allocating the DataFrame.
+        columns: dict[str, list[Any]] = {}
+        labels: dict[str, dict[str, str]] = {key: {} for key in categories}
+        for count, document in enumerate(documents):
+            for key in document:
+                if key not in {"_id", "datasetVersion"} and key not in columns:
+                    columns[key] = [None] * count
+            for key, values in columns.items():
+                value = document.get(key)
+                if key in labels and isinstance(value, str):
+                    value = labels[key].setdefault(value, value)
+                values.append(value)
+        frame = pd.DataFrame(columns)
+        for key in categories.intersection(frame.columns):
+            frame[key] = frame[key].astype("category")
+        return frame
 
     def load_active(self) -> DatasetBundle:
         state = self.active_state()
@@ -84,8 +124,9 @@ class MongoDatasetRepository:
         collisions = self._frame(
             self.database.collisions.find(
                 {"datasetVersion": version},
-                {"datasetVersion": 0, "geometry": 0},
-            )
+                {"_id": 0, **dict.fromkeys(COLLISION_COLUMNS, 1)},
+            ).batch_size(1_000),
+            categories=COLLISION_CATEGORIES,
         )
         annual = self._frame(
             self.database.neighborhood_annual.find({"datasetVersion": version}, {"datasetVersion": 0})
