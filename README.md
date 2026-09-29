@@ -6,6 +6,7 @@ A public, read-only React + FastAPI dashboard for observed Seattle collision pat
 
 - Neighborhood metrics always include every severity level. Citywide severity filters cannot enter neighborhood API requests.
 - Composite severity is `INJURIES + 3 × SERIOUSINJURIES + 5 × FATALITIES`.
+- Night share uses only collisions with a recorded incident time; date-only timestamps have an unknown hour.
 - With no neighborhood selected, Neighborhood Explorer shows all-severity Seattle citywide summary statistics and trends. Selecting a neighborhood replaces the inspector with local statistics; clearing it restores the citywide baseline.
 - Neighborhood Explorer inspector grids omit Night and Weekend distribution shares without removing those measures from the API or Citywide Analysis.
 - Annual trend is the default; `grain=monthly` shows zero-filled monthly observations from January 2015 through the latest received month.
@@ -73,6 +74,8 @@ The current regression baseline is:
 Production uses MongoDB as the durable source. Each collision and aggregate document is tagged with an immutable dataset version. A run writes and validates the entire new version before atomically switching the `dataset_state.activeVersion` pointer; failed runs leave the current dashboard untouched. The API checks for a new active version every 60 seconds and swaps its in-memory snapshot only after loading and validating it.
 
 The ingestion job queries the ArcGIS object-ID list, downloads records in batches of 1,000, verifies that the layer did not change mid-download, performs the existing cleaning and neighborhood assignment, and reconciles annual and monthly totals. Its uploaded manifest reports the source and spatial row counts, accepted exclusions, normalized hash, and difference from the checked-in 106,050-record baseline. Historical edits and deletions are captured because every monthly run is a full authoritative sync. Vehicle data is intentionally not part of this dashboard refresh.
+
+The publication gate checks both source feature count and usable spatial collision count for decreases greater than 1%. Snapshots published before the known-time night-share correction display that metric as unavailable until the next full sync.
 
 Configure these GitHub environment secrets:
 

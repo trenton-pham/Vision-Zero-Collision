@@ -5,9 +5,12 @@ import pandas as pd
 from backend.app.data import DataStore
 
 
-def test_metric_formula_and_null_safe_shares(store: DataStore) -> None:
+def test_metric_formula_and_null_safe_shares(store: DataStore, monkeypatch) -> None:
+    monkeypatch.setattr(store, "has_known_time_night_share", True)
+    monkeypatch.setattr(store, "_known_time_by_scope_year", {("ballard", 2025): 2})
     rows = pd.DataFrame([
         {
+            "YEAR": 2025,
             "collision_count": 2,
             "injuries": 3,
             "serious_injuries": 1,
@@ -26,6 +29,12 @@ def test_metric_formula_and_null_safe_shares(store: DataStore) -> None:
     assert metrics.nightShare == 0.5
     assert metrics.weekendShare == 1.0
 
+    rows["collision_count"] = 3
+    assert store._metric_set_from_annual("ballard", rows).nightShare == 0.5
+    monkeypatch.setattr(store, "_known_time_by_scope_year", {})
+    rows["night_collisions"] = 0
+    assert store._metric_set_from_annual("ballard", rows).nightShare is None
+
     empty = rows.copy()
     for column in empty.columns:
         empty[column] = 0
@@ -33,6 +42,25 @@ def test_metric_formula_and_null_safe_shares(store: DataStore) -> None:
     assert zero.collisionCount == 0
     assert zero.meanSeverity is None
     assert zero.intersectionShare is None
+    assert zero.nightShare is None
+
+
+def test_citywide_night_share_uses_only_known_times(store: DataStore, monkeypatch) -> None:
+    monkeypatch.setattr(store, "has_known_time_night_share", True)
+    frame = store.collisions.head(3).copy()
+    frame["HOUR"] = [float("nan"), 0, 21]
+    frame["night"] = [False, True, True]
+    assert store._metric_set_from_collisions(frame).nightShare == 1.0
+
+    frame["HOUR"] = float("nan")
+    frame["night"] = False
+    assert store._metric_set_from_collisions(frame).nightShare is None
+
+
+def test_legacy_snapshot_does_not_report_uncorrectable_night_share(store: DataStore, monkeypatch) -> None:
+    monkeypatch.setattr(store, "has_known_time_night_share", False)
+    assert store.citywide_summary(2025, 2025, []).metrics.nightShare is None
+    assert store.citywide_trend(2025, 2025).metrics.nightShare is None
 
 
 def test_annual_series_is_zero_filled_and_partial_excluded_from_trend(store: DataStore) -> None:

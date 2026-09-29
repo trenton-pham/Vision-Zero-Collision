@@ -242,6 +242,12 @@ class MongoDatasetWriter:
                 f"({decrease / current_source_count:.2%}); "
                 "manual override required"
             )
+        if current_count and new_count < current_count * 0.99 and not allow_row_decrease:
+            decrease = current_count - new_count
+            raise RuntimeError(
+                f"Usable collision count decreased by {decrease:,} "
+                f"({decrease / current_count:.2%}); manual override required"
+            )
         if state and state.get("contentHash") == content_hash:
             result = {
                 "status": "no_change",

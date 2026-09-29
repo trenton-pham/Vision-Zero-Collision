@@ -24,6 +24,7 @@ from backend.scripts.build_artifacts import (
     aggregate_annual,
     aggregate_monthly,
     assign,
+    partial_years,
     slugify,
 )
 
@@ -241,6 +242,9 @@ def clean_features(collection: dict[str, Any]) -> tuple[gpd.GeoDataFrame, dict[s
 
     points["INCDATE"] = _parse_arcgis_date(points["INCDATE"], "INCDATE", required=True)
     points["MODDTTM"] = _parse_arcgis_date(points["MODDTTM"], "MODDTTM", required=False)
+    has_incident_time = points["INCDTTM"].astype("string").str.contains(
+        r"\d{1,2}:\d{2}", regex=True, na=False
+    )
     incident_time = pd.to_datetime(points["INCDTTM"], format="mixed", errors="coerce")
     if incident_time.isna().mean() > 0.50:
         raise RuntimeError("More than half of ArcGIS INCDTTM values are missing or invalid")
@@ -254,7 +258,7 @@ def clean_features(collection: dict[str, Any]) -> tuple[gpd.GeoDataFrame, dict[s
     points["JUNCTIONTYPE"] = points["JUNCTIONTYPE"].astype("string").str.strip().fillna("Unknown")
     points["YEAR"] = points["INCDATE"].dt.year.astype(int)
     points["MONTH"] = points["INCDATE"].dt.month.astype(int)
-    points["HOUR"] = incident_time.dt.hour
+    points["HOUR"] = incident_time.dt.hour.where(has_incident_time)
     points["Day_of_Week"] = points["INCDATE"].dt.day_name()
 
     min_x, min_y, max_x, max_y = SEATTLE_BOUNDS
@@ -281,6 +285,7 @@ def clean_features(collection: dict[str, Any]) -> tuple[gpd.GeoDataFrame, dict[s
         "sourceRows": len(points),
         "geometryExcludedRows": excluded,
         "missingSeverityRows": int(valid_points["MAXSEVERITYDESC"].isna().sum()),
+        "unknownTimeRows": int(valid_points["HOUR"].isna().sum()),
     }
 
 
@@ -358,11 +363,8 @@ def build_bundle(
         "lastPublishedAt": None,
         "dataAsOf": data_as_of.isoformat(),
         "availableYears": available_years,
-        "partialYears": (
-            [data_as_of.year]
-            if data_as_of.year == datetime.now(ZoneInfo("America/Los_Angeles")).year
-            else []
-        ),
+        "partialYears": partial_years(data_as_of),
+        "knownTimeNightShare": True,
         "collisionCount": len(frame),
         "neighborhoodCount": len(polygons),
         "assignmentCounts": assignment_counts,

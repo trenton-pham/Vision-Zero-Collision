@@ -39,6 +39,7 @@ The product joins deterministic neighborhood assignment with transparent, route-
 - Collision-to-neighborhood assignment uses containment, deterministic shared-boundary handling, a projected nearest-neighborhood fallback within 25 metres, then an explicit unassigned state.
 - The current regression baseline is 104,579 direct assignments, 1,193 nearest assignments, and 278 unassigned collisions across 106,050 spatial records.
 - Neighborhood metrics are collision count; injuries; serious injuries; fatalities; total and mean composite severity; pedestrian-involved collisions; and intersection, night, and weekend shares. Composite severity is `INJURIES + 3 × SERIOUSINJURIES + 5 × FATALITIES`.
+- Night share uses collisions with a recorded incident hour as its denominator. Date-only incident timestamps have an unknown hour and do not count as nighttime.
 - Neighborhood calculations accept a selected year range and never accept or inherit citywide severity filters.
 - Annual and monthly series are zero-filled through the latest observed period. Annual is the default; an explicit URL-backed toggle reveals monthly observations from January 2015 through the latest received month. The current partial year uses a dynamic received-through label and is excluded from comparisons. Trend comparison uses non-overlapping first and last three-year complete-period averages only when six complete years exist.
 - There is no Express service, Streamlit UI, Folium iframe, RAG, chat, model serving, account system, or shipped model-training path.

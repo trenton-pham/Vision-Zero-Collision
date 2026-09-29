@@ -85,6 +85,9 @@ class CollisionCleaner(BaseCleaner):
             'INCDATE',
             required=True
         )
+        has_incident_time = gdf['INCDTTM'].astype('string').str.contains(
+            r'\d{1,2}:\d{2}', regex=True, na=False
+        )
         gdf['INCDTTM'] = self.parse_datetime(gdf['INCDTTM'], 'INCDTTM')
         freshness_days = self.validate_freshness(
             gdf['INCDATE'],
@@ -97,7 +100,7 @@ class CollisionCleaner(BaseCleaner):
         gdf['YEAR'] = gdf['INCDATE'].dt.year
         gdf['MONTH'] = gdf['INCDATE'].dt.month
         gdf['DAY'] = gdf['INCDATE'].dt.day
-        gdf['HOUR'] = gdf['INCDTTM'].dt.hour
+        gdf['HOUR'] = gdf['INCDTTM'].dt.hour.where(has_incident_time)
         gdf, excluded_before_window, excluded_after_window = (
             self.filter_year_window(gdf)
         )
@@ -140,10 +143,7 @@ class CollisionCleaner(BaseCleaner):
         self.validate_collision_data(gdf, 'Cleaned collision data')
 
         spatial_excluded = gdf[~gdf['HAS_VALID_GEOMETRY']]
-        midnight = (
-            gdf['INCDTTM'].dt.hour.eq(0)
-            & gdf['INCDTTM'].dt.minute.eq(0)
-        )
+        midnight = gdf['HOUR'].eq(0) & gdf['INCDTTM'].dt.minute.eq(0)
         stats = {
             'source': self.source_details(
                 source_rows,
@@ -158,6 +158,7 @@ class CollisionCleaner(BaseCleaner):
             'excluded_after_window': excluded_after_window,
             'severity_missing_rows': int(gdf['MAXSEVERITYCODE'].isna().sum()),
             'midnight_time_rows': int(midnight.sum()),
+            'unknown_time_rows': int(gdf['HOUR'].isna().sum()),
             'geometry_status': {
                 str(key): int(value)
                 for key, value in gdf['GEOMETRY_STATUS'].value_counts().items()

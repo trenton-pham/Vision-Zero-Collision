@@ -1,5 +1,5 @@
 {
-  "run_timestamp_utc": "2026-09-08T06:08:36.082050+00:00",
+  "run_timestamp_utc": "2026-09-29T17:47:45.454146+00:00",
   "analysis_window": {
     "start_year": 2015,
     "end_year": 2026,
@@ -15,7 +15,7 @@
       "rows": 261881,
       "min_incident_date": "2003-10-06",
       "max_incident_date": "2026-08-31",
-      "freshness_days": 7
+      "freshness_days": 29
     },
     "cleaned_rows": 109040,
     "canonical_format": "parquet",
@@ -23,7 +23,8 @@
     "excluded_before_window": 152841,
     "excluded_after_window": 0,
     "severity_missing_rows": 223,
-    "midnight_time_rows": 19872,
+    "midnight_time_rows": 0,
+    "unknown_time_rows": 19872,
     "geometry_status": {
       "valid": 106050,
       "missing": 2990
@@ -64,7 +65,7 @@
       "rows": 429671,
       "min_incident_date": "2004-01-01",
       "max_incident_date": "2026-01-23",
-      "freshness_days": 227
+      "freshness_days": 249
     },
     "cleaned_rows": 160695,
     "canonical_format": "parquet",
@@ -137,11 +138,11 @@
   "outputs": {
     "collision_cleaned_parquet": {
       "path": "/Users/trentonpham/Code/seattle_collision/data/cleaned/Collision_All_Filtered.parquet",
-      "bytes": 9550954
+      "bytes": 9554370
     },
     "collision_spatial_excluded": {
       "path": "/Users/trentonpham/Code/seattle_collision/data/cleaned/Collision_Spatial_Excluded.parquet",
-      "bytes": 292183
+      "bytes": 291881
     },
     "vehicle_cleaned_parquet": {
       "path": "/Users/trentonpham/Code/seattle_collision/data/cleaned/Vehicle_Filtered.parquet",
@@ -157,15 +158,15 @@
     },
     "collision_processed_parquet": {
       "path": "/Users/trentonpham/Code/seattle_collision/data/processed/Collision_Processed.parquet",
-      "bytes": 6167560
+      "bytes": 6171307
     },
     "collision_cleaned_geojson": {
       "path": "/Users/trentonpham/Code/seattle_collision/data/cleaned/Collision_All_Filtered.geojson",
-      "bytes": 248607526
+      "bytes": 248845478
     },
     "collision_processed_geojson": {
       "path": "/Users/trentonpham/Code/seattle_collision/data/processed/Collision_Processed.geojson",
-      "bytes": 127054997
+      "bytes": 127285741
     }
   }
 }

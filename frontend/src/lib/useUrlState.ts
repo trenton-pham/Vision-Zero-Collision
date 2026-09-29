@@ -1,6 +1,9 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useDatasetMeta } from './dataset'
+import { CITYWIDE_SEVERITIES } from './severity'
+
+const validSeverities = new Set<string>(CITYWIDE_SEVERITIES.map(([key]) => key))
 
 function toYear(value: string | null, fallback: number, minimum: number, maximum: number) {
   if (value === null || value.trim() === '') return fallback
@@ -21,10 +24,22 @@ export function useDashboardParams() {
   const mapMetric = searchParams.get('metric') ?? 'collisionCount'
   const trendGrain: 'annual' | 'monthly' = searchParams.get('grain') === 'monthly' ? 'monthly' : 'annual'
   const cityLayer: 'kde' | 'heatmap' = searchParams.get('layer') === 'kde' ? 'kde' : 'heatmap'
+  const rawSeverity = searchParams.get('severity')
   const severities = useMemo(
-    () => (searchParams.get('severity') ?? '').split(',').filter(Boolean),
-    [searchParams],
+    () => [...new Set((rawSeverity ?? '').split(',').filter((value) => validSeverities.has(value)))],
+    [rawSeverity],
   )
+  const canonicalSeverity = severities.join(',')
+
+  useEffect(() => {
+    if (rawSeverity === null || rawSeverity === canonicalSeverity) return
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      if (canonicalSeverity) next.set('severity', canonicalSeverity)
+      else next.delete('severity')
+      return next
+    }, { replace: true })
+  }, [rawSeverity, canonicalSeverity, setSearchParams])
 
   const update = useCallback(
     (changes: Record<string, string | number | null>) => {

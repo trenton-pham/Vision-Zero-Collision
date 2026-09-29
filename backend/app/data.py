@@ -98,6 +98,20 @@ class DataStore:
         self._validate_bundle()
         self.neighborhoods_projected = self.neighborhoods.to_crs("EPSG:26910")
         self.name_by_id = dict(zip(self.neighborhoods["id"], self.neighborhoods["name"], strict=True))
+        self.has_known_time_night_share = bool(self.manifest.get("knownTimeNightShare"))
+        self._known_time_by_scope_year: dict[tuple[str, int], int] = {}
+        if self.has_known_time_night_share:
+            known = self.collisions.loc[self.collisions["HOUR"].notna()]
+            self._known_time_by_scope_year = {
+                (str(scope), int(year)): int(count)
+                for (scope, year), count in known.groupby(
+                    ["neighborhood_id", "YEAR"], observed=True
+                ).size().items()
+            }
+            self._known_time_by_scope_year.update({
+                ("citywide", int(year)): int(count)
+                for year, count in known.groupby("YEAR").size().items()
+            })
 
         self.collisions["severity_score"] = (
             self.collisions["INJURIES"].fillna(0)
@@ -269,7 +283,15 @@ class DataStore:
             MetricDefinition(key="meanSeverity", label="Mean severity", definition="Composite severity burden per collision.", unit="score/collision"),
             MetricDefinition(key="pedestrianCollisions", label="Pedestrian-involved", definition="Collisions where PEDCOUNT is greater than zero.", unit="count"),
             MetricDefinition(key="intersectionShare", label="Intersection share", definition="Share whose junction type starts with At Intersection.", unit="percent"),
-            MetricDefinition(key="nightShare", label="Night share", definition="Share occurring from 20:00 through 05:59.", unit="percent"),
+            MetricDefinition(
+                key="nightShare", label="Night share",
+                definition=(
+                    "Share of collisions with a recorded incident time occurring from 20:00 through 05:59."
+                    if self.has_known_time_night_share
+                    else "Unavailable until the dataset is refreshed with recorded-time information."
+                ),
+                unit="percent",
+            ),
             MetricDefinition(key="weekendShare", label="Weekend share", definition="Share occurring Saturday or Sunday.", unit="percent"),
         ]
         return DatasetMeta(
@@ -291,6 +313,10 @@ class DataStore:
     def _metric_set_from_annual(self, neighborhood_id: str, rows: pd.DataFrame) -> NeighborhoodMetricSet:
         count = int(rows["collision_count"].sum())
         severity = int(rows["total_severity"].sum())
+        known_time_count = sum(
+            self._known_time_by_scope_year.get((neighborhood_id, int(year)), 0)
+            for year in rows["YEAR"]
+        )
         return NeighborhoodMetricSet(
             id=neighborhood_id,
             name=self.name_by_id.get(neighborhood_id, "Citywide"),
@@ -302,7 +328,10 @@ class DataStore:
             meanSeverity=round(severity / count, 3) if count else None,
             pedestrianCollisions=int(rows["pedestrian_collisions"].sum()),
             intersectionShare=self._nullable_ratio(rows["intersection_collisions"].sum(), count),
-            nightShare=self._nullable_ratio(rows["night_collisions"].sum(), count),
+            nightShare=(
+                self._nullable_ratio(rows["night_collisions"].sum(), known_time_count)
+                if self.has_known_time_night_share else None
+            ),
             weekendShare=self._nullable_ratio(rows["weekend_collisions"].sum(), count),
         )
 
@@ -476,7 +505,10 @@ class DataStore:
             meanSeverity=round(severity / count, 3) if count else None,
             pedestrianCollisions=int(frame["pedestrian_collision"].sum()),
             intersectionShare=self._nullable_ratio(frame["intersection"].sum(), count),
-            nightShare=self._nullable_ratio(frame["night"].sum(), count),
+            nightShare=(
+                self._nullable_ratio(frame["night"].sum(), int(frame["HOUR"].notna().sum()))
+                if self.has_known_time_night_share else None
+            ),
             weekendShare=self._nullable_ratio(frame["weekend"].sum(), count),
         )
 

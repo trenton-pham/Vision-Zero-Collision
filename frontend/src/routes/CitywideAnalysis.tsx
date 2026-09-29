@@ -7,14 +7,8 @@ import { EmptyState, ErrorState, LoadingState } from '../components/States'
 import { api } from '../lib/api'
 import { integer, metricValue } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
+import { CITYWIDE_SEVERITIES } from '../lib/severity'
 import styles from './CitywideAnalysis.module.css'
-
-const SEVERITIES = [
-  ['property-damage', 'Property damage'],
-  ['injury', 'Injury'],
-  ['serious-injury', 'Serious injury'],
-  ['fatal', 'Fatal'],
-]
 
 function yearSpan(years: number[] | undefined) {
   if (!years?.length) return 'no complete years'
@@ -31,6 +25,8 @@ export function CitywideAnalysis() {
   const downtown = useQuery({ queryKey: ['citywide-downtown', ...queryKey], queryFn: ({ signal }) => api.downtownComparison(state.startYear, state.endYear, state.severities, signal) })
   const layerQuery = state.cityLayer === 'heatmap' ? heatmap : kde
   const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error
+  const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
+  const latestCompleteDowntownYear = completeDowntownYears.at(-1)
 
   function toggleSeverity(value: string) {
     state.setSeverities(state.severities.includes(value) ? state.severities.filter((item) => item !== value) : [...state.severities, value])
@@ -45,7 +41,7 @@ export function CitywideAnalysis() {
         </div>
         <fieldset className={styles.severity}>
           <legend>SEVERITY</legend>
-          {SEVERITIES.map(([value, label]) => <label key={value}><input type="checkbox" checked={state.severities.includes(value)} onChange={() => toggleSeverity(value)}/><span><CheckIcon/>{label}</span></label>)}
+          {CITYWIDE_SEVERITIES.map(([value, label]) => <label key={value}><input type="checkbox" checked={state.severities.includes(value)} onChange={() => toggleSeverity(value)}/><span><CheckIcon/>{label}</span></label>)}
         </fieldset>
       </section>
 
@@ -53,7 +49,7 @@ export function CitywideAnalysis() {
       {firstError && <ErrorState error={firstError} onRetry={() => { void summary.refetch(); void layerQuery.refetch(); void shift.refetch(); void downtown.refetch() }}/>} 
       {summary.data && !summary.isLoading && (
         <>
-          {summary.data.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning} · excluded from spatial shift</div>)}
+          {summary.data.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning} · excluded from spatial shift and downtown comparison</div>)}
           <MetricGrid metrics={summary.data.metrics} compact/>
           <div className={styles.workspace}>
             <section className={styles.mapColumn}>
@@ -76,9 +72,9 @@ export function CitywideAnalysis() {
               <section className={styles.analysisCard}>
                 <span className={styles.cardLabel}>DOWNTOWN VS OUTER</span>
                 <div className={styles.seriesLegend} aria-hidden="true"><span><i className={styles.downtownSwatch}/>Downtown</span><span><i className={styles.outerSwatch}/>Outer Seattle</span></div>
-                <div className={styles.chart} role="img" aria-label="Annual collision comparison. Amber line shows downtown collisions. Blue line shows outer Seattle collisions.">
+                {downtown.data && (completeDowntownYears.length ? <div className={styles.chart} role="img" aria-label="Complete-year collision comparison. Amber line shows downtown collisions. Blue line shows outer Seattle collisions.">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={downtown.data?.annual ?? []} margin={{ top: 10, right: 4, bottom: 0, left: -22 }}>
+                    <LineChart data={completeDowntownYears} margin={{ top: 10, right: 4, bottom: 0, left: -22 }}>
                       <XAxis dataKey="year" stroke="#7890a8" tickLine={false} axisLine={false} tick={{ fontSize: 10 }}/>
                       <YAxis stroke="#7890a8" tickLine={false} axisLine={false} tick={{ fontSize: 10 }}/>
                       <Tooltip contentStyle={{ background: '#0b1927', border: '1px solid #36506a', borderRadius: 0 }}/>
@@ -86,11 +82,11 @@ export function CitywideAnalysis() {
                       <Line dataKey="outerCollisions" name="Outer" stroke="#2f84ff" dot={false} isAnimationActive={false}/>
                     </LineChart>
                   </ResponsiveContainer>
-                </div>
+                </div> : <EmptyState title="No complete years in range" body="Choose a range with a complete year for the downtown comparison."/>)}
               </section>
               <section className={styles.analysisCard}>
                 <span className={styles.cardLabel}>DOWNTOWN MEAN SEVERITY</span>
-                <div className={styles.splitMetric}><strong>{metricValue(downtown.data?.annual.at(-1)?.downtownMeanSeverity ?? null, 'decimal')}</strong><span>latest selected year</span></div>
+                <div className={styles.splitMetric}><strong>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong><span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'no complete year in range' : 'Loading comparison'}</span></div>
               </section>
             </aside>
           </div>

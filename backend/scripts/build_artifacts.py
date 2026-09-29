@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 import unicodedata
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -18,10 +18,18 @@ ROOT = Path(__file__).resolve().parents[2]
 COLLISIONS = ROOT / "data/processed/Collision_Processed.parquet"
 NEIGHBORHOODS = ROOT / "data/processed/Neighborhood_Map_Atlas_Neighborhoods.geojson"
 OUTPUT = ROOT / "data/dashboard"
-VERSION = "neighborhood-context-v2"
+VERSION = "neighborhood-context-v3"
 EXPECTED_TOTAL = 106_050
 EXPECTED_NEIGHBORHOODS = 94
 EXPECTED_ASSIGNMENTS = {"direct": 104_579, "nearest": 1_193, "unassigned": 278}
+
+
+def partial_years(data_as_of: date, today: date | None = None) -> list[int]:
+    today = today or datetime.now(ZoneInfo("America/Los_Angeles")).date()
+    return [data_as_of.year] if (
+        data_as_of.year == today.year
+        or data_as_of < date(data_as_of.year, 12, 31)
+    ) else []
 
 
 def sha256(path: Path) -> str:
@@ -206,11 +214,8 @@ def build(output: Path, enforce_baseline: bool = True) -> dict[str, object]:
             str(NEIGHBORHOODS.relative_to(ROOT)): sha256(NEIGHBORHOODS),
         },
         "availableYears": sorted(int(v) for v in frame["YEAR"].dropna().unique()),
-        "partialYears": (
-            [data_as_of_date.year]
-            if data_as_of_date.year == datetime.now(ZoneInfo("America/Los_Angeles")).year
-            else []
-        ),
+        "partialYears": partial_years(data_as_of_date),
+        "knownTimeNightShare": True,
         "collisionCount": len(frame),
         "neighborhoodCount": len(polygons),
         "assignmentCounts": counts,

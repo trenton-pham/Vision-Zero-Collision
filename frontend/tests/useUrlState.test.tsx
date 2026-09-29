@@ -1,13 +1,14 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { useDashboardParams } from '../src/lib/useUrlState'
 import { DatasetMetaProvider } from '../src/lib/dataset'
 
 function Harness() {
   const state = useDashboardParams()
-  return <><output>{state.startYear}/{state.endYear}/{state.neighborhood}/{state.mapMetric}/{state.trendGrain}</output><button onClick={() => state.setNeighborhood('ballard')}>Select</button><button onClick={() => state.setTrendGrain('monthly')}>Monthly</button></>
+  const location = useLocation()
+  return <><output>{state.startYear}/{state.endYear}/{state.neighborhood}/{state.mapMetric}/{state.trendGrain}</output><output data-testid="severities">{state.severities.join(',')}</output><output data-testid="url">{location.search}</output><button onClick={() => state.setNeighborhood('ballard')}>Select</button><button onClick={() => state.setTrendGrain('monthly')}>Monthly</button></>
 }
 
 describe('URL-backed dashboard state', () => {
@@ -49,5 +50,11 @@ describe('URL-backed dashboard state', () => {
       </DatasetMetaProvider>,
     )
     expect(screen.getByText('2015/2027//collisionCount/annual')).toBeInTheDocument()
+  })
+
+  it('keeps unknown severity and removes invalid values from the URL', async () => {
+    render(<MemoryRouter initialEntries={['/citywide?severity=bogus,unknown,fatal']}><Harness/></MemoryRouter>)
+    expect(screen.getByTestId('severities')).toHaveTextContent('unknown,fatal')
+    await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent('severity=unknown%2Cfatal'))
   })
 })

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../lib/api'
 import { metricValue, signedPercent } from '../lib/format'
@@ -23,6 +23,7 @@ export function NeighborhoodExplorer() {
   const [announcement, setAnnouncement] = useState('')
   const [resolving, setResolving] = useState(false)
   const [selectionPulse, setSelectionPulse] = useState(0)
+  const resolveGeneration = useRef(0)
   const geo = useQuery({ queryKey: ['neighborhood-geojson'], queryFn: ({ signal }) => api.neighborhoods(signal), staleTime: Infinity })
   const summary = useQuery({
     queryKey: ['neighborhood-summary', state.startYear, state.endYear],
@@ -46,16 +47,26 @@ export function NeighborhoodExplorer() {
     setAnnouncement(id ? `${name ?? id} selected. Neighborhood statistics updated.` : 'Neighborhood selection cleared. Seattle citywide statistics restored.')
   }
 
+  function selectManually(id: string | null, name?: string | null) {
+    resolveGeneration.current += 1
+    setResolving(false)
+    select(id, name)
+  }
+
   async function resolve(lat: number, lng: number) {
+    const generation = ++resolveGeneration.current
     setResolving(true)
     try {
       const result = await api.resolveNeighborhood(lat, lng)
+      if (generation !== resolveGeneration.current) return
       select(result.id, result.name)
       if (!result.id) setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
     } catch (error) {
-      setAnnouncement(error instanceof Error ? error.message : 'Unable to resolve that location.')
+      if (generation === resolveGeneration.current) {
+        setAnnouncement(error instanceof Error ? error.message : 'Unable to resolve that location.')
+      }
     } finally {
-      setResolving(false)
+      if (generation === resolveGeneration.current) setResolving(false)
     }
   }
 
@@ -85,7 +96,7 @@ export function NeighborhoodExplorer() {
         </div>
         <NeighborhoodPicker neighborhoods={geo.data} selectedId={state.neighborhood} onSelect={(id) => {
           const feature = geo.data?.features.find((item) => item.properties.id === id)
-          select(id, feature?.properties.name)
+          selectManually(id, feature?.properties.name)
         }}/>
         <label className={styles.metricSelect}>MAP METRIC
           <select value={state.mapMetric} onChange={(event) => state.setMapMetric(event.target.value)}>

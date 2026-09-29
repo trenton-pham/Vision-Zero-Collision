@@ -1,12 +1,20 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
 
 from backend.app.data import DataStore
+from backend.scripts.build_artifacts import partial_years
+
+
+def test_partial_year_survives_year_rollover_when_source_ends_early() -> None:
+    assert partial_years(date(2026, 8, 31), date(2027, 1, 8)) == [2026]
+    assert partial_years(date(2026, 12, 31), date(2027, 1, 8)) == []
+    assert partial_years(date(2026, 12, 31), date(2026, 12, 31)) == [2026]
 
 
 def test_assignment_regression_baseline(store: DataStore) -> None:
@@ -21,7 +29,8 @@ def test_assignment_regression_baseline(store: DataStore) -> None:
 
 
 def test_manifest_sources_are_current(store: DataStore) -> None:
-    assert store.manifest["artifactVersion"] == "neighborhood-context-v2"
+    assert store.manifest["artifactVersion"] == "neighborhood-context-v3"
+    assert store.manifest["knownTimeNightShare"] is True
     assert store.manifest["dataAsOf"] == "2026-08-31"
     assert store.manifest["partialYears"] == [2026]
 

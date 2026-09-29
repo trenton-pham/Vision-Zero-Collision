@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
 import { NavLink, Outlet } from 'react-router-dom'
@@ -11,7 +11,9 @@ import styles from './AppShell.module.css'
 function YearRangeControl() {
   const { startYear, endYear, minimumYear, maximumYear, setYears } = useDashboardParams()
   const meta = useDatasetMeta()
-  const partial = meta.partialYears.includes(endYear)
+  const [draftYears, setDraftYears] = useState<[number, number]>([startYear, endYear])
+  useEffect(() => setDraftYears([startYear, endYear]), [startYear, endYear])
+  const partial = meta.partialYears.includes(draftYears[1])
   const receivedThrough = new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
@@ -21,7 +23,7 @@ function YearRangeControl() {
     <div className={styles.yearControl} aria-label="Observed year range">
       <div className={styles.yearMeta}>
         <span>OBSERVED YEARS</span>
-        <strong>{startYear} — {endYear}</strong>
+        <strong>{draftYears[0]} — {draftYears[1]}</strong>
       </div>
       <Slider.Root
         className={styles.slider}
@@ -29,8 +31,9 @@ function YearRangeControl() {
         max={maximumYear}
         step={1}
         minStepsBetweenThumbs={0}
-        value={[startYear, endYear]}
-        onValueChange={([start, end]) => setYears(start, end)}
+        value={draftYears}
+        onValueChange={([start, end]) => setDraftYears([start, end])}
+        onValueCommit={([start, end]) => setYears(start, end)}
         aria-label="Selected year range"
       >
         <Slider.Track className={styles.track}><Slider.Range className={styles.range}/></Slider.Track>
