@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
 import threading
 from datetime import date, datetime
 from functools import lru_cache
@@ -17,9 +15,10 @@ from scipy.stats import gaussian_kde
 from shapely.geometry import Point
 
 from .config import Settings
+from .dataset import add_metric_columns
 from .repository import (
-    ArtifactDatasetRepository, DatasetBundle, MongoDatasetRepository,
-    compact_collisions, read_collisions,
+    ArtifactDatasetRepository, ArtifactError, DatasetBundle, MongoDatasetRepository,
+    compact_collisions,
 )
 from .schemas import (
     AnnualMetric,
@@ -56,18 +55,6 @@ SEVERITY_KEYS = {
 }
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for block in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-class ArtifactError(RuntimeError):
-    pass
-
-
 class DataStore:
     def __init__(
         self,
@@ -77,21 +64,15 @@ class DataStore:
     ):
         self.artifact_dir = Path(artifact_dir)
         if bundle is None:
-            self.manifest = self._read_manifest()
-            if validate_sources:
-                self._validate_sources()
-            self.collisions = read_collisions(self.artifact_dir / "collisions_assigned.parquet")
-            self.annual = pd.read_parquet(self.artifact_dir / "neighborhood_annual.parquet")
-            self.monthly = pd.read_parquet(self.artifact_dir / "context_monthly.parquet")
-            self.geojson = json.loads((self.artifact_dir / "neighborhoods.geojson").read_text())
+            bundle = ArtifactDatasetRepository(self.artifact_dir).load_active(validate_sources)
             self.neighborhoods = gpd.read_file(self.artifact_dir / "neighborhoods.geojson").sort_values("id")
         else:
-            self.manifest = dict(bundle.manifest)
-            self.collisions = compact_collisions(bundle.collisions)
-            self.annual = bundle.annual.copy()
-            self.monthly = bundle.monthly.copy()
-            self.geojson = bundle.geojson
-            self.neighborhoods = gpd.GeoDataFrame.from_features(self.geojson, crs="EPSG:4326").sort_values("id")
+            self.neighborhoods = gpd.GeoDataFrame.from_features(bundle.geojson, crs="EPSG:4326").sort_values("id")
+        self.manifest = dict(bundle.manifest)
+        self.collisions = compact_collisions(bundle.collisions)
+        self.annual = bundle.annual.copy()
+        self.monthly = bundle.monthly.copy()
+        self.geojson = bundle.geojson
 
         self.manifest.setdefault("datasetVersion", self.manifest["artifactVersion"])
         self.manifest.setdefault("lastPublishedAt", self.manifest.get("builtAt"))
@@ -113,15 +94,7 @@ class DataStore:
                 for year, count in known.groupby("YEAR").size().items()
             })
 
-        self.collisions["severity_score"] = (
-            self.collisions["INJURIES"].fillna(0)
-            + 3 * self.collisions["SERIOUSINJURIES"].fillna(0)
-            + 5 * self.collisions["FATALITIES"].fillna(0)
-        )
-        self.collisions["pedestrian_collision"] = self.collisions["PEDCOUNT"].fillna(0).gt(0)
-        self.collisions["intersection"] = self.collisions["JUNCTIONTYPE"].str.startswith("At Intersection", na=False)
-        self.collisions["night"] = self.collisions["HOUR"].lt(6) | self.collisions["HOUR"].ge(20)
-        self.collisions["weekend"] = self.collisions["Day_of_Week"].isin(["Saturday", "Sunday"])
+        self.collisions = add_metric_columns(self.collisions)
 
     def _validate_bundle(self) -> None:
         collision_columns = {
@@ -231,32 +204,6 @@ class DataStore:
             for column in metric_columns
         ):
             raise ArtifactError("Annual and monthly aggregates do not reconcile")
-
-    def _read_manifest(self) -> dict:
-        path = self.artifact_dir / "manifest.json"
-        required = [
-            path,
-            self.artifact_dir / "collisions_assigned.parquet",
-            self.artifact_dir / "neighborhood_annual.parquet",
-            self.artifact_dir / "context_monthly.parquet",
-            self.artifact_dir / "neighborhoods.geojson",
-        ]
-        missing = [str(item) for item in required if not item.exists()]
-        if missing:
-            raise ArtifactError(
-                "Dashboard artifacts are absent. Run `python -m backend.scripts.build_artifacts`. "
-                f"Missing: {', '.join(missing)}"
-            )
-        return json.loads(path.read_text())
-
-    def _validate_sources(self) -> None:
-        for relative, expected in self.manifest.get("sourceHashes", {}).items():
-            source = ROOT / relative
-            if not source.exists() or sha256(source) != expected:
-                raise ArtifactError(
-                    f"Dashboard artifacts are stale for {relative}. "
-                    "Run `python -m backend.scripts.build_artifacts`."
-                )
 
     @property
     def available_years(self) -> list[int]:
@@ -649,8 +596,6 @@ class DataStoreManager:
         return store
 
     def refresh(self, force: bool = False) -> bool:
-        # Only one candidate may be loaded at a time. Readers and health probes
-        # can still use the previous snapshot while the replacement is built.
         with self._refresh_lock:
             return self._refresh(force)
 

@@ -14,3 +14,10 @@ export function signedPercent(value: number | null) {
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
 }
 
+export function receivedThrough(dataAsOf: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${dataAsOf}T00:00:00Z`)).toUpperCase()
+}

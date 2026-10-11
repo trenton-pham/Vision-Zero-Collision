@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -179,10 +179,3 @@ class DowntownAnnual(ApiModel):
 class DowntownComparisonResponse(ApiModel):
     bbox: dict[str, float]
     annual: list[DowntownAnnual]
-
-
-class ErrorResponse(ApiModel):
-    detail: str
-
-
-GeoJson = dict[str, Any]

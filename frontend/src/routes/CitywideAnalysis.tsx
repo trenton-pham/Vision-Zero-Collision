@@ -7,7 +7,7 @@ import { EmptyState, ErrorState, LoadingState } from '../components/States'
 import { api } from '../lib/api'
 import { integer, metricValue } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
-import { CITYWIDE_SEVERITIES } from '../lib/severity'
+import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
 import styles from './CitywideAnalysis.module.css'
 
 function yearSpan(years: number[] | undefined) {
@@ -28,7 +28,7 @@ export function CitywideAnalysis() {
   const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
   const latestCompleteDowntownYear = completeDowntownYears.at(-1)
 
-  function toggleSeverity(value: string) {
+  function toggleSeverity(value: CitywideSeverity) {
     state.setSeverities(state.severities.includes(value) ? state.severities.filter((item) => item !== value) : [...state.severities, value])
   }
 

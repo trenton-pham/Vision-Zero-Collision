@@ -17,18 +17,19 @@ import pandas as pd
 from backend.app.config import Settings
 from backend.app.mongo_writer import MongoDatasetWriter
 from backend.app.repository import DatasetBundle
-from backend.scripts.build_artifacts import (
-    NEIGHBORHOODS,
+from backend.app.dataset import (
     EXPECTED_TOTAL,
     VERSION,
     aggregate_annual,
     aggregate_monthly,
     assign,
+    dashboard_geojson,
+    load_neighborhoods,
     partial_years,
-    slugify,
 )
 
 
+NEIGHBORHOODS = Path(__file__).resolve().parents[2] / "data/processed/Neighborhood_Map_Atlas_Neighborhoods.geojson"
 START_DATE = "2015-01-01"
 BATCH_SIZE = 1_000
 SEATTLE_BOUNDS = (-122.45, 47.45, -122.20, 47.75)
@@ -289,28 +290,6 @@ def clean_features(collection: dict[str, Any]) -> tuple[gpd.GeoDataFrame, dict[s
     }
 
 
-def load_neighborhoods() -> gpd.GeoDataFrame:
-    polygons = gpd.read_file(NEIGHBORHOODS).to_crs("EPSG:4326")
-    polygons = polygons[["S_HOOD", "L_HOOD", "geometry"]].copy()
-    polygons["id"] = polygons["S_HOOD"].map(slugify)
-    polygons["name"] = polygons["S_HOOD"].astype(str)
-    polygons = polygons.sort_values(["id", "name"]).reset_index(drop=True)
-    if len(polygons) != 94 or polygons["id"].nunique() != 94:
-        raise RuntimeError("Neighborhood source must contain exactly 94 unique S_HOOD polygons")
-    return polygons
-
-
-def _dashboard_geojson(polygons: gpd.GeoDataFrame) -> dict[str, Any]:
-    collection = json.loads(polygons[["id", "name", "L_HOOD", "geometry"]].to_json())
-    for feature in collection["features"]:
-        feature["properties"] = {
-            "id": feature["properties"]["id"],
-            "name": feature["properties"]["name"],
-            "largeNeighborhood": feature["properties"]["L_HOOD"],
-        }
-    return collection
-
-
 def _content_hash(frame: pd.DataFrame) -> str:
     columns = [
         "OBJECTID", "INCKEY", "COLDETKEY", "MAXSEVERITYDESC", "INJURIES",
@@ -333,7 +312,9 @@ def build_bundle(
     source_metadata: dict[str, Any],
 ) -> tuple[DatasetBundle, str, dict[str, Any]]:
     points, quality = clean_features(collection)
-    polygons = load_neighborhoods()
+    polygons = load_neighborhoods(NEIGHBORHOODS)
+    if len(polygons) != 94 or polygons["id"].nunique() != 94:
+        raise RuntimeError("Neighborhood source must contain exactly 94 unique S_HOOD polygons")
     assignment = assign(points, polygons)
     frame = pd.concat([points.drop(columns="geometry"), assignment], axis=1)
     assignment_counts = {
@@ -384,7 +365,7 @@ def build_bundle(
     )
     if citywide_annual != len(frame) or citywide_monthly != len(frame):
         raise RuntimeError("Generated annual and monthly totals do not reconcile")
-    return DatasetBundle(manifest, frame, annual, monthly, _dashboard_geojson(polygons)), content_hash, quality
+    return DatasetBundle(manifest, frame, annual, monthly, dashboard_geojson(polygons)), content_hash, quality
 
 
 def run_sync(
@@ -425,7 +406,6 @@ def run_sync(
                 manifest=bundle.manifest if bundle is not None else None,
             )
         except Exception:
-            # Preserve the original ingestion error when Atlas itself is unavailable.
             pass
         raise
     finally:

@@ -17,9 +17,9 @@ export function CitywideMap({
   shift?: SpatialShiftResponse
   downtown?: DowntownComparisonResponse
 }) {
-  const shiftPoints: [number, number][] = shift?.status === 'available' && shift.before.centroidLat && shift.before.centroidLng && shift.after.centroidLat && shift.after.centroidLng
+  const shiftPoints: [[number, number], [number, number]] | null = shift?.status === 'available'
     ? [[shift.before.centroidLat, shift.before.centroidLng], [shift.after.centroidLat, shift.after.centroidLng]]
-    : []
+    : null
   const bbox = downtown?.bbox
   return (
     <div className={styles.frame}>
@@ -33,7 +33,7 @@ export function CitywideMap({
           <CircleMarker key={`${cell.lat}-${cell.lng}-${index}`} center={[cell.lat, cell.lng]} radius={2.5 + cell.density * 6} pathOptions={{ stroke: false, fillColor: cell.density > .6 ? '#27d1df' : '#2f84ff', fillOpacity: .06 + cell.density * .5 }}/>
         ))}
         {bbox && <Rectangle bounds={[[bbox.yMin, bbox.xMin], [bbox.yMax, bbox.xMax]]} pathOptions={{ color: '#f3a52b', weight: 1, dashArray: '5 4', fillOpacity: .02 }}/>} 
-        {shiftPoints.length === 2 && <><Polyline positions={shiftPoints} pathOptions={{ color: '#27d1df', weight: 2, dashArray: '5 5' }}/><CircleMarker center={shiftPoints[0]} radius={5} pathOptions={{ color: '#7890a8', fillColor: '#7890a8', fillOpacity: 1 }}/><CircleMarker center={shiftPoints[1]} radius={6} pathOptions={{ color: '#27d1df', fillColor: '#27d1df', fillOpacity: 1 }}/></>}
+        {shiftPoints !== null && <><Polyline positions={shiftPoints} pathOptions={{ color: '#27d1df', weight: 2, dashArray: '5 5' }}/><CircleMarker center={shiftPoints[0]} radius={5} pathOptions={{ color: '#7890a8', fillColor: '#7890a8', fillOpacity: 1 }}/><CircleMarker center={shiftPoints[1]} radius={6} pathOptions={{ color: '#27d1df', fillColor: '#27d1df', fillOpacity: 1 }}/></>}
       </MapContainer>
       <div className={styles.legend}>
         <strong>{layer === 'heatmap' ? 'GRIDDED COLLISION COUNT' : 'NORMALIZED KDE DENSITY'}</strong>

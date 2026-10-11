@@ -4,6 +4,8 @@ import { MemoryRouter, useLocation } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { useDashboardParams } from '../src/lib/useUrlState'
 import { DatasetMetaProvider } from '../src/lib/dataset'
+import type { DatasetMeta } from '../src/lib/contracts'
+import { datasetMeta } from './fixtures'
 
 function Harness() {
   const state = useDashboardParams()
@@ -33,7 +35,7 @@ describe('URL-backed dashboard state', () => {
   })
 
   it('derives year bounds and defaults from dataset metadata', () => {
-    const meta = {
+    const meta: DatasetMeta = {
       dataAsOf: '2027-02-28',
       availableYears: [2015, 2016, 2027],
       partialYears: [2027],
@@ -56,5 +58,24 @@ describe('URL-backed dashboard state', () => {
     render(<MemoryRouter initialEntries={['/citywide?severity=bogus,unknown,fatal']}><Harness/></MemoryRouter>)
     expect(screen.getByTestId('severities')).toHaveTextContent('unknown,fatal')
     await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent('severity=unknown%2Cfatal'))
+  })
+
+  it.each(['collisionCount', 'totalSeverity', 'pedestrianCollisions', 'fatalities'])('restores the supported map metric %s', (metric) => {
+    render(<MemoryRouter initialEntries={[`/neighborhoods?metric=${metric}`]}><Harness/></MemoryRouter>)
+    expect(screen.getByText(`2015/2026//${metric}/annual`)).toBeInTheDocument()
+  })
+
+  it.each(['', 'bogus', 'injuries', 'name'])('normalizes unsupported map metric %s and preserves other parameters', async (metric) => {
+    render(<DatasetMetaProvider meta={datasetMeta}><MemoryRouter initialEntries={[`/neighborhoods?start=2021&end=2025&metric=${metric}&severity=bogus,unknown&grain=monthly&neighborhood=ballard`]}><Harness/></MemoryRouter></DatasetMetaProvider>)
+    expect(screen.getByText('2021/2025/ballard/collisionCount/monthly')).toBeInTheDocument()
+    await waitFor(() => {
+      const query = new URLSearchParams(screen.getByTestId('url').textContent ?? '')
+      expect(query.has('metric')).toBe(false)
+      expect(query.get('start')).toBe('2021')
+      expect(query.get('end')).toBe('2025')
+      expect(query.get('grain')).toBe('monthly')
+      expect(query.get('neighborhood')).toBe('ballard')
+      expect(query.get('severity')).toBe('unknown')
+    })
   })
 })

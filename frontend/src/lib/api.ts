@@ -1,61 +1,79 @@
-import type {
-  CitywideSummary,
-  CitywideTrendContext,
-  DatasetMeta,
-  DowntownComparisonResponse,
-  HeatmapResponse,
-  KdeResponse,
-  NeighborhoodContext,
-  NeighborhoodFeatureCollection,
-  NeighborhoodMetricSet,
-  ResolveResponse,
-  SpatialShiftResponse,
+import { z } from 'zod'
+import {
+  citywideSummarySchema,
+  citywideTrendContextSchema,
+  datasetMetaSchema,
+  downtownComparisonResponseSchema,
+  heatmapResponseSchema,
+  kdeResponseSchema,
+  neighborhoodContextSchema,
+  neighborhoodFeatureCollectionSchema,
+  neighborhoodMetricSetSchema,
+  resolveResponseSchema,
+  spatialShiftResponseSchema,
 } from './contracts'
+import type { CitywideSeverity } from './severity'
 
-async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
+function isAbortError(error: unknown) {
+  return error !== null && typeof error === 'object' && 'name' in error && error.name === 'AbortError'
+}
+
+async function request<T>(path: string, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { signal })
   if (!response.ok) {
     let message = `Request failed (${response.status})`
     try {
-      const body = (await response.json()) as { detail?: string }
-      if (body.detail) message = body.detail
-    } catch {
-      // The status code remains useful if the response is not JSON.
+      const body: unknown = await response.json()
+      if (body !== null && typeof body === 'object' && 'detail' in body
+        && typeof body.detail === 'string' && body.detail.trim()) message = body.detail
+    } catch (error) {
+      if (signal?.aborted || isAbortError(error)) throw error
     }
     throw new Error(message)
   }
-  return response.json() as Promise<T>
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch (error) {
+    if (signal?.aborted || isAbortError(error)) throw error
+    throw new Error('The server returned invalid dashboard data.', { cause: { path, error } })
+  }
+  const result = schema.safeParse(body)
+  if (!result.success) {
+    throw new Error('The server returned invalid dashboard data.', { cause: { path, issues: result.error.issues } })
+  }
+  return result.data
 }
 
 function years(startYear: number, endYear: number) {
   return new URLSearchParams({ start_year: String(startYear), end_year: String(endYear) })
 }
 
-function citywideParams(startYear: number, endYear: number, severities: string[]) {
+function citywideParams(startYear: number, endYear: number, severities: CitywideSeverity[]) {
   const params = years(startYear, endYear)
   severities.forEach((severity) => params.append('severity', severity))
   return params
 }
 
 export const api = {
-  meta: (signal?: AbortSignal) => request<DatasetMeta>('/api/meta', signal),
-  neighborhoods: (signal?: AbortSignal) => request<NeighborhoodFeatureCollection>('/api/neighborhoods/geojson', signal),
+  meta: (signal?: AbortSignal) => request('/api/meta', datasetMetaSchema, signal),
+  neighborhoods: (signal?: AbortSignal) => request('/api/neighborhoods/geojson', neighborhoodFeatureCollectionSchema, signal),
   neighborhoodSummary: (startYear: number, endYear: number, signal?: AbortSignal) =>
-    request<NeighborhoodMetricSet[]>(`/api/neighborhoods/summary?${years(startYear, endYear)}`, signal),
+    request(`/api/neighborhoods/summary?${years(startYear, endYear)}`, z.array(neighborhoodMetricSetSchema), signal),
   neighborhoodContext: (id: string, startYear: number, endYear: number, signal?: AbortSignal) =>
-    request<NeighborhoodContext>(`/api/neighborhoods/${encodeURIComponent(id)}/context?${years(startYear, endYear)}`, signal),
+    request(`/api/neighborhoods/${encodeURIComponent(id)}/context?${years(startYear, endYear)}`, neighborhoodContextSchema, signal),
   citywideNeighborhoodTrend: (startYear: number, endYear: number, signal?: AbortSignal) =>
-    request<CitywideTrendContext>(`/api/neighborhoods/citywide-trend?${years(startYear, endYear)}`, signal),
+    request(`/api/neighborhoods/citywide-trend?${years(startYear, endYear)}`, citywideTrendContextSchema, signal),
   resolveNeighborhood: (lat: number, lng: number, signal?: AbortSignal) =>
-    request<ResolveResponse>(`/api/neighborhoods/resolve?${new URLSearchParams({ lat: String(lat), lng: String(lng) })}`, signal),
-  citywideSummary: (startYear: number, endYear: number, severities: string[], signal?: AbortSignal) =>
-    request<CitywideSummary>(`/api/citywide/summary?${citywideParams(startYear, endYear, severities)}`, signal),
-  heatmap: (startYear: number, endYear: number, severities: string[], signal?: AbortSignal) =>
-    request<HeatmapResponse>(`/api/citywide/heatmap?${citywideParams(startYear, endYear, severities)}`, signal),
-  kde: (startYear: number, endYear: number, severities: string[], signal?: AbortSignal) =>
-    request<KdeResponse>(`/api/citywide/kde?${citywideParams(startYear, endYear, severities)}`, signal),
-  spatialShift: (startYear: number, endYear: number, severities: string[], signal?: AbortSignal) =>
-    request<SpatialShiftResponse>(`/api/citywide/spatial-shift?${citywideParams(startYear, endYear, severities)}`, signal),
-  downtownComparison: (startYear: number, endYear: number, severities: string[], signal?: AbortSignal) =>
-    request<DowntownComparisonResponse>(`/api/citywide/downtown-comparison?${citywideParams(startYear, endYear, severities)}`, signal),
+    request(`/api/neighborhoods/resolve?${new URLSearchParams({ lat: String(lat), lng: String(lng) })}`, resolveResponseSchema, signal),
+  citywideSummary: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
+    request(`/api/citywide/summary?${citywideParams(startYear, endYear, severities)}`, citywideSummarySchema, signal),
+  heatmap: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
+    request(`/api/citywide/heatmap?${citywideParams(startYear, endYear, severities)}`, heatmapResponseSchema, signal),
+  kde: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
+    request(`/api/citywide/kde?${citywideParams(startYear, endYear, severities)}`, kdeResponseSchema, signal),
+  spatialShift: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
+    request(`/api/citywide/spatial-shift?${citywideParams(startYear, endYear, severities)}`, spatialShiftResponseSchema, signal),
+  downtownComparison: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
+    request(`/api/citywide/downtown-comparison?${citywideParams(startYear, endYear, severities)}`, downtownComparisonResponseSchema, signal),
 }

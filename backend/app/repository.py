@@ -9,8 +9,16 @@ from typing import Any, Iterable
 import pandas as pd
 import pyarrow.parquet as pq
 
+from .dataset import sha256
 
-# Keep the runtime snapshot small; source-only descriptions are not used by the API.
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+class ArtifactError(RuntimeError):
+    pass
+
+
 COLLISION_COLUMNS = (
     "OBJECTID", "INCKEY", "COLDETKEY", "MAXSEVERITYDESC", "INJURIES",
     "SERIOUSINJURIES", "FATALITIES", "PEDCOUNT", "INCDATE", "JUNCTIONTYPE",
@@ -53,8 +61,13 @@ class ArtifactDatasetRepository:
         manifest = json.loads((self.artifact_dir / "manifest.json").read_text())
         return str(manifest.get("datasetVersion", manifest["artifactVersion"]))
 
-    def load_active(self) -> DatasetBundle:
-        manifest = json.loads((self.artifact_dir / "manifest.json").read_text())
+    def load_active(self, validate_sources: bool | None = None) -> DatasetBundle:
+        if validate_sources is None:
+            manifest = json.loads((self.artifact_dir / "manifest.json").read_text())
+        else:
+            manifest = self._read_manifest()
+            if validate_sources:
+                self._validate_sources(manifest)
         manifest.setdefault("datasetVersion", manifest["artifactVersion"])
         manifest.setdefault("lastPublishedAt", manifest.get("builtAt"))
         return DatasetBundle(
@@ -64,6 +77,32 @@ class ArtifactDatasetRepository:
             monthly=pd.read_parquet(self.artifact_dir / "context_monthly.parquet"),
             geojson=json.loads((self.artifact_dir / "neighborhoods.geojson").read_text()),
         )
+
+    def _read_manifest(self) -> dict:
+        path = self.artifact_dir / "manifest.json"
+        required = [
+            path,
+            self.artifact_dir / "collisions_assigned.parquet",
+            self.artifact_dir / "neighborhood_annual.parquet",
+            self.artifact_dir / "context_monthly.parquet",
+            self.artifact_dir / "neighborhoods.geojson",
+        ]
+        missing = [str(item) for item in required if not item.exists()]
+        if missing:
+            raise ArtifactError(
+                "Dashboard artifacts are absent. Run `python -m backend.scripts.build_artifacts`. "
+                f"Missing: {', '.join(missing)}"
+            )
+        return json.loads(path.read_text())
+
+    def _validate_sources(self, manifest: dict) -> None:
+        for relative, expected in manifest.get("sourceHashes", {}).items():
+            source = ROOT / relative
+            if not source.exists() or sha256(source) != expected:
+                raise ArtifactError(
+                    f"Dashboard artifacts are stale for {relative}. "
+                    "Run `python -m backend.scripts.build_artifacts`."
+                )
 
     def close(self) -> None:
         return None
@@ -96,8 +135,6 @@ class MongoDatasetRepository:
         documents: Iterable[dict[str, Any]],
         categories: frozenset[str] = frozenset(),
     ) -> pd.DataFrame:
-        # Decode directly into columns instead of retaining every Mongo document.
-        # Share repeated labels immediately, before allocating the DataFrame.
         columns: dict[str, list[Any]] = {}
         labels: dict[str, dict[str, str]] = {key: {} for key in categories}
         for count, document in enumerate(documents):

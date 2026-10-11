@@ -6,15 +6,65 @@ from pathlib import Path
 
 import geopandas as gpd
 import pandas as pd
+import pytest
 
-from backend.app.data import DataStore
-from backend.scripts.build_artifacts import partial_years
+from backend.app.data import ArtifactError, DataStore
+from backend.app.dataset import partial_years
+from backend.app.repository import ArtifactDatasetRepository
 
 
 def test_partial_year_survives_year_rollover_when_source_ends_early() -> None:
     assert partial_years(date(2026, 8, 31), date(2027, 1, 8)) == [2026]
     assert partial_years(date(2026, 12, 31), date(2027, 1, 8)) == []
     assert partial_years(date(2026, 12, 31), date(2026, 12, 31)) == [2026]
+
+
+@pytest.mark.parametrize("validate_sources", [True, False])
+def test_direct_store_keeps_missing_artifact_diagnostic(tmp_path: Path, validate_sources: bool) -> None:
+    names = ["manifest.json", "collisions_assigned.parquet", "neighborhood_annual.parquet",
+             "context_monthly.parquet", "neighborhoods.geojson"]
+    message = (
+        "Dashboard artifacts are absent. Run `python -m backend.scripts.build_artifacts`. "
+        f"Missing: {', '.join(str(tmp_path / name) for name in names)}"
+    )
+    with pytest.raises(ArtifactError) as error:
+        DataStore(tmp_path, validate_sources=validate_sources)
+    assert str(error.value) == message
+
+
+def test_direct_store_source_validation_remains_optional(tmp_path: Path, store: DataStore) -> None:
+    for name in ["collisions_assigned.parquet", "neighborhood_annual.parquet",
+                 "context_monthly.parquet", "neighborhoods.geojson"]:
+        (tmp_path / name).symlink_to((store.artifact_dir / name).resolve())
+    manifest = {**store.manifest, "sourceHashes": {"missing-collision-source.parquet": "invalid"}}
+    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
+
+    with pytest.raises(ArtifactError) as error:
+        DataStore(tmp_path)
+    assert str(error.value) == (
+        "Dashboard artifacts are stale for missing-collision-source.parquet. "
+        "Run `python -m backend.scripts.build_artifacts`."
+    )
+    assert DataStore(tmp_path, validate_sources=False).meta() == store.meta()
+
+
+def test_store_does_not_mutate_supplied_bundle(store: DataStore) -> None:
+    bundle = ArtifactDatasetRepository(store.artifact_dir).load_active()
+    collisions = bundle.collisions.copy(deep=True)
+    annual = bundle.annual.copy(deep=True)
+    monthly = bundle.monthly.copy(deep=True)
+    manifest = dict(bundle.manifest)
+
+    loaded = DataStore(bundle=bundle)
+    loaded.collisions.loc[0, "INJURIES"] = 99
+    loaded.annual.loc[0, "injuries"] = 99
+    loaded.monthly.loc[0, "injuries"] = 99
+    loaded.manifest["datasetVersion"] = "changed"
+
+    pd.testing.assert_frame_equal(bundle.collisions, collisions)
+    pd.testing.assert_frame_equal(bundle.annual, annual)
+    pd.testing.assert_frame_equal(bundle.monthly, monthly)
+    assert bundle.manifest == manifest
 
 
 def test_assignment_regression_baseline(store: DataStore) -> None:

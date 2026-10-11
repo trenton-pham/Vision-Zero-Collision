@@ -1,14 +1,15 @@
 import { useEffect, useMemo } from 'react'
 import { GeoJSON, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import { geoJSON, type LeafletMouseEvent, type PathOptions } from 'leaflet'
+import { geoJSON, type PathOptions } from 'leaflet'
 import type { Feature } from 'geojson'
 import type { NeighborhoodFeatureCollection, NeighborhoodMetricSet, NeighborhoodProperties } from '../lib/contracts'
+import type { MapMetric } from '../lib/mapMetrics'
 import styles from './NeighborhoodMap.module.css'
 
 const CENTER: [number, number] = [47.612, -122.334]
 
-function metricNumber(metric: NeighborhoodMetricSet | undefined, key: string) {
-  const value = metric?.[key as keyof NeighborhoodMetricSet]
+function metricNumber(metric: NeighborhoodMetricSet | undefined, key: MapMetric) {
+  const value = metric?.[key]
   return typeof value === 'number' ? value : 0
 }
 
@@ -34,14 +35,16 @@ export function NeighborhoodMap({
   metricKey,
   selectedId,
   pulseKey,
+  geometryRevision,
   onResolve,
   busy,
 }: {
   collection: NeighborhoodFeatureCollection
   metrics: NeighborhoodMetricSet[]
-  metricKey: string
+  metricKey: MapMetric
   selectedId: string | null
   pulseKey: number
+  geometryRevision: number
   onResolve: (lat: number, lng: number) => void
   busy: boolean
 }) {
@@ -64,15 +67,9 @@ export function NeighborhoodMap({
       <MapContainer className={styles.map} center={CENTER} zoom={11} zoomControl attributionControl aria-label="Interactive Seattle neighborhood collision map">
         <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <GeoJSON
-          key={`${metricKey}-${selectedId}-${metrics.length}-${pulseKey}`}
+          key={`${metricKey}-${selectedId}-${metrics.length}-${pulseKey}-${geometryRevision}`}
           data={collection}
           style={style}
-          onEachFeature={(_, layer) => layer.on({
-            click: (event: LeafletMouseEvent) => {
-              event.originalEvent.stopPropagation()
-              onResolve(event.latlng.lat, event.latlng.lng)
-            },
-          })}
         />
         <ClickResolver onClick={onResolve}/>
         <FitSelected collection={collection} selectedId={selectedId} pulseKey={pulseKey}/>

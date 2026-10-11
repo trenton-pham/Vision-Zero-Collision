@@ -1,9 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { TrendChart } from '../src/components/TrendChart'
+import type { AnnualMetric, DatasetMeta } from '../src/lib/contracts'
 import { DatasetMetaProvider } from '../src/lib/dataset'
 
-const meta = {
+const meta: DatasetMeta = {
   dataAsOf: '2027-02-28',
   availableYears: [2015, 2027],
   partialYears: [2027],
@@ -15,7 +16,7 @@ const meta = {
   lastPublishedAt: '2027-03-08T11:17:00Z',
 }
 
-const annual = [{
+const annualRow: AnnualMetric = {
   year: 2027,
   collisionCount: 10,
   injuries: 1,
@@ -24,10 +25,11 @@ const annual = [{
   totalSeverity: 1,
   meanSeverity: 0.1,
   isPartial: true,
-}]
+}
+const annual = [annualRow]
 
 const monthly = [1, 2].map((month) => ({
-  ...annual[0],
+  ...annualRow,
   period: `2027-0${month}`,
   month,
   collisionCount: 5,

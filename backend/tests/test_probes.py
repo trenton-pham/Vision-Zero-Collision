@@ -15,7 +15,6 @@ from backend.app.data import DataStoreManager
 
 @pytest.fixture(params=[False, True], ids=["without-frontend", "with-frontend"])
 def probe_module(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> ModuleType:
-    """Import a fresh app without replacing the module used by other API tests."""
     frontend = main.FRONTEND_DIST
     original_exists = Path.exists
 

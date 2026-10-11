@@ -28,8 +28,6 @@ def test_streamed_documents_preserve_missing_values_and_precision() -> None:
 
 
 def test_collision_snapshot_fits_memory_budget(store: data.DataStore) -> None:
-    # Leave space in a 512 MiB instance for imports, geometry, concurrent charts,
-    # and the old snapshot while a new publication is validated.
     assert len(store.collisions) > 100_000
     assert store.collisions.memory_usage(deep=True).sum() < 20 * 1024**2
 

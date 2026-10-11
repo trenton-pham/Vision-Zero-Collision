@@ -10,7 +10,7 @@ const neighborhoods = {
     { type: 'Feature', properties: { id: 'ballard', name: 'Ballard', largeNeighborhood: 'Ballard' }, geometry: { type: 'Polygon', coordinates: [] } },
     { type: 'Feature', properties: { id: 'fremont', name: 'Fremont', largeNeighborhood: 'Lake Union' }, geometry: { type: 'Polygon', coordinates: [] } },
   ],
-} as NeighborhoodFeatureCollection
+} satisfies NeighborhoodFeatureCollection
 
 describe('NeighborhoodPicker', () => {
   it('supports keyboard-only search and selection', async () => {
@@ -18,6 +18,36 @@ describe('NeighborhoodPicker', () => {
     const user = userEvent.setup()
     render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
     const input = screen.getByRole('combobox', { name: 'NEIGHBORHOOD' })
+    await user.type(input, 'Ball')
+    await user.keyboard('{Enter}')
+    expect(onSelect).toHaveBeenCalledWith('ballard')
+  })
+
+  it('reselects a later result after reopening with one match', async () => {
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
+    const input = screen.getByRole('combobox')
+    await user.click(input)
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(onSelect).toHaveBeenLastCalledWith('fremont')
+    await user.tab()
+    await user.click(input)
+    await user.keyboard('{Enter}')
+    expect(onSelect).toHaveBeenCalledTimes(2)
+    expect(onSelect).toHaveBeenLastCalledWith('fremont')
+  })
+
+  it('keeps empty-result navigation safe and selects after a new search', async () => {
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
+    const input = screen.getByRole('combobox')
+    await user.type(input, 'missing')
+    await user.keyboard('{ArrowDown}{ArrowUp}{Enter}')
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(input).not.toHaveAttribute('aria-activedescendant')
+    await user.clear(input)
     await user.type(input, 'Ball')
     await user.keyboard('{Enter}')
     expect(onSelect).toHaveBeenCalledWith('ballard')

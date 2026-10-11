@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
 import { NavLink, Outlet } from 'react-router-dom'
 import { api } from '../lib/api'
 import { DatasetMetaProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
+import { receivedThrough } from '../lib/format'
+import { ErrorState, LoadingState } from './States'
 import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
 
@@ -14,11 +16,7 @@ function YearRangeControl() {
   const [draftYears, setDraftYears] = useState<[number, number]>([startYear, endYear])
   useEffect(() => setDraftYears([startYear, endYear]), [startYear, endYear])
   const partial = meta.partialYears.includes(draftYears[1])
-  const receivedThrough = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${meta.dataAsOf}T00:00:00Z`)).toUpperCase()
+  const receivedThroughDate = receivedThrough(meta.dataAsOf)
   return (
     <div className={styles.yearControl} aria-label="Observed year range">
       <div className={styles.yearMeta}>
@@ -32,20 +30,26 @@ function YearRangeControl() {
         step={1}
         minStepsBetweenThumbs={0}
         value={draftYears}
-        onValueChange={([start, end]) => setDraftYears([start, end])}
-        onValueCommit={([start, end]) => setYears(start, end)}
+        onValueChange={(values) => {
+          const [start, end] = values
+          if (values.length === 2 && start !== undefined && end !== undefined && Number.isFinite(start) && Number.isFinite(end)) setDraftYears([start, end])
+        }}
+        onValueCommit={(values) => {
+          const [start, end] = values
+          if (values.length === 2 && start !== undefined && end !== undefined && Number.isFinite(start) && Number.isFinite(end)) setYears(start, end)
+        }}
         aria-label="Selected year range"
       >
         <Slider.Track className={styles.track}><Slider.Range className={styles.range}/></Slider.Track>
         <Slider.Thumb className={styles.thumb} aria-label="Start year" />
         <Slider.Thumb className={`${styles.thumb} ${styles.partialThumb}`} aria-label="End year" />
       </Slider.Root>
-      {partial && <span className={styles.partial}>PARTIAL THROUGH {receivedThrough}</span>}
+      {partial && <span className={styles.partial}>PARTIAL THROUGH {receivedThroughDate}</span>}
     </div>
   )
 }
 
-function ShellContent({ dataAsOf }: { dataAsOf?: string }) {
+function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: ReactNode }) {
   return (
       <div className={styles.shell}>
         <aside className={styles.rail} aria-label="Primary navigation">
@@ -73,9 +77,9 @@ function ShellContent({ dataAsOf }: { dataAsOf?: string }) {
             <NavLink to="/neighborhoods">Neighborhoods</NavLink>
             <NavLink to="/citywide">Citywide</NavLink>
           </nav>
-          <YearRangeControl/>
+          {dataAsOf && <YearRangeControl/>}
         </header>
-        <main id="main-content" className={styles.main}><Outlet/></main>
+        <main id="main-content" className={styles.main}>{children}</main>
       </div>
   )
 }
@@ -103,7 +107,10 @@ export function AppShell() {
 
   return (
     <DatasetMetaProvider meta={meta.data}>
-      <ShellContent dataAsOf={meta.data?.dataAsOf}/>
+      <ShellContent dataAsOf={meta.data?.dataAsOf}>
+        {meta.error && <ErrorState error={meta.error} onRetry={() => void meta.refetch()}/>}
+        {meta.data ? <Outlet/> : !meta.error && <LoadingState label="Loading dataset metadata"/>}
+      </ShellContent>
     </DatasetMetaProvider>
   )
 }

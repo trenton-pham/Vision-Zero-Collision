@@ -129,10 +129,8 @@ class BaseCleaner(ABC):
         self.validate_source_unchanged('after it was read')
         source_stat_before = self.source_path.stat()
 
-        digest = hashlib.sha256()
         with self.source_path.open('rb') as source_file:
-            for chunk in iter(lambda: source_file.read(1024 * 1024), b''):
-                digest.update(chunk)
+            digest = hashlib.file_digest(source_file, 'sha256')
 
         source_stat = self.source_path.stat()
         if (

@@ -26,9 +26,12 @@ export function NeighborhoodPicker({
   useEffect(() => { setQuery(selected?.name ?? '') }, [selected?.name])
   const matches = options.filter((option) => option.name.toLowerCase().includes(query.toLowerCase())).slice(0, 12)
 
+  const activeMatch = matches[activeIndex]
+
   function choose(option: Option) {
     setQuery(option.name)
     setOpen(false)
+    setActiveIndex(0)
     onSelect(option.id)
   }
 
@@ -43,16 +46,16 @@ export function NeighborhoodPicker({
           aria-expanded={open}
           aria-controls={listId}
           aria-autocomplete="list"
-          aria-activedescendant={open && matches[activeIndex] ? `${listId}-${matches[activeIndex].id}` : undefined}
+          aria-activedescendant={open && activeMatch ? `${listId}-${activeMatch.id}` : undefined}
           autoComplete="off"
           placeholder="Search 94 neighborhoods"
           value={query}
-          onFocus={() => setOpen(true)}
+          onFocus={() => { setOpen(true); setActiveIndex(0) }}
           onChange={(event) => { setQuery(event.target.value); setOpen(true); setActiveIndex(0) }}
           onKeyDown={(event) => {
-            if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); setActiveIndex((value) => Math.min(value + 1, matches.length - 1)) }
+            if (event.key === 'ArrowDown') { event.preventDefault(); setOpen(true); setActiveIndex((value) => Math.max(0, Math.min(open ? value + 1 : 0, matches.length - 1))) }
             if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex((value) => Math.max(value - 1, 0)) }
-            if (event.key === 'Enter' && matches[activeIndex]) { event.preventDefault(); choose(matches[activeIndex]) }
+            if (event.key === 'Enter' && activeMatch) { event.preventDefault(); choose(activeMatch) }
             if (event.key === 'Escape') { setOpen(false) }
           }}
         />

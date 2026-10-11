@@ -344,16 +344,6 @@ class MongoDatasetWriter:
                 except DuplicateKeyError as error:
                     raise RuntimeError("Another process published the first dataset concurrently") from error
 
-            # The active pointer is the publication boundary. A transient error
-            # while annotating the run must not report a successful publication
-            # as failed or invite a retry that stages an already-active version.
-            try:
-                self.database.ingestion_runs.update_one(
-                    {"_id": version},
-                    {"$set": {"status": "published", "publishedAt": published_at}},
-                )
-            except Exception:
-                pass
         except Exception as error:
             active = self.database.dataset_state.find_one({"_id": "active"})
             if not active or active.get("activeVersion") != version:
@@ -365,6 +355,14 @@ class MongoDatasetWriter:
                 manifest=bundle.manifest,
             )
             raise
+
+        try:
+            self.database.ingestion_runs.update_one(
+                {"_id": version},
+                {"$set": {"status": "published", "publishedAt": published_at}},
+            )
+        except Exception:
+            pass
 
         keep = [item for item in (version, current_version) if item]
         cleanup_filter = {"datasetVersion": {"$nin": keep}}

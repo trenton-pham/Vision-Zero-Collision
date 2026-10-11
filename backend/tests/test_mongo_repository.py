@@ -139,6 +139,27 @@ def test_failed_version_never_replaces_active_pointer() -> None:
         writer.close()
 
 
+def test_post_commit_annotation_failure_does_not_fail_publication(monkeypatch) -> None:
+    writer = MongoDatasetWriter(os.environ["MONGODB_TEST_URI"], f"collision_test_{uuid4().hex}")
+    collection_type = type(writer.database.ingestion_runs)
+    update_one = collection_type.update_one
+
+    def unavailable_annotation(collection, query, update, *args, **kwargs):
+        if update.get("$set", {}).get("status") == "published":
+            raise RuntimeError("Run annotation unavailable")
+        return update_one(collection, query, update, *args, **kwargs)
+
+    monkeypatch.setattr(collection_type, "update_one", unavailable_annotation)
+    try:
+        assert writer.publish(bundle("v1"), "v1", "hash-v1", {})["status"] == "published"
+        assert writer.database.dataset_state.find_one({"_id": "active"})["activeVersion"] == "v1"
+        assert writer.database.ingestion_runs.find_one({"_id": "v1"})["status"] == "validated"
+        assert writer.database.collisions.count_documents({"datasetVersion": "v1"}) == 1
+    finally:
+        writer.client.drop_database(writer.database.name)
+        writer.close()
+
+
 def test_no_change_run_does_not_create_or_switch_a_snapshot() -> None:
     uri = os.environ["MONGODB_TEST_URI"]
     database = f"collision_test_{uuid4().hex}"

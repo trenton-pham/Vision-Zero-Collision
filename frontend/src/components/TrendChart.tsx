@@ -1,6 +1,7 @@
 import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { AnnualMetric, MonthlyMetric } from '../lib/contracts'
 import { useDatasetMeta } from '../lib/dataset'
+import { receivedThrough } from '../lib/format'
 import styles from './TrendChart.module.css'
 
 type Props = {
@@ -35,11 +36,7 @@ export function TrendChart({ annual, monthly, grain, pulseKey }: Props) {
   const partialMonths = monthly.filter((item) => item.isPartial)
   const partialStart = partialMonths.at(0)?.period
   const partialEnd = partialMonths.at(-1)?.period
-  const receivedThrough = new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${meta.dataAsOf}T00:00:00Z`)).toUpperCase()
+  const receivedThroughDate = receivedThrough(meta.dataAsOf)
   const monthlyTicks = monthly.filter((item) => item.month === 1).map((item) => item.period)
   const finalMonth = monthly.at(-1)?.period
   if (finalMonth && !monthlyTicks.includes(finalMonth)) monthlyTicks.push(finalMonth)
@@ -74,7 +71,7 @@ export function TrendChart({ annual, monthly, grain, pulseKey }: Props) {
         </ComposedChart>
       </ResponsiveContainer>
       {pulseKey > 0 && <i key={pulseKey} className={styles.selectionMarker} aria-hidden="true"/>}
-      {partial && <div className={styles.partialMarker}>{partialYear} PARTIAL · RECEIVED THROUGH {receivedThrough}</div>}
+      {partial && <div className={styles.partialMarker}>{partialYear} PARTIAL · RECEIVED THROUGH {receivedThroughDate}</div>}
     </div>
   )
 }

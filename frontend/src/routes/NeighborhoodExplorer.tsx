@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation } from 'react-router-dom'
+import { MAP_METRICS, parseMapMetric } from '../lib/mapMetrics'
 import { api } from '../lib/api'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
@@ -10,20 +12,16 @@ import { ErrorState, LoadingState } from '../components/States'
 import { TrendChart } from '../components/TrendChart'
 import styles from './NeighborhoodExplorer.module.css'
 
-const MAP_METRICS = [
-  ['collisionCount', 'Collisions'],
-  ['totalSeverity', 'Severity burden'],
-  ['pedestrianCollisions', 'Pedestrian-involved'],
-  ['fatalities', 'Fatalities'],
-]
-
 export function NeighborhoodExplorer() {
   const state = useDashboardParams()
   const queryClient = useQueryClient()
+  const location = useLocation()
   const [announcement, setAnnouncement] = useState('')
   const [resolving, setResolving] = useState(false)
   const [selectionPulse, setSelectionPulse] = useState(0)
   const resolveGeneration = useRef(0)
+  const resolveController = useRef<AbortController | null>(null)
+  const neighborhood = state.neighborhood
   const geo = useQuery({ queryKey: ['neighborhood-geojson'], queryFn: ({ signal }) => api.neighborhoods(signal), staleTime: Infinity })
   const summary = useQuery({
     queryKey: ['neighborhood-summary', state.startYear, state.endYear],
@@ -31,8 +29,7 @@ export function NeighborhoodExplorer() {
   })
   const context = useQuery({
     queryKey: ['neighborhood-context', state.neighborhood, state.startYear, state.endYear],
-    queryFn: ({ signal }) => api.neighborhoodContext(state.neighborhood!, state.startYear, state.endYear, signal),
-    enabled: Boolean(state.neighborhood),
+    queryFn: neighborhood ? ({ signal }) => api.neighborhoodContext(neighborhood, state.startYear, state.endYear, signal) : skipToken,
   })
   const citywideTrend = useQuery({
     queryKey: ['citywide-neighborhood-trend', state.startYear, state.endYear],
@@ -47,38 +44,62 @@ export function NeighborhoodExplorer() {
     setAnnouncement(id ? `${name ?? id} selected. Neighborhood statistics updated.` : 'Neighborhood selection cleared. Seattle citywide statistics restored.')
   }
 
-  function selectManually(id: string | null, name?: string | null) {
+  const currentSelection = useRef({ select, location })
+  useLayoutEffect(() => { currentSelection.current = { select, location } })
+
+  function invalidateResolution() {
     resolveGeneration.current += 1
+    resolveController.current?.abort()
+    resolveController.current = null
+  }
+
+  useLayoutEffect(() => {
+    invalidateResolution()
+    setResolving(false)
+    return invalidateResolution
+  }, [location.key])
+
+  function selectManually(id: string | null, name?: string | null) {
+    invalidateResolution()
     setResolving(false)
     select(id, name)
   }
 
   async function resolve(lat: number, lng: number) {
-    const generation = ++resolveGeneration.current
+    invalidateResolution()
+    const committedLocation = currentSelection.current.location
+    const requestLocation = `${committedLocation.pathname}${committedLocation.search}${committedLocation.hash}`
+    const matchesLocation = () => requestLocation === `${window.location.pathname}${window.location.search}${window.location.hash}`
+    if (!matchesLocation()) {
+      setResolving(false)
+      return
+    }
+    const generation = resolveGeneration.current
+    const controller = new AbortController()
+    resolveController.current = controller
+    const isCurrent = () => generation === resolveGeneration.current && !controller.signal.aborted && matchesLocation()
     setResolving(true)
     try {
-      const result = await api.resolveNeighborhood(lat, lng)
-      if (generation !== resolveGeneration.current) return
-      select(result.id, result.name)
+      const result = await api.resolveNeighborhood(lat, lng, controller.signal)
+      if (!isCurrent()) return
+      currentSelection.current.select(result.id, result.name)
       if (!result.id) setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
     } catch (error) {
-      if (generation === resolveGeneration.current) {
+      if (isCurrent()) {
         setAnnouncement(error instanceof Error ? error.message : 'Unable to resolve that location.')
       }
     } finally {
-      if (generation === resolveGeneration.current) setResolving(false)
+      if (isCurrent()) {
+        resolveController.current = null
+        setResolving(false)
+      }
     }
   }
 
   const initialLoading = geo.isLoading || summary.isLoading
   const initialError = geo.error ?? summary.error
-  const trendData = state.neighborhood ? context.data : citywideTrend.data
-  const trendLoading = state.neighborhood ? context.isLoading : citywideTrend.isLoading
-  const trendError = state.neighborhood ? context.error : citywideTrend.error
+  const activeQuery = state.neighborhood ? context : citywideTrend
   const trendScope = context.data?.neighborhood.name ?? citywideTrend.data?.scope.name ?? (state.neighborhood ? 'Selected neighborhood' : 'Seattle citywide')
-  const inspectorData = state.neighborhood ? context.data : citywideTrend.data
-  const inspectorLoading = state.neighborhood ? context.isLoading : citywideTrend.isLoading
-  const inspectorError = state.neighborhood ? context.error : citywideTrend.error
   const inspectorName = state.neighborhood ? context.data?.neighborhood.name : citywideTrend.data?.scope.name
 
   function setTrendGrain(grain: 'annual' | 'monthly') {
@@ -99,7 +120,7 @@ export function NeighborhoodExplorer() {
           selectManually(id, feature?.properties.name)
         }}/>
         <label className={styles.metricSelect}>MAP METRIC
-          <select value={state.mapMetric} onChange={(event) => state.setMapMetric(event.target.value)}>
+          <select value={state.mapMetric} onChange={(event) => state.setMapMetric(parseMapMetric(event.target.value))}>
             {MAP_METRICS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}
           </select>
         </label>
@@ -111,29 +132,29 @@ export function NeighborhoodExplorer() {
         <div className={styles.workspace}>
           <section className={styles.mapPanel} aria-label="Neighborhood map">
             <div className={styles.panelLabel}><span>94 S_HOOD POLYGONS</span><strong>{MAP_METRICS.find(([value]) => value === state.mapMetric)?.[1]}</strong></div>
-            <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedId={state.neighborhood} pulseKey={selectionPulse} onResolve={resolve} busy={resolving}/>
+            <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedId={state.neighborhood} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving}/>
           </section>
           <aside
             className={`${styles.inspector} ${selectionPulse > 0 ? styles.selectionPulse : ''}`}
             key={`inspector-${selectionPulse}`}
             aria-label={state.neighborhood ? 'Selected neighborhood context' : 'Seattle citywide context'}
           >
-            {inspectorLoading && <LoadingState label={state.neighborhood ? 'Loading neighborhood context' : 'Loading Seattle citywide context'}/>}
-            {inspectorError && <ErrorState error={inspectorError} onRetry={() => void (state.neighborhood ? context.refetch() : citywideTrend.refetch())}/>}
-            {inspectorData && inspectorName && (
+            {activeQuery.isLoading && <LoadingState label={state.neighborhood ? 'Loading neighborhood context' : 'Loading Seattle citywide context'}/>}
+            {activeQuery.error && <ErrorState error={activeQuery.error} onRetry={() => void activeQuery.refetch()}/>}
+            {activeQuery.data && inspectorName && (
               <>
                 <div className={styles.inspectorHead}>
                   <span>{state.neighborhood ? 'ACTIVE NEIGHBORHOOD' : 'CITYWIDE BASELINE'}</span>
                   <h2>{inspectorName}</h2>
                   <p>{state.startYear}—{state.endYear} · all severity levels</p>
                 </div>
-                {inspectorData.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning}</div>)}
+                {activeQuery.data.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning}</div>)}
                 <div className={styles.primaryBurden}>
                   <span>SEVERITY BURDEN</span>
-                  <strong>{inspectorData.metrics.totalSeverity.toLocaleString()}</strong>
-                  <small>Mean {metricValue(inspectorData.metrics.meanSeverity, 'decimal')} per collision</small>
+                  <strong>{activeQuery.data.metrics.totalSeverity.toLocaleString()}</strong>
+                  <small>Mean {metricValue(activeQuery.data.metrics.meanSeverity, 'decimal')} per collision</small>
                 </div>
-                <MetricGrid metrics={inspectorData.metrics} variant="inspector"/>
+                <MetricGrid metrics={activeQuery.data.metrics} variant="inspector"/>
                 <div className={styles.methodNote}>
                   {state.neighborhood
                     ? 'Neighborhood results deliberately ignore Citywide Analysis severity filters.'
@@ -154,17 +175,17 @@ export function NeighborhoodExplorer() {
                 <button type="button" aria-pressed={state.trendGrain === 'monthly'} onClick={() => setTrendGrain('monthly')}>Monthly</button>
               </div>
             </div>
-            {trendData && <div className={styles.comparison}>
-              {trendData.comparison.status === 'available' ? <>
+            {activeQuery.data && <div className={styles.comparison}>
+              {activeQuery.data.comparison.status === 'available' ? <>
                 <span>FIRST VS LAST COMPLETE 3-YEAR AVERAGE</span>
-                <strong className={(trendData.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(trendData.comparison.collisionChangePercent)} collisions</strong>
-                <strong className={(trendData.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(trendData.comparison.severityChangePercent)} burden</strong>
+                <strong className={(activeQuery.data.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.collisionChangePercent)} collisions</strong>
+                <strong className={(activeQuery.data.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.severityChangePercent)} burden</strong>
               </> : <><span>TREND COMPARISON</span><strong>Insufficient complete years</strong></>}
             </div>}
           </div>
-          {trendLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
-          {trendError && <ErrorState error={trendError} onRetry={() => void (state.neighborhood ? context.refetch() : citywideTrend.refetch())}/>}
-          {trendData && <TrendChart annual={trendData.annual} monthly={trendData.monthly} grain={state.trendGrain} pulseKey={selectionPulse}/>}
+          {activeQuery.isLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
+          {activeQuery.error && <ErrorState error={activeQuery.error} onRetry={() => void activeQuery.refetch()}/>}
+          {activeQuery.data && <TrendChart annual={activeQuery.data.annual} monthly={activeQuery.data.monthly} grain={state.trendGrain} pulseKey={selectionPulse}/>}
         </section>
     </div>
   )

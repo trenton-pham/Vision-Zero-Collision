@@ -38,8 +38,6 @@ async def lifespan(_: FastAPI):
     try:
         await asyncio.to_thread(manager.get)
     except Exception as error:
-        # Keep liveness available while readiness remains false. This lets the
-        # service recover automatically when Atlas or the initial dataset does.
         logger.error("Initial dataset load failed; readiness remains false: %s", error)
     polling_task: asyncio.Task[None] | None = None
 
@@ -49,7 +47,6 @@ async def lifespan(_: FastAPI):
             try:
                 await asyncio.to_thread(manager.refresh)
             except Exception:
-                # Keep serving the last fully validated in-memory snapshot.
                 continue
 
     if manager.backend == "mongodb":
@@ -101,9 +98,6 @@ def health() -> HealthResponse:
 def readiness() -> HealthResponse:
     manager = get_store_manager()
     if not manager.ready:
-        # Startup and the background poll own connection attempts. Responding
-        # from cached state keeps Render's five-second health probe from timing
-        # out while PyMongo is waiting on an unreachable Atlas host.
         raise HTTPException(
             status_code=503,
             detail=manager.last_error or "No validated dataset snapshot is loaded",
@@ -121,7 +115,6 @@ def readiness() -> HealthResponse:
 @app.get("/api/meta", response_model=DatasetMeta, tags=["metadata"])
 def meta() -> DatasetMeta:
     manager = get_store_manager()
-    # The background poll owns refreshes; browser visits only read the snapshot.
     return manager.get().meta()
 
 
@@ -184,7 +177,6 @@ def citywide_downtown(start_year: int, end_year: int, store: Store, severity: Se
 
 @app.head("/", include_in_schema=False)
 def root_head() -> Response:
-    # Keep the probe available even before the frontend has been built.
     return Response(status_code=204)
 
 
