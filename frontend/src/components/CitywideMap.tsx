@@ -23,7 +23,7 @@ export function CitywideMap({
   const bbox = downtown?.bbox
   return (
     <div className={styles.frame}>
-      <MapContainer className={styles.map} center={CENTER} zoom={11} zoomControl attributionControl aria-label="Citywide collision density map">
+      <MapContainer className={styles.map} center={CENTER} zoom={11} preferCanvas zoomControl attributionControl aria-label="Citywide collision density map">
         <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"/>
         {layer === 'heatmap' && heatmap?.points.map((point, index) => {
           const ratio = point.weight / Math.max(1, heatmap.maxWeight)

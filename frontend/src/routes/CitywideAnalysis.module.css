@@ -9,7 +9,7 @@
 .severity input { position: absolute; opacity: 0; pointer-events: none; }
 .severity span { min-height: 40px; padding: 0 13px; border: 1px solid var(--border-strong); display: flex; align-items: center; color: var(--text-muted); text-transform: uppercase; font: 600 .66rem/1 var(--font-display); letter-spacing: .08em; }
 .severity span svg { width: 14px; height: 14px; margin-right: 7px; opacity: 0; }
-.severity input:checked + span { color: var(--selection); border-color: var(--selection); background: var(--panel-active); }
+.severity input:checked + span { color: var(--focus); border-color: var(--selection); background: var(--panel-active); }
 .severity input:checked + span svg { opacity: 1; }
 .severity input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 3px; }
 .warning { margin-bottom: 10px; min-height: 36px; padding: 0 13px; display: flex; align-items: center; border: 1px solid color-mix(in srgb, var(--caution) 48%, var(--border)); background: var(--caution-soft); color: var(--caution); text-transform: uppercase; font: 600 .65rem/1 var(--font-display); letter-spacing: .1em; }
@@ -20,7 +20,7 @@
 .panelBar strong { color: var(--text-secondary); }
 .tabs { height: 100%; display: flex; }
 .tabs button { min-width: 112px; height: 100%; border: 0; border-left: 1px solid var(--border); background: transparent; color: var(--text-muted); text-transform: uppercase; font: 600 .67rem/1 var(--font-display); letter-spacing: .08em; cursor: pointer; }
-.tabs button[aria-selected="true"] { background: var(--panel-active); color: var(--selection); box-shadow: inset 0 -2px var(--selection); }
+.tabs button[aria-selected="true"] { background: var(--panel-active); color: var(--focus); box-shadow: inset 0 -2px var(--selection); }
 .analysisRail { border: 1px solid var(--border); border-left: 0; background: var(--panel); }
 .analysisCard { min-height: 172px; padding: 18px; border-bottom: 1px solid var(--border); }
 .analysisCard:last-child { border-bottom: 0; }

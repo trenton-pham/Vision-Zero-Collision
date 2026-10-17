@@ -1,0 +1,156 @@
+
+> seattle-collision-dashboard-web@2.0.0 test:e2e
+> playwright test
+
+[WebServer] INFO:     Started server process [93952]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:4173 (Press CTRL+C to quit)
+
+Running 44 tests using 4 workers
+
+(node:93972) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:93970) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:93971) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:93969) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓   2 [desktop] › tests/e2e/contracts.spec.ts:17:1 › all response schemas accept real local endpoint payloads (441ms)
+  ✓   1 [mobile] › tests/e2e/contracts.spec.ts:17:1 › all response schemas accept real local endpoint payloads (446ms)
+  ✓   4 [mobile] › tests/e2e/dashboard.spec.ts:11:1 › map and keyboard selector share URL-backed neighborhood state (1.1s)
+  ✓   3 [desktop] › tests/e2e/dashboard.spec.ts:11:1 › map and keyboard selector share URL-backed neighborhood state (1.1s)
+  ✓   5 [desktop] › tests/e2e/contracts.spec.ts:50:1 › invalid map links normalize without adding a history entry (1.1s)
+  ✓   6 [mobile] › tests/e2e/contracts.spec.ts:50:1 › invalid map links normalize without adding a history entry (1.1s)
+  ✓   8 [desktop] › tests/e2e/dashboard.spec.ts:23:1 › empty selection shows citywide context and supports URL-backed monthly grain (748ms)
+  ✓   7 [mobile] › tests/e2e/dashboard.spec.ts:23:1 › empty selection shows citywide context and supports URL-backed monthly grain (1.1s)
+  ✓   9 [desktop] › tests/e2e/dashboard.spec.ts:49:1 › citywide context follows the selected year range (896ms)
+  ✓  10 [mobile] › tests/e2e/dashboard.spec.ts:49:1 › citywide context follows the selected year range (919ms)
+  ✓  11 [desktop] › tests/e2e/dashboard.spec.ts:56:1 › citywide analysis exposes independent severity controls (1.0s)
+  ✓  12 [mobile] › tests/e2e/dashboard.spec.ts:56:1 › citywide analysis exposes independent severity controls (1.0s)
+  ✓  13 [desktop] › tests/e2e/dashboard.spec.ts:68:1 › citywide Canvas stays painted through layers, zoom, and data changes (2.4s)
+  ✓  14 [mobile] › tests/e2e/dashboard.spec.ts:68:1 › citywide Canvas stays painted through layers, zoom, and data changes (2.4s)
+  ✓  15 [desktop] › tests/e2e/dashboard.spec.ts:153:1 › invalid severity links normalize in place and retain Unknown (970ms)
+  ✓  16 [mobile] › tests/e2e/dashboard.spec.ts:153:1 › invalid severity links normalize in place and retain Unknown (970ms)
+  ✓  17 [desktop] › tests/e2e/dashboard.spec.ts:165:1 › downtown comparison uses complete years only (1.7s)
+  ✓  18 [mobile] › tests/e2e/dashboard.spec.ts:165:1 › downtown comparison uses complete years only (1.7s)
+  ✓  19 [desktop] › tests/e2e/dashboard.spec.ts:173:1 › a later map click wins when resolution replies arrive out of order (1.0s)
+  ✓  20 [mobile] › tests/e2e/dashboard.spec.ts:173:1 › a later map click wins when resolution replies arrive out of order (1.0s)
+  ✓  21 [desktop] › tests/e2e/dashboard.spec.ts:208:1 › manual selection wins over a pending map resolution (998ms)
+  ✓  22 [mobile] › tests/e2e/dashboard.spec.ts:208:1 › manual selection wins over a pending map resolution (1.0s)
+  ✓  23 [desktop] › tests/e2e/dashboard.spec.ts:232:1 › a slider drag adds one history entry (1.1s)
+  ✓  24 [mobile] › tests/e2e/dashboard.spec.ts:232:1 › a slider drag adds one history entry (1.1s)
+  ✓  25 [desktop] › tests/e2e/dashboard.spec.ts:252:3 › neighborhoods has no serious accessibility violations (1.2s)
+  ✓  26 [mobile] › tests/e2e/dashboard.spec.ts:252:3 › neighborhoods has no serious accessibility violations (1.2s)
+  ✓  27 [desktop] › tests/e2e/dashboard.spec.ts:252:3 › citywide has no serious accessibility violations (1.2s)
+  ✘  28 [mobile] › tests/e2e/dashboard.spec.ts:252:3 › citywide has no serious accessibility violations (1.3s)
+(node:94085) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  29 [desktop] › tests/e2e/dashboard.spec.ts:265:1 › capture finish-review surface (1.9s)
+  ✓  31 [desktop] › tests/e2e/dashboard.spec.ts:285:3 › navigation years invalidates a pending map reply (1.0s)
+  ✓  30 [mobile] › tests/e2e/dashboard.spec.ts:265:1 › capture finish-review surface (2.2s)
+  ✓  32 [desktop] › tests/e2e/dashboard.spec.ts:285:3 › navigation grain invalidates a pending map reply (966ms)
+  ✓  33 [mobile] › tests/e2e/dashboard.spec.ts:285:3 › navigation years invalidates a pending map reply (1.1s)
+  ✓  34 [desktop] › tests/e2e/dashboard.spec.ts:285:3 › navigation back invalidates a pending map reply (983ms)
+  ✓  35 [mobile] › tests/e2e/dashboard.spec.ts:285:3 › navigation grain invalidates a pending map reply (1.0s)
+  ✓  36 [desktop] › tests/e2e/dashboard.spec.ts:285:3 › navigation citywide invalidates a pending map reply (964ms)
+  ✓  37 [mobile] › tests/e2e/dashboard.spec.ts:285:3 › navigation back invalidates a pending map reply (1.0s)
+  ✓  38 [desktop] › tests/e2e/dashboard.spec.ts:331:3 › polygon selection works after years changes and sends one request (1.1s)
+  ✓  39 [mobile] › tests/e2e/dashboard.spec.ts:285:3 › navigation citywide invalidates a pending map reply (973ms)
+  ✓  40 [desktop] › tests/e2e/dashboard.spec.ts:331:3 › polygon selection works after grain changes and sends one request (1.0s)
+  ✓  41 [mobile] › tests/e2e/dashboard.spec.ts:331:3 › polygon selection works after years changes and sends one request (1.1s)
+  ✓  42 [desktop] › tests/e2e/dashboard.spec.ts:374:1 › a dataset refresh replaces same-sized polygon paths (1.1s)
+  ✓  43 [mobile] › tests/e2e/dashboard.spec.ts:331:3 › polygon selection works after grain changes and sends one request (1.1s)
+  ✓  44 [mobile] › tests/e2e/dashboard.spec.ts:374:1 › a dataset refresh replaces same-sized polygon paths (1.1s)
+
+
+  1) [mobile] › tests/e2e/dashboard.spec.ts:252:3 › citywide has no serious accessibility violations 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 58
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+    +     "help": "Elements must meet minimum color contrast ratio thresholds",
+    +     "helpUrl": "https://dequeuniversity.com/rules/axe/4.13/color-contrast?application=playwright",
+    +     "id": "color-contrast",
+    +     "impact": "serious",
+    +     "nodes": Array [
+    +       Object {
+    +         "all": Array [],
+    +         "any": Array [
+    +           Object {
+    +             "data": Object {
+    +               "bgColor": "#102742",
+    +               "contrastRatio": 4.21,
+    +               "expectedContrastRatio": "4.5:1",
+    +               "fgColor": "#2f84ff",
+    +               "fontSize": "8.0pt (10.72px)",
+    +               "fontWeight": "normal",
+    +               "messageKey": null,
+    +             },
+    +             "id": "color-contrast",
+    +             "impact": "serious",
+    +             "message": "Element has insufficient color contrast of 4.21 (foreground color: #2f84ff, background color: #102742, font size: 8.0pt (10.72px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +             "relatedNodes": Array [
+    +               Object {
+    +                 "html": "<button role=\"tab\" aria-selected=\"true\">Heatmap</button>",
+    +                 "target": Array [
+    +                   "button:nth-child(1)",
+    +                 ],
+    +               },
+    +             ],
+    +           },
+    +         ],
+    +         "failureSummary": "Fix any of the following:
+    +   Element has insufficient color contrast of 4.21 (foreground color: #2f84ff, background color: #102742, font size: 8.0pt (10.72px), font weight: normal). Expected contrast ratio of 4.5:1",
+    +         "html": "<button role=\"tab\" aria-selected=\"true\">Heatmap</button>",
+    +         "impact": "serious",
+    +         "none": Array [],
+    +         "target": Array [
+    +           "button:nth-child(1)",
+    +         ],
+    +       },
+    +     ],
+    +     "tags": Array [
+    +       "cat.color",
+    +       "wcag2aa",
+    +       "wcag143",
+    +       "TTv5",
+    +       "TT13.c",
+    +       "EN-301-549",
+    +       "EN-9.1.4.3",
+    +       "ACT",
+    +       "RGAAv4",
+    +       "RGAA-3.2.1",
+    +     ],
+    +   },
+    + ]
+
+      257 |     if (route === 'citywide') await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+      258 |     const results = await new AxeBuilder({ page }).include('#main-content').analyze()
+    > 259 |     expect(results.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([])
+          |                                                                                                                ^
+      260 |     expect([390, 1440]).toContain(testInfo.project.use.viewport?.width)
+      261 |     expect(pageErrors).toEqual([])
+      262 |   })
+        at /Users/trentonpham/Code/seattle_collision/frontend/tests/e2e/dashboard.spec.ts:259:112
+
+    Error Context: test-results/dashboard-citywide-has-no-serious-accessibility-violations-mobile/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/dashboard-citywide-has-no-serious-accessibility-violations-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/dashboard-citywide-has-no-serious-accessibility-violations-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [mobile] › tests/e2e/dashboard.spec.ts:252:3 › citywide has no serious accessibility violations 
+  43 passed (27.6s)

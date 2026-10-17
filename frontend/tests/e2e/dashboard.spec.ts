@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import { datasetMetaSchema, neighborhoodFeatureCollectionSchema } from '../../src/lib/contracts'
+import { citywideSummarySchema, datasetMetaSchema, neighborhoodFeatureCollectionSchema } from '../../src/lib/contracts'
 
 function deferred() {
   let release: (() => void) | undefined
@@ -63,6 +63,107 @@ test('citywide analysis exposes independent severity controls', async ({ page })
   await expect(page).toHaveURL(/severity=fatal%2Cunknown/)
   await page.getByText('Unknown', { exact: true }).click()
   await expect(page).toHaveURL(/severity=fatal(?:&|$)/)
+})
+
+test('citywide Canvas stays painted through layers, zoom, and data changes', async ({ page }) => {
+  const pageErrors: Error[] = []
+  page.on('pageerror', (error) => pageErrors.push(error))
+  await page.goto('/citywide?start=2025&end=2025')
+  const map = page.locator('.leaflet-container')
+  const canvas = map.locator('.leaflet-overlay-pane canvas')
+  await expect(canvas).toBeVisible()
+  await expect(map.locator('.leaflet-overlay-pane svg')).toHaveCount(0)
+  const readCanvas = () => canvas.evaluate((element) => {
+    if (!(element instanceof HTMLCanvasElement)) throw new Error('Density overlay is not a canvas')
+    const context = element.getContext('2d')
+    if (!context) throw new Error('Density canvas has no 2D context')
+    const pixels = context.getImageData(0, 0, element.width, element.height).data
+    return {
+      painted: pixels.some((value, index) => index % 4 === 3 && value > 0),
+      densityPainted: pixels.some((red, index) => {
+        if (index % 4 !== 0) return false
+        const green = pixels[index + 1] ?? 0
+        const blue = pixels[index + 2] ?? 0
+        const alpha = pixels[index + 3] ?? 0
+        return red < 100 && green > 90 && green < 180 && blue > 200 && alpha > 0
+      }),
+      image: element.toDataURL(),
+    }
+  })
+  await expect.poll(async () => (await readCanvas()).densityPainted).toBe(true)
+  const heatmap = await readCanvas()
+  await page.getByRole('tab', { name: 'KDE density' }).click()
+  await expect(page).toHaveURL(/layer=kde/)
+  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect.poll(async () => {
+    const density = await readCanvas()
+    return density.densityPainted && density.image !== heatmap.image
+  }).toBe(true)
+  const density = await readCanvas()
+  await page.getByRole('tab', { name: 'Heatmap', exact: true }).click()
+  await expect(page.getByRole('tab', { name: 'Heatmap', exact: true })).toHaveAttribute('aria-selected', 'true')
+  await expect.poll(async () => {
+    const restored = await readCanvas()
+    return restored.densityPainted && restored.image !== density.image
+  }).toBe(true)
+  const beforeZoom = await readCanvas()
+
+  await map.getByRole('button', { name: 'Zoom in', exact: true }).click()
+  await expect.poll(async () => {
+    const zoomed = await readCanvas()
+    return zoomed.painted && zoomed.image !== beforeZoom.image
+  }).toBe(true)
+  const zoomed = await readCanvas()
+  await map.getByRole('button', { name: 'Zoom out', exact: true }).click()
+  await expect.poll(async () => {
+    const restored = await readCanvas()
+    return restored.painted && restored.image !== zoomed.image
+  }).toBe(true)
+  await expect(map.locator('.leaflet-zoom-anim')).toHaveCount(0)
+  const beforeFilter = await readCanvas()
+
+  const fatalResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/citywide/summary' && url.searchParams.get('severity') === 'fatal'
+  })
+  await page.getByText('Fatal', { exact: true }).click()
+  await expect(page.getByRole('checkbox', { name: 'Fatal', exact: true })).toBeChecked()
+  await expect(page).toHaveURL(/severity=fatal(?:&|$)/)
+  const fatalPayload: unknown = await (await fatalResponse).json()
+  const fatal = citywideSummarySchema.parse(fatalPayload)
+  const collisionCount = page.locator('dt').filter({ hasText: /^Collisions$/ }).locator('..').locator('dd')
+  await expect(collisionCount).toHaveText(new Intl.NumberFormat('en-US').format(fatal.metrics.collisionCount))
+  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect.poll(async () => {
+    const filtered = await readCanvas()
+    return filtered.painted && filtered.image !== beforeFilter.image
+  }).toBe(true)
+  const beforeYearChange = await readCanvas()
+
+  const partialResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url())
+    return url.pathname === '/api/citywide/summary' && url.searchParams.get('end_year') === '2026' && url.searchParams.get('severity') === 'fatal'
+  })
+  await page.getByRole('slider', { name: 'End year' }).press('ArrowRight')
+  await expect(page).toHaveURL(/end=2026(?:&|$)/)
+  const partialPayload: unknown = await (await partialResponse).json()
+  const partial = citywideSummarySchema.parse(partialPayload)
+  await expect(collisionCount).toHaveText(new Intl.NumberFormat('en-US').format(partial.metrics.collisionCount))
+  expect(partial.warnings.length).toBeGreaterThan(0)
+  for (const warning of partial.warnings) await expect(page.getByText(warning, { exact: false })).toBeVisible()
+  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect.poll(async () => {
+    const changed = await readCanvas()
+    return changed.painted && changed.image !== beforeYearChange.image
+  }).toBe(true)
+  await expect(map.locator('.leaflet-overlay-pane svg')).toHaveCount(0)
+
+  const neighborhoodLink = page.getByRole('link', { name: 'Neighborhood Explorer', exact: true })
+  if (await neighborhoodLink.isVisible()) await neighborhoodLink.click()
+  else await page.getByRole('link', { name: 'Neighborhoods', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Locate burden. Read context.' })).toBeVisible()
+  await expect(page.locator('path.leaflet-interactive').first()).toBeVisible()
+  expect(pageErrors).toEqual([])
 })
 
 test('invalid severity links normalize in place and retain Unknown', async ({ page }) => {
@@ -163,13 +264,24 @@ test('a slider drag adds one history entry', async ({ page }) => {
   await expect(page).toHaveURL(/start=2015(?:&|$)/)
 })
 
-test('core routes have no serious accessibility violations', async ({ page }, testInfo) => {
-  await page.goto('/neighborhoods?start=2020&end=2025')
-  await expect(page.getByRole('heading', { name: 'Locate burden. Read context.' })).toBeVisible()
-  const results = await new AxeBuilder({ page }).include('#main-content').analyze()
-  expect(results.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([])
-  expect([390, 1440]).toContain(testInfo.project.use.viewport?.width)
-})
+for (const route of ['neighborhoods', 'citywide']) {
+  test(`${route} has no serious accessibility violations`, async ({ page }, testInfo) => {
+    const pageErrors: Error[] = []
+    page.on('pageerror', (error) => pageErrors.push(error))
+    await page.goto(`/${route}?start=2020&end=2025`)
+    await expect(page.locator('.leaflet-container')).toBeVisible()
+    if (route === 'citywide') {
+      await page.getByText('Fatal', { exact: true }).click()
+      await expect(page.getByRole('checkbox', { name: 'Fatal', exact: true })).toBeChecked()
+      await page.getByRole('tab', { name: 'KDE density' }).click()
+      await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+    }
+    const results = await new AxeBuilder({ page }).include('#main-content').analyze()
+    expect(results.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([])
+    expect([390, 1440]).toContain(testInfo.project.use.viewport?.width)
+    expect(pageErrors).toEqual([])
+  })
+}
 
 test('capture finish-review surface', async ({ page }, testInfo) => {
   await page.goto('/neighborhoods?start=2015&end=2026&neighborhood=ballard&metric=collisionCount')

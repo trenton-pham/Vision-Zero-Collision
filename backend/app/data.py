@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 from datetime import date, datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import Iterable
+from typing import Callable, Iterable, TypeVar
 from zoneinfo import ZoneInfo
 
 import geopandas as gpd
@@ -21,6 +22,7 @@ from .repository import (
     compact_collisions,
 )
 from .schemas import (
+    ApiModel,
     AnnualMetric,
     CitywideSummary,
     CitywideTrendContext,
@@ -53,6 +55,9 @@ SEVERITY_KEYS = {
     "fatal": "Fatal Collision",
     "unknown": None,
 }
+_DENSITY_CACHE_MAX_ENTRIES = 32
+_DENSITY_CACHE_MAX_BYTES = 8 * 1024**2
+_DensityResponse = TypeVar("_DensityResponse", bound=ApiModel)
 
 
 class DataStore:
@@ -95,6 +100,11 @@ class DataStore:
             })
 
         self.collisions = add_metric_columns(self.collisions)
+        self._density_cache: OrderedDict[tuple[str, int, int, tuple[str, ...]], bytes] = OrderedDict()
+        self._density_cache_bytes = 0
+        self._density_cache_lock = threading.Lock()
+        self._heatmap_lock = threading.Lock()
+        self._kde_lock = threading.Lock()
 
     def _validate_bundle(self) -> None:
         collision_columns = {
@@ -469,6 +479,55 @@ class DataStore:
         )
 
     def heatmap(self, start_year: int, end_year: int, severities: list[str]) -> HeatmapResponse:
+        return self._cached_density("heatmap", start_year, end_year, severities, HeatmapResponse, self._heatmap, self._heatmap_lock)
+
+    def kde(self, start_year: int, end_year: int, severities: list[str]) -> KdeResponse:
+        return self._cached_density("kde", start_year, end_year, severities, KdeResponse, self._kde, self._kde_lock)
+
+    def _cached_density(
+        self,
+        endpoint: str,
+        start_year: int,
+        end_year: int,
+        severities: list[str],
+        model_type: type[_DensityResponse],
+        compute: Callable[[int, int, list[str]], _DensityResponse],
+        compute_lock: threading.Lock,
+    ) -> _DensityResponse:
+        self.validate_year_range(start_year, end_year)
+        selected = tuple(sorted(set(severities)))
+        invalid = sorted(set(selected) - set(SEVERITY_KEYS))
+        if invalid:
+            raise ValueError(f"unknown severity filter: {', '.join(invalid)}")
+        key = (endpoint, start_year, end_year, selected)
+        with self._density_cache_lock:
+            cached = self._density_cache.get(key)
+            if cached is not None:
+                self._density_cache.move_to_end(key)
+        if cached is not None:
+            return model_type.model_validate_json(cached)
+        with compute_lock:
+            with self._density_cache_lock:
+                cached = self._density_cache.get(key)
+                if cached is not None:
+                    self._density_cache.move_to_end(key)
+            if cached is not None:
+                return model_type.model_validate_json(cached)
+            response = compute(start_year, end_year, list(selected))
+            payload = response.model_dump_json().encode()
+            if len(payload) <= _DENSITY_CACHE_MAX_BYTES:
+                with self._density_cache_lock:
+                    self._density_cache[key] = payload
+                    self._density_cache_bytes += len(payload)
+                    while (
+                        len(self._density_cache) > _DENSITY_CACHE_MAX_ENTRIES
+                        or self._density_cache_bytes > _DENSITY_CACHE_MAX_BYTES
+                    ):
+                        _, evicted = self._density_cache.popitem(last=False)
+                        self._density_cache_bytes -= len(evicted)
+            return response
+
+    def _heatmap(self, start_year: int, end_year: int, severities: list[str]) -> HeatmapResponse:
         frame = self._filter_citywide(start_year, end_year, severities)
         if frame.empty:
             return HeatmapResponse(points=[], maxWeight=0, collisionCount=0)
@@ -482,7 +541,7 @@ class DataStore:
             ))
         return HeatmapResponse(points=points, maxWeight=int(counts.max()), collisionCount=len(frame))
 
-    def kde(self, start_year: int, end_year: int, severities: list[str]) -> KdeResponse:
+    def _kde(self, start_year: int, end_year: int, severities: list[str]) -> KdeResponse:
         frame = self._filter_citywide(start_year, end_year, severities)
         bounds = [
             float(self.collisions["Y"].min()), float(self.collisions["X"].min()),

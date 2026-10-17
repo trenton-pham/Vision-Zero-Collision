@@ -1,0 +1,259 @@
+{
+  "browser": "153.0.8010.12",
+  "base": "c06e61df7a9d055eba83aef2a7200f6996c60d6b",
+  "mobile": "Chromium emulation, iPhone 13 device settings",
+  "tilePolicy": "Identical local transparent PNG tiles; no external tile timing",
+  "samples": [
+    {
+      "variant": "svg",
+      "viewport": "desktop",
+      "layer": "heatmap",
+      "pair": 0,
+      "overlayMs": 75.40000003576279,
+      "circles": 1726,
+      "expectedCircles": 1726,
+      "frameP95Ms": 16.700000000000045,
+      "frames": 106,
+      "renderedLayers": 1728
+    },
+    {
+      "variant": "canvas",
+      "viewport": "desktop",
+      "layer": "heatmap",
+      "pair": 0,
+      "overlayMs": 56.299999952316284,
+      "circles": 1726,
+      "expectedCircles": 1726,
+      "frameP95Ms": 16.700000000000045,
+      "frames": 106,
+      "renderedLayers": 1728
+    },
+    {
+      "variant": "svg",
+      "viewport": "desktop",
+      "layer": "kde",
+      "pair": 0,
+      "overlayMs": 44.19999998807907,
+      "circles": 859,
+      "expectedCircles": 859,
+      "frameP95Ms": 16.799999999999955,
+      "frames": 106,
+      "renderedLayers": 861
+    },
+    {
+      "variant": "canvas",
+      "viewport": "desktop",
+      "layer": "kde",
+      "pair": 0,
+      "overlayMs": 56.19999998807907,
+      "circles": 859,
+      "expectedCircles": 859,
+      "frameP95Ms": 16.700000000000273,
+      "frames": 104,
+      "renderedLayers": 861
+    },
+    {
+      "variant": "svg",
+      "viewport": "mobile",
+      "layer": "heatmap",
+      "pair": 0,
+      "overlayMs": 72.30000001192093,
+      "circles": 1726,
+      "expectedCircles": 1726,
+      "frameP95Ms": 16.700000000000273,
+      "frames": 105,
+      "renderedLayers": 1728
+    },
+    {
+      "variant": "canvas",
+      "viewport": "mobile",
+      "layer": "heatmap",
+      "pair": 0,
+      "overlayMs": 56.69999998807907,
+      "circles": 1726,
+      "expectedCircles": 1726,
+      "frameP95Ms": 16.799999999999955,
+      "frames": 104,
+      "renderedLayers": 1728
+    },
+    {
+      "variant": "svg",
+      "viewport": "mobile",
+      "layer": "kde",
+      "pair": 0,
+      "overlayMs": 51.19999998807907,
+      "circles": 859,
+      "expectedCircles": 859,
+      "frameP95Ms": 16.700000000000273,
+      "frames": 106,
+      "renderedLayers": 861
+    },
+    {
+      "variant": "canvas",
+      "viewport": "mobile",
+      "layer": "kde",
+      "pair": 0,
+      "overlayMs": 48.5,
+      "circles": 859,
+      "expectedCircles": 859,
+      "frameP95Ms": 16.799999999999955,
+      "frames": 105,
+      "renderedLayers": 861
+    }
+  ],
+  "summaries": [
+    {
+      "viewport": "desktop",
+      "layer": "heatmap",
+      "metric": "overlayMs",
+      "svgMedian": 75.40000003576279,
+      "svgRange": [
+        75.40000003576279,
+        75.40000003576279
+      ],
+      "canvasMedian": 56.299999952316284,
+      "canvasRange": [
+        56.299999952316284,
+        56.299999952316284
+      ],
+      "improvementPercent": 25.331565085394203,
+      "svgVariation": 0,
+      "qualifies": true,
+      "regresses": false
+    },
+    {
+      "viewport": "desktop",
+      "layer": "heatmap",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.700000000000045,
+      "svgRange": [
+        16.700000000000045,
+        16.700000000000045
+      ],
+      "canvasMedian": 16.700000000000045,
+      "canvasRange": [
+        16.700000000000045,
+        16.700000000000045
+      ],
+      "improvementPercent": 0,
+      "svgVariation": 0,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "desktop",
+      "layer": "kde",
+      "metric": "overlayMs",
+      "svgMedian": 44.19999998807907,
+      "svgRange": [
+        44.19999998807907,
+        44.19999998807907
+      ],
+      "canvasMedian": 56.19999998807907,
+      "canvasRange": [
+        56.19999998807907,
+        56.19999998807907
+      ],
+      "improvementPercent": -27.149321274290614,
+      "svgVariation": 0,
+      "qualifies": false,
+      "regresses": true
+    },
+    {
+      "viewport": "desktop",
+      "layer": "kde",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.799999999999955,
+      "svgRange": [
+        16.799999999999955,
+        16.799999999999955
+      ],
+      "canvasMedian": 16.700000000000273,
+      "canvasRange": [
+        16.700000000000273,
+        16.700000000000273
+      ],
+      "improvementPercent": 0.5952380952362021,
+      "svgVariation": 0,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "heatmap",
+      "metric": "overlayMs",
+      "svgMedian": 72.30000001192093,
+      "svgRange": [
+        72.30000001192093,
+        72.30000001192093
+      ],
+      "canvasMedian": 56.69999998807907,
+      "canvasRange": [
+        56.69999998807907,
+        56.69999998807907
+      ],
+      "improvementPercent": 21.57676351489586,
+      "svgVariation": 0,
+      "qualifies": true,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "heatmap",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.700000000000273,
+      "svgRange": [
+        16.700000000000273,
+        16.700000000000273
+      ],
+      "canvasMedian": 16.799999999999955,
+      "canvasRange": [
+        16.799999999999955,
+        16.799999999999955
+      ],
+      "improvementPercent": -0.598802395207665,
+      "svgVariation": 0,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "kde",
+      "metric": "overlayMs",
+      "svgMedian": 51.19999998807907,
+      "svgRange": [
+        51.19999998807907,
+        51.19999998807907
+      ],
+      "canvasMedian": 48.5,
+      "canvasRange": [
+        48.5,
+        48.5
+      ],
+      "improvementPercent": 5.2734374779447535,
+      "svgVariation": 0,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "kde",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.700000000000273,
+      "svgRange": [
+        16.700000000000273,
+        16.700000000000273
+      ],
+      "canvasMedian": 16.799999999999955,
+      "canvasRange": [
+        16.799999999999955,
+        16.799999999999955
+      ],
+      "improvementPercent": -0.598802395207665,
+      "svgVariation": 0,
+      "qualifies": false,
+      "regresses": false
+    }
+  ],
+  "acceptCanvas": false
+}

@@ -1,0 +1,33 @@
+         11210 function calls (11181 primitive calls) in 0.079 seconds
+
+   Ordered by: cumulative time
+   List reduced from 388 to 25 due to restriction <25>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.079    0.079 /Users/trentonpham/Code/seattle_collision/backend/app/data.py:485(kde)
+        1    0.051    0.051    0.052    0.052 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/scipy/stats/_kde.py:247(evaluate)
+        1    0.001    0.001    0.025    0.025 /Users/trentonpham/Code/seattle_collision/backend/app/data.py:505(<listcomp>)
+     1765    0.000    0.000    0.024    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pydantic/main.py:253(__init__)
+     1765    0.024    0.000    0.024    0.000 {method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects}
+        1    0.000    0.000    0.001    0.001 /Users/trentonpham/Code/seattle_collision/backend/app/data.py:425(_filter_citywide)
+        8    0.000    0.000    0.001    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/frame.py:4073(__getitem__)
+        1    0.000    0.000    0.001    0.001 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/frame.py:4141(_getitem_bool_array)
+        1    0.000    0.000    0.001    0.001 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/generic.py:6684(copy)
+        1    0.000    0.000    0.001    0.001 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/internals/managers.py:576(copy)
+     5292    0.001    0.000    0.001    0.000 {built-in method builtins.round}
+        1    0.000    0.000    0.001    0.001 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/internals/managers.py:1801(_consolidate_inplace)
+        1    0.000    0.000    0.001    0.001 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/internals/managers.py:2278(_consolidate)
+        1    0.000    0.000    0.001    0.001 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/internals/managers.py:317(apply)
+       14    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/internals/blocks.py:816(copy)
+        6    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/internals/managers.py:2295(_merge_blocks)
+       13    0.000    0.000    0.000    0.000 {method 'copy' of 'numpy.ndarray' objects}
+        4    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/numpy/_core/shape_base.py:218(vstack)
+        1    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/series.py:5583(between)
+        3    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/ops/common.py:62(new_method)
+        1    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/scipy/stats/_kde.py:209(__init__)
+        1    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/scipy/stats/_kde.py:518(set_bandwidth)
+        1    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/scipy/stats/_kde.py:581(_compute_covariance)
+        4    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/generic.py:12427(_stat_function)
+        4    0.000    0.000    0.000    0.000 /Users/trentonpham/Code/seattle_collision/.venv-render/lib/python3.11/site-packages/pandas/core/series.py:6439(_reduce)
+
+

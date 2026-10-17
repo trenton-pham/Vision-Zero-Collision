@@ -1,0 +1,23 @@
+
+> seattle-collision-dashboard-web@2.0.0 test:e2e
+> playwright test --grep serious accessibility|Canvas stays
+
+[WebServer] INFO:     Started server process [98472]
+[WebServer] INFO:     Waiting for application startup.
+[WebServer] INFO:     Application startup complete.
+[WebServer] INFO:     Uvicorn running on http://127.0.0.1:4173 (Press CTRL+C to quit)
+
+Running 6 tests using 2 workers
+
+(node:98491) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:98490) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [desktop] › tests/e2e/dashboard.spec.ts:68:1 › citywide Canvas stays painted through layers, zoom, and data changes (2.5s)
+  ✓  2 [mobile] › tests/e2e/dashboard.spec.ts:68:1 › citywide Canvas stays painted through layers, zoom, and data changes (2.7s)
+  ✓  3 [desktop] › tests/e2e/dashboard.spec.ts:268:3 › neighborhoods has no serious accessibility violations (1.2s)
+  ✓  4 [mobile] › tests/e2e/dashboard.spec.ts:268:3 › neighborhoods has no serious accessibility violations (1.2s)
+  ✓  5 [desktop] › tests/e2e/dashboard.spec.ts:268:3 › citywide has no serious accessibility violations (1.4s)
+  ✓  6 [mobile] › tests/e2e/dashboard.spec.ts:268:3 › citywide has no serious accessibility violations (1.3s)
+
+  6 passed (7.8s)

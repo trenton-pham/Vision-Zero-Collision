@@ -1,0 +1,197 @@
+{"variant":"svg","viewport":"desktop","layer":"heatmap","pair":0,"overlayMs":65.60000002384186,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000045,"frames":104,"renderedLayers":1728}
+{"variant":"canvas","viewport":"desktop","layer":"heatmap","pair":0,"overlayMs":57.30000001192093,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000273,"frames":105,"renderedLayers":1728}
+{"variant":"svg","viewport":"desktop","layer":"heatmap","pair":1,"overlayMs":68.60000002384186,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000045,"frames":104,"renderedLayers":1728}
+{"variant":"canvas","viewport":"desktop","layer":"heatmap","pair":1,"overlayMs":51.39999997615814,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000045,"frames":105,"renderedLayers":1728}
+{"variant":"svg","viewport":"desktop","layer":"heatmap","pair":2,"overlayMs":68.69999998807907,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000045,"frames":105,"renderedLayers":1728}
+{"variant":"canvas","viewport":"desktop","layer":"heatmap","pair":2,"overlayMs":52.19999998807907,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000273,"frames":106,"renderedLayers":1728}
+{"variant":"svg","viewport":"desktop","layer":"heatmap","pair":3,"overlayMs":57.30000001192093,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.799999999999955,"frames":104,"renderedLayers":1728}
+{"variant":"canvas","viewport":"desktop","layer":"heatmap","pair":3,"overlayMs":58.5,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000273,"frames":106,"renderedLayers":1728}
+{"variant":"svg","viewport":"desktop","layer":"heatmap","pair":4,"overlayMs":64.80000001192093,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000045,"frames":105,"renderedLayers":1728}
+{"variant":"canvas","viewport":"desktop","layer":"heatmap","pair":4,"overlayMs":57.5,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000273,"frames":107,"renderedLayers":1728}
+{"variant":"svg","viewport":"desktop","layer":"kde","pair":0,"overlayMs":54.90000003576279,"circles":859,"expectedCircles":859,"frameP95Ms":16.799999999999955,"frames":104,"renderedLayers":861}
+{"variant":"canvas","viewport":"desktop","layer":"kde","pair":0,"overlayMs":56,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":104,"renderedLayers":861}
+{"variant":"svg","viewport":"desktop","layer":"kde","pair":1,"overlayMs":55,"circles":859,"expectedCircles":859,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":861}
+{"variant":"canvas","viewport":"desktop","layer":"kde","pair":1,"overlayMs":51.799999952316284,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":104,"renderedLayers":861}
+{"variant":"svg","viewport":"desktop","layer":"kde","pair":2,"overlayMs":66.5,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":105,"renderedLayers":861}
+{"variant":"canvas","viewport":"desktop","layer":"kde","pair":2,"overlayMs":38.90000003576279,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000045,"frames":105,"renderedLayers":861}
+{"variant":"svg","viewport":"desktop","layer":"kde","pair":3,"overlayMs":52.5,"circles":859,"expectedCircles":859,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":861}
+{"variant":"canvas","viewport":"desktop","layer":"kde","pair":3,"overlayMs":52.90000003576279,"circles":859,"expectedCircles":859,"frameP95Ms":16.799999999999955,"frames":104,"renderedLayers":861}
+{"variant":"svg","viewport":"desktop","layer":"kde","pair":4,"overlayMs":51.299999952316284,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":104,"renderedLayers":861}
+{"variant":"canvas","viewport":"desktop","layer":"kde","pair":4,"overlayMs":50.5,"circles":859,"expectedCircles":859,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":861}
+{"variant":"svg","viewport":"mobile","layer":"heatmap","pair":0,"overlayMs":59,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":1728}
+{"variant":"canvas","viewport":"mobile","layer":"heatmap","pair":0,"overlayMs":44.19999998807907,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000045,"frames":102,"renderedLayers":1728}
+{"variant":"svg","viewport":"mobile","layer":"heatmap","pair":1,"overlayMs":53.30000001192093,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":1728}
+{"variant":"canvas","viewport":"mobile","layer":"heatmap","pair":1,"overlayMs":58.30000001192093,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000273,"frames":106,"renderedLayers":1728}
+{"variant":"svg","viewport":"mobile","layer":"heatmap","pair":2,"overlayMs":62.5,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000273,"frames":106,"renderedLayers":1728}
+{"variant":"canvas","viewport":"mobile","layer":"heatmap","pair":2,"overlayMs":41.09999996423721,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":1728}
+{"variant":"svg","viewport":"mobile","layer":"heatmap","pair":3,"overlayMs":62.19999998807907,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":1728}
+{"variant":"canvas","viewport":"mobile","layer":"heatmap","pair":3,"overlayMs":58.30000001192093,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.799999999999955,"frames":105,"renderedLayers":1728}
+{"variant":"svg","viewport":"mobile","layer":"heatmap","pair":4,"overlayMs":61.19999998807907,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.800000000000068,"frames":106,"renderedLayers":1728}
+{"variant":"canvas","viewport":"mobile","layer":"heatmap","pair":4,"overlayMs":50.10000002384186,"circles":1726,"expectedCircles":1726,"frameP95Ms":16.700000000000273,"frames":106,"renderedLayers":1728}
+{"variant":"svg","viewport":"mobile","layer":"kde","pair":0,"overlayMs":57.10000002384186,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":104,"renderedLayers":861}
+{"variant":"canvas","viewport":"mobile","layer":"kde","pair":0,"overlayMs":52.09999996423721,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000045,"frames":103,"renderedLayers":861}
+{"variant":"svg","viewport":"mobile","layer":"kde","pair":1,"overlayMs":33.299999952316284,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":104,"renderedLayers":861}
+{"variant":"canvas","viewport":"mobile","layer":"kde","pair":1,"overlayMs":51.80000001192093,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":103,"renderedLayers":861}
+{"variant":"svg","viewport":"mobile","layer":"kde","pair":2,"overlayMs":53,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000045,"frames":104,"renderedLayers":861}
+{"variant":"canvas","viewport":"mobile","layer":"kde","pair":2,"overlayMs":54.69999998807907,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":105,"renderedLayers":861}
+{"variant":"svg","viewport":"mobile","layer":"kde","pair":3,"overlayMs":53.19999998807907,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000045,"frames":105,"renderedLayers":861}
+{"variant":"canvas","viewport":"mobile","layer":"kde","pair":3,"overlayMs":51.19999998807907,"circles":859,"expectedCircles":859,"frameP95Ms":16.700000000000273,"frames":103,"renderedLayers":861}
+{"variant":"svg","viewport":"mobile","layer":"kde","pair":4,"overlayMs":55.19999998807907,"circles":859,"expectedCircles":859,"frameP95Ms":16.799999999999955,"frames":107,"renderedLayers":861}
+{"variant":"canvas","viewport":"mobile","layer":"kde","pair":4,"overlayMs":51.89999997615814,"circles":859,"expectedCircles":859,"frameP95Ms":16.799999999999955,"frames":104,"renderedLayers":861}
+{
+  "summaries": [
+    {
+      "viewport": "desktop",
+      "layer": "heatmap",
+      "metric": "overlayMs",
+      "svgMedian": 65.60000002384186,
+      "svgRange": [
+        57.30000001192093,
+        68.69999998807907
+      ],
+      "canvasMedian": 57.30000001192093,
+      "canvasRange": [
+        51.39999997615814,
+        58.5
+      ],
+      "improvementPercent": 12.652439037963951,
+      "svgVariation": 11.399999976158142,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "desktop",
+      "layer": "heatmap",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.700000000000045,
+      "svgRange": [
+        16.700000000000045,
+        16.799999999999955
+      ],
+      "canvasMedian": 16.700000000000273,
+      "canvasRange": [
+        16.700000000000045,
+        16.700000000000273
+      ],
+      "improvementPercent": -1.3615190146301283e-12,
+      "svgVariation": 0.09999999999990905,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "desktop",
+      "layer": "kde",
+      "metric": "overlayMs",
+      "svgMedian": 54.90000003576279,
+      "svgRange": [
+        51.299999952316284,
+        66.5
+      ],
+      "canvasMedian": 51.799999952316284,
+      "canvasRange": [
+        38.90000003576279,
+        56
+      ],
+      "improvementPercent": 5.646630385113133,
+      "svgVariation": 15.200000047683716,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "desktop",
+      "layer": "kde",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.799999999999955,
+      "svgRange": [
+        16.700000000000273,
+        16.799999999999955
+      ],
+      "canvasMedian": 16.700000000000273,
+      "canvasRange": [
+        16.700000000000045,
+        16.799999999999955
+      ],
+      "improvementPercent": 0.5952380952362021,
+      "svgVariation": 0.09999999999968168,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "heatmap",
+      "metric": "overlayMs",
+      "svgMedian": 61.19999998807907,
+      "svgRange": [
+        53.30000001192093,
+        62.5
+      ],
+      "canvasMedian": 50.10000002384186,
+      "canvasRange": [
+        41.09999996423721,
+        58.30000001192093
+      ],
+      "improvementPercent": 18.13725484705775,
+      "svgVariation": 9.199999988079071,
+      "qualifies": true,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "heatmap",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.799999999999955,
+      "svgRange": [
+        16.700000000000273,
+        16.800000000000068
+      ],
+      "canvasMedian": 16.700000000000273,
+      "canvasRange": [
+        16.700000000000045,
+        16.799999999999955
+      ],
+      "improvementPercent": 0.5952380952362021,
+      "svgVariation": 0.09999999999979536,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "kde",
+      "metric": "overlayMs",
+      "svgMedian": 53.19999998807907,
+      "svgRange": [
+        33.299999952316284,
+        57.10000002384186
+      ],
+      "canvasMedian": 51.89999997615814,
+      "canvasRange": [
+        51.19999998807907,
+        54.69999998807907
+      ],
+      "improvementPercent": 2.4436090455117103,
+      "svgVariation": 23.800000071525574,
+      "qualifies": false,
+      "regresses": false
+    },
+    {
+      "viewport": "mobile",
+      "layer": "kde",
+      "metric": "frameP95Ms",
+      "svgMedian": 16.700000000000273,
+      "svgRange": [
+        16.700000000000045,
+        16.799999999999955
+      ],
+      "canvasMedian": 16.700000000000273,
+      "canvasRange": [
+        16.700000000000045,
+        16.799999999999955
+      ],
+      "improvementPercent": 0,
+      "svgVariation": 0.09999999999990905,
+      "qualifies": false,
+      "regresses": false
+    }
+  ],
+  "acceptCanvas": true
+}
