@@ -18,7 +18,9 @@
 - [x] Run **Opening a PR**.
   - skip: Deliver the local corrections for review. No PR was requested.
 
-## Known issue outside this change
+## Historical issues outside the initial change
+
+The following caveats describe the original verification. The container onboarding follow-up retires the host environment and updates the vulnerable dependency. See [container-onboarding-verification.md](./container-onboarding-verification.md) for its results.
 
 `npm audit` reports the existing high-severity `source-map-js` advisory GHSA-68fv-2mgg-jv7q. No dependency versions or lockfiles changed. The advisory concerns denial of service when processing indexed source maps. Follow-up: update the affected transitive build dependency and verify the frontend build and tests.
 

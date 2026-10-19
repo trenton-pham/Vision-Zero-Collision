@@ -1,6 +1,6 @@
 # Onboarding verification
 
-Checked October 18, 2026, America/Los_Angeles. The application source is at `2a7fa31`. Setup and documentation corrections remain in the working tree.
+Historical checks from October 18, 2026, America/Los_Angeles. The application source and live deployment were at `2a7fa31`. Setup and documentation corrections were verified separately and subsequently committed in `cd7d0fd`. These results do not establish deployment of that setup commit or later changes.
 
 | Check | Result | Evidence |
 | --- | --- | --- |

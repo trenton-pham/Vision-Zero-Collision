@@ -50,7 +50,7 @@ The cleaning manifest records 109,040 cleaned collisions. Spatial analysis exclu
 | `collision_clean.py` | Adds temporal features (`YEAR`, `MONTH`, `DAY`, `HOUR`, `Day_of_Week`, `Season`), standardizes missing categories, flags geometry quality, and engineers spatial/severity features |
 | `vehicle_clean.py` | Standardizes vehicle categories, validates vehicle keys, and separates records without matching collision keys |
 
-Download [SDOT Collisions All Years](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-all-years/about) as GeoJSON and [SDOT Collisions Vehicles](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-vehicles) as CSV. Save them under the raw filenames listed above. Install the Python dependencies in **Local development**, then run from the repository root:
+Download [SDOT Collisions All Years](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-all-years/about) as GeoJSON and [SDOT Collisions Vehicles](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-vehicles) as CSV. Save them under the raw filenames listed above. Complete **Local development**, then run from the repository root in the container terminal:
 
 ```bash
 .venv/bin/python clean.py --start-year 2015 --end-year 2026
@@ -97,15 +97,17 @@ Use `--skip-geojson` if you only need Parquet and CSV. The spatial notebook stil
 
 ### Run the notebooks
 
-`pyproject.toml` defines the application dependencies. Install notebook visualization and modeling libraries separately:
+Complete **Local development** first. In the container terminal at the repository root, install the notebook libraries separately:
 
 ```bash
 .venv/bin/pip install jupyterlab matplotlib seaborn folium scikit-learn xgboost lightgbm catboost
 cd notebooks
-../.venv/bin/jupyter lab
+../.venv/bin/jupyter lab --ip=0.0.0.0 --no-browser
 ```
 
-Run these commands after the Python setup in **Local development**. Start Jupyter from `notebooks/` to match the relative data paths. `model.ipynb` reads the checked-in Parquet. The EDA and spatial notebooks require cleaned outputs from `clean.py`.
+Forward the port printed by Jupyter, normally 8888, and open the URL with its token. Start Jupyter from `notebooks/` to match the relative data paths. If you use the VS Code notebook editor instead, select the container project's `.venv/bin/python` kernel. The container config sets each notebook's directory as its working directory. Confirm the kernel with `import sys; print(sys.executable, sys.version)` before running cells. It must report Python 3.11 from the container environment.
+
+`model.ipynb` reads the checked-in Parquet. The EDA and spatial notebooks require cleaned outputs from `clean.py`. Notebook extras are optional and are not installed by the container creation hook.
 
 ## EDA findings
 
@@ -201,40 +203,51 @@ data/dashboard/              Reproducible generated artifacts (gitignored)
 
 ## Local development
 
-Use Python 3.11 and Node 22 to match Docker and CI. The Python package supports Python 3.11 through 3.14. Run these commands from the repository root. You do not need raw data downloads or notebook dependencies.
+### Dev containers and Codespaces (recommended)
+
+Install Docker and the VS Code Dev Containers extension, then open the repository with **Dev Containers: Reopen in Container**. You can also open the repository in GitHub Codespaces. Wait for container creation to finish before opening a terminal.
+
+The container supplies Python 3.11 and Node 22.12 or later within Node 22. It installs dependencies, generates dashboard artifacts, builds React, and starts FastAPI on port 8000. Open forwarded port 8000 to use the dashboard. The container uses local artifact mode. You do not need host Python, a host `.venv`, MongoDB credentials, raw data downloads, or notebook extras for the dashboard.
+
+Python and frontend dependencies live in container volumes mounted at `.venv` and `frontend/node_modules`. The container's `.venv` uses Python 3.11. An old host Python 3.10 `.venv` is unsupported and can be removed from the host after closing any processes that use it. Removing the host environment does not remove the container volume.
+
+Run the cleaning, notebook, artifact, and verification commands in this README in the container terminal from the repository root unless a command changes directories. FastAPI already runs in the container. Do not start a second Uvicorn process on port 8000.
+
+Confirm readiness or inspect startup failures with:
 
 ```bash
+curl --fail http://127.0.0.1:8000/readyz
+tail -n 100 /tmp/dashboard-api.log
+```
+
+Readiness confirms a validated dataset is loaded. API documentation is available at [/docs](http://127.0.0.1:8000/docs). Check `/readyz` directly on port 8000 because Vite does not proxy that route.
+
+For live frontend development, open a container terminal and run:
+
+```bash
+cd frontend
+npm run dev -- --host 0.0.0.0
+```
+
+Open forwarded port 5173. Vite proxies `/api` and `/healthz` to the existing API on port 8000. After changing processed inputs, rebuild the artifacts and restart the container as described below.
+
+### Optional native setup
+
+If you work outside the container, install Python 3.11 and Node 22.12 or later within Node 22. The application package supports Python 3.11 through 3.14. Python 3.11 matches the container and CI. Remove any existing Python 3.10 `.venv` before creating its replacement. Run from the repository root:
+
+```bash
+python3.11 --version
+node --version
 python3.11 -m venv .venv
 .venv/bin/pip install -e '.[test]'
 export DASHBOARD_DATA_BACKEND=artifacts
 .venv/bin/python -m backend.scripts.build_artifacts
-
-cd frontend
-npm ci --legacy-peer-deps
-npm run build
-cd ..
-
+npm --prefix frontend ci --legacy-peer-deps
+npm --prefix frontend run build
 .venv/bin/uvicorn backend.app.main:app --reload
 ```
 
-Open [http://127.0.0.1:8000](http://127.0.0.1:8000). When `frontend/dist` exists, FastAPI serves both the API and the compiled single-page application from the same origin. API documentation is available at [/docs](http://127.0.0.1:8000/docs), and [/readyz](http://127.0.0.1:8000/readyz) confirms a validated dataset is loaded.
-
-For frontend development, keep the API running and open a second terminal:
-
-```bash
-cd frontend
-npm run dev
-```
-
-Open the Vite URL printed in that terminal, normally [http://localhost:5173](http://localhost:5173). Vite proxies `/api` and `/healthz` to port 8000.
-
-Local development defaults to `DASHBOARD_DATA_BACKEND=artifacts`. This path is deterministic and does not require MongoDB credentials.
-
-### Dev containers and Codespaces
-
-Open the repository in a dev container or Codespaces. The container supplies Python 3.11 and Node 22, installs dependencies, generates dashboard artifacts, and builds the frontend. Python and frontend dependencies use container volumes, separate from the host's `.venv` and `frontend/node_modules`. It starts FastAPI on port 8000 when the container starts. Open the forwarded port to use the dashboard. Server logs are in `/tmp/dashboard-api.log`.
-
-For frontend development, run `npm run dev -- --host 0.0.0.0` from `frontend` and open forwarded port 5173. After changing processed inputs, rebuild the artifacts and restart the API as described below.
+Open [http://127.0.0.1:8000](http://127.0.0.1:8000). FastAPI serves both the API and the compiled application when `frontend/dist` exists. The same artifact, notebook, and verification commands apply to this Python 3.11 environment.
 
 ### Configuration
 
@@ -250,7 +263,7 @@ For frontend development, run `npm run dev -- --host 0.0.0.0` from `frontend` an
 
 ## Generated artifacts
 
-Run:
+Run from the repository root in the container terminal:
 
 ```bash
 .venv/bin/python -m backend.scripts.build_artifacts
@@ -258,7 +271,7 @@ Run:
 
 The builder hashes the processed collision Parquet and neighborhood GeoJSON. It assigns collisions by polygon containment, with a nearest-neighborhood fallback within 25 metres. It writes assigned records, zero-filled annual and monthly aggregates, boundaries, and a manifest. Monthly aggregates cover 94 neighborhoods plus a citywide scope and end at the latest observed month.
 
-Rebuild artifacts after changing either processed input, then restart the API. Stop and rerun Uvicorn locally, or restart the dev container. The API validates the generated snapshot but does not compare its source hashes with the processed files. A healthy `/readyz` response does not prove the artifacts are current. Missing or invalid artifacts prevent initial loading and leave `/readyz` at HTTP 503. Direct `DataStore` construction and the artifact tests also check source hashes.
+Rebuild artifacts after changing either processed input, then restart the container. For optional native development, stop and rerun Uvicorn. The API validates the generated snapshot but does not compare its source hashes with the processed files. A healthy `/readyz` response does not prove the artifacts are current. Missing or invalid artifacts prevent initial loading and leave `/readyz` at HTTP 503. Direct `DataStore` construction and the artifact tests also check source hashes.
 
 The checked-in spatial snapshot's regression baseline is:
 
@@ -310,19 +323,21 @@ After investigating a source decrease greater than 1%, a manual operator can pas
 
 ## Verification
 
-After building the local artifacts, run from the repository root:
+After container setup has built the artifacts, run from the repository root in the container terminal:
 
 ```bash
 .venv/bin/python -m pytest backend/tests -q
 cd frontend
 npm test
 npm run build
-npx playwright install chromium
+npx playwright install --with-deps chromium
 mkdir -p ../.impeccable/review
 npm run test:e2e
 ```
 
 Playwright starts its own FastAPI server on port 4173 and exercises 1440 px desktop and 390 px mobile layouts, keyboard-only neighborhood selection, URL restoration, route-specific filters, partial-year behavior, and automated accessibility checks. The review directory stores browser-test screenshots.
+
+The [October 18, 2026 verification record](./.audit/onboarding-verification.md) covers application commit `2a7fa31`, including its live deployment and browser checks. Those historical results do not establish that later commits are deployed. Container checks performed after later changes must be recorded separately. Direct Atlas inspection was blocked during that audit.
 
 MongoDB integration tests run when `MONGODB_TEST_URI` is set. Use a separate test database instance; GitHub Actions supplies MongoDB 8.2 as a service container.
 

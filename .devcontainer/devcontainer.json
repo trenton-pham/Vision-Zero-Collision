@@ -21,14 +21,18 @@
       ]
     },
     "vscode": {
-      "settings": {},
+      "settings": {
+        "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+        "jupyter.notebookFileRoot": "${fileDirname}"
+      },
       "extensions": [
         "ms-python.python",
-        "ms-python.vscode-pylance"
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
       ]
     }
   },
-  "postCreateCommand": "sudo chown vscode:vscode .venv frontend/node_modules && python -m venv .venv && .venv/bin/python -m pip install -e '.[test]' && .venv/bin/python -m backend.scripts.build_artifacts && npm --prefix frontend ci --legacy-peer-deps && npm --prefix frontend run build",
+  "postCreateCommand": "sudo rm -f /etc/apt/sources.list.d/yarn.list && sudo chown vscode:vscode .venv frontend/node_modules && python -m venv .venv && .venv/bin/python -m pip install -e '.[test]' && .venv/bin/python -m backend.scripts.build_artifacts && npm --prefix frontend ci --legacy-peer-deps && npm --prefix frontend run build",
   "postStartCommand": "nohup .venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/dashboard-api.log 2>&1 &",
   "portsAttributes": {
     "8000": {

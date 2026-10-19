@@ -60,7 +60,7 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 | Source and transport | SDOT ArcGIS REST FeatureServer; Seattle Open Data; HTTPX `>=0.28,<1`; HTTP JSON | Ingestion downloads a complete collision snapshot using an ID list and batches. Vehicle research uses a separately downloaded CSV. |
 | Durable production storage | MongoDB Atlas; PyMongo `>=4.10,<5`; dnspython `>=2.7,<3` | Versioned documents and the active-version pointer. dnspython supports SRV connection environments; application source does not import it directly. |
 | Data formats | Parquet with WKB geometry; GeoJSON; CSV; JSON manifests; SHA-256 hashes | Reproducible snapshots, neighborhood polygons, research inputs, and lineage. EPSG:4326 carries longitude and latitude; EPSG:26910 supports distance and area calculations in metres. |
-| Frontend build | Node 22; npm; Vite `^7.2.2`; Vite React plugin `^5.1.0`; TypeScript build mode | `npm ci --legacy-peer-deps`, `tsc -b`, and Vite build the browser assets. `frontend/vite.config.ts` configures chunking, proxies, and unit-test discovery. |
+| Frontend build | Node 22.12 or later within Node 22; npm; Vite `^7.2.2`; Vite React plugin `^5.1.0`; TypeScript build mode | `npm ci --legacy-peer-deps`, `tsc -b`, and Vite build the browser assets. `frontend/vite.config.ts` configures chunking, proxies, and unit-test discovery. |
 | Python packaging | pip; Hatchling | `pyproject.toml` defines installation and builds the `backend` wheel package. Root cleaning scripts and notebooks are outside that wheel target. |
 | Hosting and automation | Docker; Debian Bookworm slim base images; Render; GitHub Actions; Git; Ubuntu CI runner | A multi-stage image builds the UI and runs one Python service. Actions validates the project and publishes data independently of a Render deployment. |
 | Python verification | pytest `>=8.3,<9`; pytest-cov `>=6,<8`; HTTPX TestClient support; MongoDB 8.2 CI service | API, assignment, metrics, ingestion, publication, probe, and memory tests. pytest-cov is declared; default test options do not enable coverage output. |
@@ -69,7 +69,7 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 | Type definitions | `@types/react ^19.2.2`; `@types/react-dom ^19.2.2`; `@types/node ^24.10.0`; `@types/leaflet ^1.9.21`; `@types/geojson ^7946.0.16` | Compile-time definitions, not runtime application services. |
 | Notebook research | Jupyter notebook format; Matplotlib; Seaborn; Folium; scikit-learn; XGBoost; LightGBM; CatBoost | EDA, spatial plots, and historical regression. These packages are not fully declared by the app's `pyproject.toml`, and no notebook model is served by the app. |
 | Design workflow | Figma; Impeccable; Markdown design briefs and JSON design tokens | Documents and local design tooling guide the frontend; they are not runtime data sources. |
-| Development container | Dev Containers and Codespaces; Python 3.11; Node 22; VS Code Python and Pylance | The container installs dependencies, generates artifacts, builds React, and starts Uvicorn on port 8000. Port 5173 is available for optional Vite development. |
+| Development container | Dev Containers and Codespaces; Python 3.11; Node 22; VS Code Python, Pylance, and Jupyter | The container installs dependencies, generates artifacts, builds React, and starts Uvicorn on port 8000. Port 5173 is available for optional Vite development. |
 
 ## Runtime architecture
 
@@ -393,7 +393,7 @@ These paths are operationally important even though they are excluded from the t
 
 ### Local workflow
 
-The following commands run from the repository root unless shown otherwise. The examples assume Python 3.11, Node 22, an existing `.venv`, and installed frontend packages. The full initial installation procedure is in `README.md`.
+The recommended environment is the development container with Python 3.11 and Node 22.12 or later within Node 22. Container creation installs dependencies, generates artifacts, and builds React. Startup already runs Uvicorn on port 8000. The container volumes supply `.venv` and `frontend/node_modules`. No host Python environment is needed. Run the following commands in the container terminal from the repository root unless shown otherwise. See `README.md` for setup and the optional native workflow.
 
 ```bash
 export DASHBOARD_DATA_BACKEND=artifacts
@@ -403,11 +403,11 @@ npm run build
 cd ..
 ```
 
-After the frontend build, return to the repository root, then start `.venv/bin/uvicorn backend.app.main:app --reload`. FastAPI serves the application at `http://127.0.0.1:8000` if `frontend/dist` exists. For live frontend development, run `npm run dev` from `frontend` while the API remains running.
+After rebuilding artifacts, restart the container so the API loads the new snapshot. FastAPI serves the application on forwarded port 8000 when `frontend/dist` exists. Do not start a second Uvicorn process in the container. For live frontend development, run `npm run dev -- --host 0.0.0.0` from `frontend` and open forwarded port 5173. Check readiness directly with `curl --fail http://127.0.0.1:8000/readyz`. Inspect startup failures with `tail -n 100 /tmp/dashboard-api.log`.
 
 Relevant checks are `.venv/bin/python -m pytest backend/tests -q` from the root and `npm test`, `npm run build`, and `npm run test:e2e` from `frontend`. Browser tests need built assets, generated dashboard artifacts, Chromium, and the review directory. Mongo integration tests additionally need `MONGODB_TEST_URI`.
 
-Production data operations are `python -m backend.scripts.sync_collisions --dry-run`, the same command without `--dry-run` to publish, and `python -m backend.scripts.rollback_dataset` to restore the previous version. They require the operational environment and database credentials described in `README.md`; the runtime dashboard should use a separate read-only database user.
+Production data operations are `.venv/bin/python -m backend.scripts.sync_collisions --dry-run`, the same command without `--dry-run` to publish, and `.venv/bin/python -m backend.scripts.rollback_dataset` to restore the previous version. They require the operational environment and database credentials described in `README.md`; the runtime dashboard should use a separate read-only database user.
 
 ## Configuration notes and change boundaries
 
@@ -417,7 +417,7 @@ Production data operations are `python -m backend.scripts.sync_collisions --dry-
 
 **The development container uses local artifacts.** Its creation hook builds artifacts and React. Its startup hook runs Uvicorn. Restart the API after rebuilding artifacts, or restart the container. Vite development is optional and runs separately on port 5173.
 
-**Notebook environments need additional dependencies.** Matplotlib, Seaborn, Folium, scikit-learn, and the boosting libraries are imported by research notebooks but are not part of the backend dependency list. Installing the backend package alone does not reproduce the research environment.
+**Notebooks use the container environment with optional dependencies.** Install the notebook libraries listed in `README.md` into the container's `.venv`. Select that Python 3.11 kernel and run notebooks with `notebooks/` as the working directory. The modeling notebook reads checked-in Parquet. The EDA and spatial notebooks require cleaned outputs. Container setup alone does not install notebook extras.
 
 **One snapshot is held per worker process.** Locks protect refreshes within a process; multiple Uvicorn workers would each load and refresh their own snapshot. The checked-in launch command uses the default single-worker invocation. The memory test measures the collision frame, not total process memory or the combined old/new snapshot footprint.
 
