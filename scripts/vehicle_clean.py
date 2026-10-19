@@ -1,6 +1,6 @@
 import pandas as pd
 
-from cleaning_base import (
+from .cleaning_base import (
     DATA_DIR,
     DEFAULT_END_YEAR,
     DEFAULT_MAX_FRESHNESS_DAYS,

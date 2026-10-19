@@ -61,7 +61,7 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 | Durable production storage | MongoDB Atlas; PyMongo `>=4.10,<5`; dnspython `>=2.7,<3` | Versioned documents and the active-version pointer. dnspython supports SRV connection environments; application source does not import it directly. |
 | Data formats | Parquet with WKB geometry; GeoJSON; CSV; JSON manifests; SHA-256 hashes | Reproducible snapshots, neighborhood polygons, research inputs, and lineage. EPSG:4326 carries longitude and latitude; EPSG:26910 supports distance and area calculations in metres. |
 | Frontend build | Node 22.12 or later within Node 22; npm; Vite `^7.2.2`; Vite React plugin `^5.1.0`; TypeScript build mode | `npm ci --legacy-peer-deps`, `tsc -b`, and Vite build the browser assets. `frontend/vite.config.ts` configures chunking, proxies, and unit-test discovery. |
-| Python packaging | pip; Hatchling | `pyproject.toml` defines installation and builds the `backend` wheel package. Root cleaning scripts and notebooks are outside that wheel target. |
+| Python packaging | pip; Hatchling | `pyproject.toml` defines installation and builds the `backend` wheel package. Offline cleaning scripts and notebooks are outside that wheel target. |
 | Hosting and automation | Docker; Debian Bookworm slim base images; Render; GitHub Actions; Git; Ubuntu CI runner | A multi-stage image builds the UI and runs one Python service. Actions validates the project and publishes data independently of a Render deployment. |
 | Python verification | pytest `>=8.3,<9`; pytest-cov `>=6,<8`; HTTPX TestClient support; MongoDB 8.2 CI service | API, assignment, metrics, ingestion, publication, probe, and memory tests. pytest-cov is declared; default test options do not enable coverage output. |
 | Browser verification | Vitest `^4.0.10`; jsdom `^27.2.0`; Testing Library React `^16.3.0`, DOM `^10.4.1`, jest-dom `^6.9.1`, user-event `^14.6.1` | Component and API-client tests in a simulated browser environment. |
@@ -107,7 +107,7 @@ GitHub Actions runs the tests before syncing. The workflow is configured for the
 
 ### Research path
 
-`clean.py` coordinates the broader collision and vehicle cleaning workflow from local raw files. It preserves collision records with invalid or missing geometry in cleaned outputs and writes only accepted spatial records into the processed snapshot. It also separates orphaned vehicle records and records source lineage. This path can replace the checked-in processed data and requires a deliberate baseline review afterward.
+`scripts/clean.py` coordinates the broader collision and vehicle cleaning workflow from local raw files. It preserves collision records with invalid or missing geometry in cleaned outputs and writes only accepted spatial records into the processed snapshot. It also separates orphaned vehicle records and records source lineage. This path can replace the checked-in processed data and requires a deliberate baseline review afterward.
 
 The four notebooks analyze cleaned or processed files. The modeling notebook fits historical grid-cell regressors and compares them using training cross-validation and held-out evaluation. Its selected model does not feed a dashboard endpoint. Vehicle data has a different coverage window and does not enter the scheduled production collision sync.
 
@@ -193,13 +193,13 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 ### Cleaning and feature preparation
 
-**`clean.py`** — CLI and coordinator for collision cleaning, vehicle cleaning, processed features, and manifest creation. Uses temporary files followed by replacement for individual outputs; writes cleaned and processed Parquet plus optional GeoJSON and vehicle CSV. It is outside the deployed backend package.
+**`scripts/clean.py`** — CLI and coordinator for collision cleaning, vehicle cleaning, processed features, and manifest creation. Uses temporary files followed by replacement for individual outputs; writes cleaned and processed Parquet plus optional GeoJSON and vehicle CSV. It is outside the deployed backend package.
 
-**`cleaning_base.py`** — Shared `BaseCleaner` with column validation, datetime parsing, year filtering, freshness limits, source change checks, and SHA-256 lineage. Both concrete cleaners inherit it.
+**`scripts/cleaning_base.py`** — Shared `BaseCleaner` with column validation, datetime parsing, year filtering, freshness limits, source change checks, and SHA-256 lineage. Both concrete cleaners inherit it.
 
-**`collision_clean.py`** — `CollisionCleaner` reads raw collision GeoJSON, normalizes categories, preserves unknown times, labels geometry quality, and validates counts and keys. `process` keeps accepted point geometries and adds severity, pedestrian/cyclist totals, coordinates, and 150-bin latitude/longitude features for downstream research and artifacts.
+**`scripts/collision_clean.py`** — `CollisionCleaner` reads raw collision GeoJSON, normalizes categories, preserves unknown times, labels geometry quality, and validates counts and keys. `process` keeps accepted point geometries and adds severity, pedestrian/cyclist totals, coordinates, and 150-bin latitude/longitude features for downstream research and artifacts.
 
-**`vehicle_clean.py`** — `VehicleCleaner` reads selected CSV columns, maps vehicle descriptions to stable categories, joins against cleaned collision keys, and separates orphaned rows. Returns data and quality statistics to `clean.py`; production collision sync does not call it.
+**`scripts/vehicle_clean.py`** — `VehicleCleaner` reads selected CSV columns, maps vehicle descriptions to stable categories, joins against cleaned collision keys, and separates orphaned rows. Returns data and quality statistics to `scripts/clean.py`; production collision sync does not call it.
 
 ### Checked in data
 
@@ -259,7 +259,7 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 **`backend/tests/test_snapshot_memory.py`** — Tests streamed decoding, a collision-frame memory budget below 20 MiB, serialized concurrent refresh, previous-snapshot retention, and metadata reads without database refresh.
 
-**`backend/tests/test_time_quality.py`** — Checks date-only and wholly unknown incident times across the root cleaner and live-source cleaner. Confirms those records do not become false midnight observations.
+**`backend/tests/test_time_quality.py`** — Checks date-only and wholly unknown incident times across the offline cleaner and live-source cleaner. Confirms those records do not become false midnight observations.
 
 ### Frontend build and entry points
 
@@ -386,7 +386,7 @@ These paths are operationally important even though they are excluded from the t
 | `data/dashboard/context_monthly.parquet` | Artifact builder | Monthly trends for every neighborhood and the citywide scope. |
 | `data/dashboard/neighborhoods.geojson` | Artifact builder | Local runtime geometry and neighborhood IDs. |
 | `data/dashboard/manifest.json` | Artifact builder | Dataset version, dates, source hashes, and assignment counts. |
-| `data/cleaned/` | Root cleaning coordinator | EDA notebooks and cleaning audit outputs, including excluded geometries and orphan vehicles. |
+| `data/cleaned/` | `scripts/clean.py` | EDA notebooks and cleaning audit outputs, including excluded geometries and orphan vehicles. |
 | `data/processed/Collision_Processed.geojson` | Cleaning or spatial notebook | Optional spatial export; not the app's canonical input. |
 | `frontend/dist/` | Frontend build | FastAPI's SPA and asset delivery. |
 | `.impeccable/review/` | Browser tests and design review | Local review images; not shipped application content. |

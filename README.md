@@ -45,15 +45,15 @@ The cleaning manifest records 109,040 cleaned collisions. Spatial analysis exclu
 
 | File | Description |
 | --- | --- |
-| `clean.py` | Coordinates collision and vehicle cleaning, writes Parquet/CSV/GeoJSON outputs, and records source lineage and quality checks |
-| `cleaning_base.py` | Shared date parsing, analysis-window filtering, freshness checks, and source checksum validation |
-| `collision_clean.py` | Adds temporal features (`YEAR`, `MONTH`, `DAY`, `HOUR`, `Day_of_Week`, `Season`), standardizes missing categories, flags geometry quality, and engineers spatial/severity features |
-| `vehicle_clean.py` | Standardizes vehicle categories, validates vehicle keys, and separates records without matching collision keys |
+| `scripts/clean.py` | Coordinates collision and vehicle cleaning, writes Parquet/CSV/GeoJSON outputs, and records source lineage and quality checks |
+| `scripts/cleaning_base.py` | Shared date parsing, analysis-window filtering, freshness checks, and source checksum validation |
+| `scripts/collision_clean.py` | Adds temporal features (`YEAR`, `MONTH`, `DAY`, `HOUR`, `Day_of_Week`, `Season`), standardizes missing categories, flags geometry quality, and engineers spatial/severity features |
+| `scripts/vehicle_clean.py` | Standardizes vehicle categories, validates vehicle keys, and separates records without matching collision keys |
 
 Download [SDOT Collisions All Years](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-all-years/about) as GeoJSON and [SDOT Collisions Vehicles](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-vehicles) as CSV. Save them under the raw filenames listed above. Complete **Local development**, then run from the repository root in the container terminal:
 
 ```bash
-.venv/bin/python clean.py --start-year 2015 --end-year 2026
+.venv/bin/python -m scripts.clean --start-year 2015 --end-year 2026
 ```
 
 Cleaning replaces the processed snapshot. You do not need to run it to use the checked-in data. The cleaner keeps raw categories alongside standardized fields and retains collisions with missing geometry in the all-collision output. Only valid Seattle points enter the spatial dataset. Records without a known incident time keep an unknown `HOUR`.
@@ -107,7 +107,7 @@ cd notebooks
 
 Forward the port printed by Jupyter, normally 8888, and open the URL with its token. Start Jupyter from `notebooks/` to match the relative data paths. If you use the VS Code notebook editor instead, select the container project's `.venv/bin/python` kernel. The container config sets each notebook's directory as its working directory. Confirm the kernel with `import sys; print(sys.executable, sys.version)` before running cells. It must report Python 3.11 from the container environment.
 
-`model.ipynb` reads the checked-in Parquet. The EDA and spatial notebooks require cleaned outputs from `clean.py`. Notebook extras are optional and are not installed by the container creation hook.
+`model.ipynb` reads the checked-in Parquet. The EDA and spatial notebooks require cleaned outputs from `scripts/clean.py`. Notebook extras are optional and are not installed by the container creation hook.
 
 ## EDA findings
 
@@ -186,8 +186,7 @@ The [architecture guide](./docs/architecture/architecture-guide.md) describes re
 ## Repository layout
 
 ```text
-clean.py / *_clean.py         Collision and vehicle cleaning workflow
-cleaning_base.py             Shared cleaning validation and lineage helpers
+scripts/                     Offline collision and vehicle cleaning workflow
 notebooks/                   EDA, geospatial analysis, and severity regression
 backend/app/                 FastAPI routes, schemas, and analytical services
 backend/scripts/             Artifact builder, ArcGIS sync, and rollback commands

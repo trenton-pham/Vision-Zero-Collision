@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from collision_clean import CollisionCleaner
+from scripts.collision_clean import CollisionCleaner
 from backend.scripts.sync_collisions import clean_features
 
 

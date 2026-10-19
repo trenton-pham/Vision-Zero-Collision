@@ -4,8 +4,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from clean import write_dataframe, write_json
-from vehicle_clean import VehicleCleaner
+from scripts.clean import write_dataframe, write_json
+from scripts.vehicle_clean import VehicleCleaner
 
 
 @pytest.fixture
@@ -85,7 +85,7 @@ def test_failed_serialization_preserves_existing_file_and_removes_temporary_file
         raise OSError("Serialization failed")
 
     if output_format == "json":
-        from clean import json
+        from scripts.clean import json
         monkeypatch.setattr(json, "dumps", fail)
         write = lambda: write_json({"rows": 1}, target)
     else:

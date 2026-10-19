@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / 'data'
 DEFAULT_START_YEAR = 2015
 DEFAULT_END_YEAR = pd.Timestamp.now(tz='America/Los_Angeles').year

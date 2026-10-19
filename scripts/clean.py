@@ -4,14 +4,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from cleaning_base import (
+from .cleaning_base import (
     DATA_DIR,
     DEFAULT_END_YEAR,
     DEFAULT_MAX_FRESHNESS_DAYS,
     DEFAULT_START_YEAR
 )
-from collision_clean import CollisionCleaner, get_collision_source
-from vehicle_clean import VEHICLE_SOURCE, VehicleCleaner
+from .collision_clean import CollisionCleaner, get_collision_source
+from .vehicle_clean import VEHICLE_SOURCE, VehicleCleaner
 
 
 __all__ = [
