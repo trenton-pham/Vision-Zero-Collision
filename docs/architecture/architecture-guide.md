@@ -1,10 +1,10 @@
 # Seattle Collision Dashboard Architecture Guide
 
-Developer reference · October 7 2026 · Repository snapshot `b3c3386`
+Developer reference. Updated October 18, 2026 against repository snapshot `2a7fa31` and the setup corrections in this change.
 
 The project is a public, read-only analytics application backed by a validated, in-memory collision dataset. React renders two workspaces, FastAPI calculates and serves their analytics, and an independent ingestion command publishes replacement datasets to MongoDB. The same API can instead load reproducible local Parquet artifacts. Historical notebooks and vehicle cleaning support research; they do not participate in a browser request.
 
-This guide explains the technology relationships, runtime and refresh flows, API boundaries, and all **98 files tracked at the inspected commit**. Installed dependencies, Git internals, local credentials, caches, raw downloads, generated application bundles, and review screenshots are outside that file inventory. Important generated data files are described separately. Technology coverage includes direct declared dependencies, directly imported supporting packages, notebook libraries, deployment services, and design tools; the npm lockfile's entire transitive dependency tree is not an architecture layer.
+This guide describes request handling, dataset refreshes, API contracts, and the source files used by the application and research workflows. The file reference excludes installed dependencies, credentials, caches, raw downloads, and review captures. Generated data files are described separately.
 
 ## Start here
 
@@ -19,13 +19,28 @@ Read these files in order to follow one feature from the screen to its data:
 7. `backend/app/repository.py` loads the common bundle from disk or MongoDB.
 8. `backend/scripts/sync_collisions.py` and `backend/app/mongo_writer.py` explain how production data becomes available.
 
-For visual changes, read `tokens.css`, the relevant component and its CSS Module. For analytical changes, begin with `data.py` and its metric tests. For changes to assignment or aggregates, read `build_artifacts.py` before changing ingestion: both paths share its functions.
+For visual changes, read `tokens.css`, the relevant component and its CSS Module. For analytical changes, begin with `data.py` and its metric tests. Assignment and aggregation functions live in `backend/app/dataset.py`. Both `build_artifacts.py` and production ingestion import them.
 
 ## Technology map
 
-![Technology relationships](technology-map.png)
-
-The solid arrows show data or request flow. Dashed arrows show build, validation, design, or research relationships. The editable graph is `technology-map.mmd`; `technology-map.svg` provides a scalable image. The map groups related packages so the main connections remain readable.
+```mermaid
+flowchart TD
+    Processed[Processed collision Parquet] --> Builder[Local artifact builder]
+    Boundaries[Checked-in neighborhood boundaries] --> Builder
+    Builder --> Artifacts[Dashboard artifacts]
+    ArcGIS[SDOT ArcGIS collision layer] --> Sync[Monthly collision sync]
+    Boundaries --> Sync
+    Sync --> Mongo[Versioned MongoDB datasets]
+    Artifacts --> Store[Validated in-memory snapshot]
+    Mongo --> Store
+    Store --> API[FastAPI analytics]
+    API -->|JSON validated with Zod| React[React dashboard]
+    Vite[Vite build] -->|Compiled frontend| API
+    Clean[Raw collision and vehicle cleaning] --> Processed
+    Clean --> Notebooks[Research notebooks]
+    Processed --> Notebooks
+    Boundaries --> Notebooks
+```
 
 ## Technology inventory
 
@@ -39,13 +54,13 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 | Controls and fonts | Radix React Slider `^1.3.6`; Fontsource Barlow Condensed and IBM Plex Sans `^5.2.8` | The shell's year slider uses Radix. Fonts are imported into the frontend bundle. |
 | Declared compatibility package | `react-is ^19.2.0` | Declared in `package.json`; no direct import in project source was found. |
 | Python service | Python `>=3.11,<3.15`; FastAPI `>=0.116,<1`; Uvicorn standard `>=0.34,<1` | Docker and CI use Python 3.11. Uvicorn hosts the API and static application. |
-| Response contracts | Pydantic, imported through the FastAPI dependency environment | `schemas.py` defines strict response models; TypeScript equivalents in `contracts.ts` are maintained separately. |
+| Response contracts | Pydantic through FastAPI; Zod `^4.6.6` | `schemas.py` defines backend response models. `contracts.ts` defines Zod schemas and inferred TypeScript types. The client validates JSON before returning it to components. |
 | Tabular analytics | Pandas `>=2.2,<3`; NumPy `>=2.0,<3`; PyArrow `>=18,<23` | DataFrames, numerical summaries, histogram bins, and Parquet reads and writes. |
 | Spatial analytics | GeoPandas `>=1.0,<2`; Shapely `>=2.0,<3`; SciPy `>=1.14,<2`; PyProj | Polygon assignment, point geometry, Gaussian KDE, and projected centroid distances. PyProj is imported directly but provided transitively by GeoPandas. |
 | Source and transport | SDOT ArcGIS REST FeatureServer; Seattle Open Data; HTTPX `>=0.28,<1`; HTTP JSON | Ingestion downloads a complete collision snapshot using an ID list and batches. Vehicle research uses a separately downloaded CSV. |
 | Durable production storage | MongoDB Atlas; PyMongo `>=4.10,<5`; dnspython `>=2.7,<3` | Versioned documents and the active-version pointer. dnspython supports SRV connection environments; application source does not import it directly. |
 | Data formats | Parquet with WKB geometry; GeoJSON; CSV; JSON manifests; SHA-256 hashes | Reproducible snapshots, neighborhood polygons, research inputs, and lineage. EPSG:4326 carries longitude and latitude; EPSG:26910 supports distance and area calculations in metres. |
-| Frontend build | Node 22; npm; Vite `^7.2.2`; Vite React plugin `^5.1.0`; TypeScript build mode | `npm ci`, `tsc -b`, and Vite build the browser assets. The active JavaScript config differs from the TypeScript source config; see configuration notes. |
+| Frontend build | Node 22; npm; Vite `^7.2.2`; Vite React plugin `^5.1.0`; TypeScript build mode | `npm ci --legacy-peer-deps`, `tsc -b`, and Vite build the browser assets. `frontend/vite.config.ts` configures chunking, proxies, and unit-test discovery. |
 | Python packaging | pip; Hatchling | `pyproject.toml` defines installation and builds the `backend` wheel package. Root cleaning scripts and notebooks are outside that wheel target. |
 | Hosting and automation | Docker; Debian Bookworm slim base images; Render; GitHub Actions; Git; Ubuntu CI runner | A multi-stage image builds the UI and runs one Python service. Actions validates the project and publishes data independently of a Render deployment. |
 | Python verification | pytest `>=8.3,<9`; pytest-cov `>=6,<8`; HTTPX TestClient support; MongoDB 8.2 CI service | API, assignment, metrics, ingestion, publication, probe, and memory tests. pytest-cov is declared; default test options do not enable coverage output. |
@@ -54,7 +69,7 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 | Type definitions | `@types/react ^19.2.2`; `@types/react-dom ^19.2.2`; `@types/node ^24.10.0`; `@types/leaflet ^1.9.21`; `@types/geojson ^7946.0.16` | Compile-time definitions, not runtime application services. |
 | Notebook research | Jupyter notebook format; Matplotlib; Seaborn; Folium; scikit-learn; XGBoost; LightGBM; CatBoost | EDA, spatial plots, and historical regression. These packages are not fully declared by the app's `pyproject.toml`, and no notebook model is served by the app. |
 | Design workflow | Figma; Impeccable; Markdown design briefs and JSON design tokens | Documents and local design tooling guide the frontend; they are not runtime data sources. |
-| Legacy development setup | Dev Containers and Codespaces; VS Code Python and Pylance; Streamlit | `.devcontainer/devcontainer.json` still launches a missing `app.py` on port 8501. It describes the previous app setup, not the current dashboard. |
+| Development container | Dev Containers and Codespaces; Python 3.11; Node 22; VS Code Python and Pylance | The container installs dependencies, generates artifacts, builds React, and starts Uvicorn on port 8000. Port 5173 is available for optional Vite development. |
 
 ## Runtime architecture
 
@@ -66,7 +81,7 @@ The production container has one origin. FastAPI serves the compiled frontend fr
 
 Consider `/neighborhoods?start=2015&end=2025&neighborhood=ballard&grain=monthly`. `useDashboardParams` restores the year range, selected neighborhood, and chart grain. The explorer requests polygon geometry, all neighborhood summaries, and Ballard's context. React Query keys include the selected years and neighborhood, so changes select the appropriate cached result or start a request. Monthly and annual observations arrive together; switching grain changes chart presentation.
 
-`api.ts` adds the query parameters and passes cancellation signals to native `fetch`. FastAPI's route uses `Depends(get_store)` to obtain the current snapshot. `DataStore.neighborhood_context` reads the annual and monthly aggregates, builds metrics and comparisons, and returns Pydantic models. `NeighborhoodMap`, `MetricGrid`, and `TrendChart` render the results. A coordinate click first calls the resolver API; generation counters prevent an older reply from replacing a newer map click or manual selection.
+`api.ts` adds query parameters and passes cancellation signals to native `fetch`. FastAPI's route uses `Depends(get_store)` to obtain the current snapshot. `DataStore.neighborhood_context` reads the annual and monthly aggregates, builds metrics and comparisons, and returns Pydantic models. The client validates response JSON against the matching Zod schema before `NeighborhoodMap`, `MetricGrid`, and `TrendChart` receive it. Invalid JSON or schema mismatches raise "The server returned invalid dashboard data." A coordinate click first calls the resolver API. Generation counters prevent an older reply from replacing a newer map click or manual selection.
 
 Neighborhood requests never send severity filters. Citywide requests include repeated `severity` parameters and use the raw collision snapshot for their calculations. React Router stores view state in the URL; local React state handles transient interaction details. There is no separate global state store.
 
@@ -84,9 +99,9 @@ There are two preparation paths. The local artifact builder reads the checked-in
 
 The production sync performs a full authoritative ArcGIS download starting January 1 2015. It verifies required field types, obtains the complete object-ID list, downloads batches of 1,000 by POST, reconciles returned IDs, and checks the layer's edit timestamp before and after download. It retries transient failures and retries the whole download when source edits occur during acquisition.
 
-After cleaning accepted Seattle point records, ingestion reuses `assign`, `aggregate_annual`, and `aggregate_monthly` from the artifact builder. It records a normalized content hash, source quality counts, and a new version identifier. `MongoDatasetWriter.publish` checks publication guards, stages version-tagged documents, reads aggregates back for validation, then changes the single `dataset_state.activeVersion` pointer using a compare-and-swap condition. This pointer update is the publication boundary. No multi-collection transaction is used.
+After cleaning accepted Seattle point records, ingestion uses `assign`, `aggregate_annual`, and `aggregate_monthly` from `backend/app/dataset.py`, as does the local artifact builder. It records a normalized content hash, source quality counts, and a new version identifier. `MongoDatasetWriter.publish` checks publication guards, stages version-tagged documents, reads aggregates back for validation, then changes `dataset_state.activeVersion` using a compare-and-swap condition. This pointer update publishes the dataset. No multi-collection transaction is used.
 
-The writer rejects a backwards data date and, unless explicitly overridden, source or usable collision count decreases greater than one percent. Identical content produces a no-change result. A successful publication keeps the active and immediately previous data versions and attempts to prune older version data. `rollback_dataset.py` swaps the pointer back after checking the previous collision count. The API independently validates a replacement before adopting it.
+The writer rejects a backwards data date and, unless explicitly overridden, source or usable collision count decreases greater than one percent. Identical content produces a no-change result. Publication keeps the active and previous datasets and attempts to prune older ones. `rollback_dataset.py` checks the previous collision count, then swaps the active and previous versions. A second rollback reverses the first. No fallback exists after the first publication. The API validates a replacement before adopting it.
 
 GitHub Actions runs the tests before syncing. The workflow is configured for the eighth of each month at 03:17 America/Los_Angeles and also supports manual invocation. It temporarily admits the runner IP to Atlas and uploads an ingestion manifest. This describes repository configuration; it does not establish that a deployed schedule or live database is currently healthy.
 
@@ -127,7 +142,7 @@ Invalid year ranges and unknown citywide severity keys become HTTP 422. Unknown 
 - Spatial shift uses complete years on each side of 2020. Downtown calculations use a fixed bounding box in the API; the frontend filters out partial years for its comparison chart and latest-complete-year severity value. The spatial notebook uses neighborhood polygon logic, so the two downtown definitions should not be treated as identical.
 - Unknown incident times remain unknown. Night share uses only recorded incident hours as its denominator when the manifest declares `knownTimeNightShare`; older snapshots return null for that measure.
 - Inspector metrics omit Night and Weekend and show burden and mean severity separately. The default metric grid can still display those measures.
-- Backend Pydantic models and frontend TypeScript contracts are manually paired. A response-field change normally requires changes on both sides and in contract tests.
+- Backend Pydantic models and frontend Zod schemas are manually paired. TypeScript types are inferred from Zod. A response-field change requires matching schema updates and contract tests.
 
 ### MongoDB collections
 
@@ -142,7 +157,7 @@ Invalid year ranges and unknown citywide severity keys become HTTP 422. Unknown 
 
 ## File reference
 
-Each entry describes its responsibility and its key connections. Paths are relative to the repository root. The inventory includes generated files that are actually tracked, so they can be distinguished from source files.
+Each entry describes a file's responsibility and its connections. Paths are relative to the repository root. Generated artifacts and build outputs appear in the generated-files section.
 
 ### Root documentation and configuration
 
@@ -166,7 +181,7 @@ Each entry describes its responsibility and its key connections. Paths are relat
 
 **`.dockerignore`** — Removes Git internals, local environments, notebooks, generated dashboard data, frontend outputs, and design tooling from build context. It excludes most Markdown but retains `README.md`; the Dockerfile controls what actually enters the image.
 
-**`.devcontainer/devcontainer.json`** — Older Codespaces/VS Code container setup using Python 3.11, Python and Pylance extensions, and a Streamlit launch on port 8501. It references the absent `app.py` and does not launch the current React/FastAPI application.
+**`.devcontainer/devcontainer.json`**. Python 3.11 container with Node 22 and artifact mode. Named volumes keep the Python environment and frontend packages separate from host dependencies. Creation installs dependencies, builds dashboard artifacts, and compiles React. Container startup launches Uvicorn on port 8000 and logs to `/tmp/dashboard-api.log`. Reattaching does not start another server. Port 5173 is forwarded for optional Vite development.
 
 **`.github/workflows/monthly-collision-sync.yml`** — Scheduled and manual CI-to-publication workflow. Starts MongoDB 8.2 for integration tests, builds local artifacts, runs Python and frontend checks, opens temporary Atlas access, executes sync, and retains its manifest.
 
@@ -206,6 +221,8 @@ Each entry describes its responsibility and its key connections. Paths are relat
 
 **`backend/app/data.py`** — Main analytical layer and snapshot manager. Implements bundle validation, metadata, metrics, zero-filled series responses, complete-year comparisons, coordinate resolution, histogram/KDE density, centroid shift, and downtown bounding-box comparison. `DataStoreManager` handles concurrent loads and safe replacement.
 
+**`backend/app/dataset.py`**. Shared neighborhood loading, assignment, severity calculations, annual and monthly aggregation, source hashing, and partial-year rules. Both local artifact generation and live ingestion use these functions.
+
 **`backend/app/repository.py`** — Defines `DatasetBundle` and disk/Mongo repository adapters. Restricts runtime collision columns, compacts repeated labels, reads one active Mongo version, and returns the same in-memory shape for both storage modes.
 
 **`backend/app/schemas.py`** — Pydantic response contracts for metadata, health, metrics, annual/monthly series, resolution, density, spatial shift, downtown comparison, and errors. Uses `extra="forbid"`; paired frontend types live in `contracts.ts`.
@@ -216,7 +233,7 @@ Each entry describes its responsibility and its key connections. Paths are relat
 
 **`backend/scripts/__init__.py`** — Marks the operational-command package so scripts can run through `python -m backend.scripts...`.
 
-**`backend/scripts/build_artifacts.py`** — Deterministic local builder and shared preparation functions. Loads preserved data, derives IDs, assigns polygons with a 25-metre fallback, calculates annual/monthly aggregates, and writes dashboard files and manifest. The fixed local row baseline remains enforced by `load_sources` even when assignment-baseline drift is allowed.
+**`backend/scripts/build_artifacts.py`**. Local artifact builder. Loads preserved data, calls the shared preparation functions in `dataset.py`, and writes dashboard files and a manifest. `load_sources` enforces the fixed row baseline even when assignment-baseline drift is allowed.
 
 **`backend/scripts/sync_collisions.py`** — Production ingestion CLI, `ArcGISClient`, live-source cleaning, content hashing, bundle construction, manifest reporting, and orchestration of the Mongo writer. Reuses assignment and aggregate functions but validates changing live counts separately from the preserved local baseline.
 
@@ -252,21 +269,13 @@ Each entry describes its responsibility and its key connections. Paths are relat
 
 **`frontend/index.html`** — SPA document with metadata, accessible skip link, root mount element, and `main.tsx` module entry. FastAPI serves its compiled counterpart after a build.
 
-**`frontend/vite.config.ts`** — Newer configuration with React transformation, API proxying, manual maps/charts/query chunks, jsdom setup, and explicit unit-test inclusion that excludes end-to-end files. It is currently shadowed by the checked-in JavaScript config under default discovery.
-
-**`frontend/vite.config.js`** — Older generated-style configuration with React transformation, proxies, and basic Vitest/jsdom settings. Local Vite resolution selected this file; it lacks the TypeScript config's manual chunks and unit/e2e discovery separation.
-
-**`frontend/vite.config.d.ts`** — Generated type declaration for the Vite configuration export. No runtime behavior; treat it as emitted metadata rather than the configuration source.
+**`frontend/vite.config.ts`**. The sole checked-in Vite configuration. Sets React transformation, API proxies, separate maps, charts, and query chunks, jsdom setup, and unit-test discovery that excludes browser tests.
 
 **`frontend/tsconfig.json`** — TypeScript project-reference root connecting application/test checking and Node-side configuration checking.
 
 **`frontend/tsconfig.app.json`** — Strict browser/test type-checking settings, ES2022 and DOM libraries, React JSX, bundler resolution, no JavaScript input, and no emitted app code. Includes `src` and `tests`.
 
 **`frontend/tsconfig.node.json`** — Composite, no-emit TypeScript configuration for Vite and Playwright config files, using ES modules and bundler resolution.
-
-**`frontend/tsconfig.app.tsbuildinfo`** — Tracked TypeScript incremental build metadata for the application project. Generated compiler state, not a source module to edit.
-
-**`frontend/tsconfig.node.tsbuildinfo`** — Equivalent incremental build metadata for the Node configuration project. Rebuilt by the compiler.
 
 **`frontend/playwright.config.ts`** — End-to-end runner configuration, API/static server startup on port 4173, failure traces, and Chromium desktop/mobile profiles. Uses the repository virtual environment locally and system Python in CI.
 
@@ -278,9 +287,9 @@ Each entry describes its responsibility and its key connections. Paths are relat
 
 ### Frontend contracts and shared logic
 
-**`frontend/src/lib/api.ts`** — Typed API-client facade over native `fetch`. Builds year and repeated severity parameters, forwards AbortSignals, extracts API errors, and keeps neighborhood requests free of severity filters.
+**`frontend/src/lib/api.ts`**. HTTP client over native `fetch`. Builds query parameters, forwards AbortSignals, extracts API errors, and validates response JSON with Zod. Neighborhood requests omit severity filters.
 
-**`frontend/src/lib/contracts.ts`** — TypeScript models for metadata, metrics, series, GeoJSON properties, and every analytical response. Mirrors the Python schemas manually; it does not validate JSON at runtime.
+**`frontend/src/lib/contracts.ts`**. Zod schemas for metadata, metrics, series, GeoJSON, and analytical responses. `z.infer` derives TypeScript types from these schemas. `api.ts` uses them for runtime validation. Keep them aligned with backend Pydantic models.
 
 **`frontend/src/lib/dataset.tsx`** — React Context provider and `useDatasetMeta` hook with temporary loading defaults. Supplies server-derived date coverage and year bounds to shell, controls, charts, and URL parsing.
 
@@ -342,6 +351,8 @@ Each entry describes its responsibility and its key connections. Paths are relat
 
 **`frontend/tests/api.test.ts`** — Verifies the client omits severity on neighborhood routes and emits repeated severity parameters for citywide routes.
 
+**`frontend/tests/contracts.test.ts`** and **`frontend/tests/e2e/contracts.spec.ts`**. Check response schemas and browser error handling for invalid API responses.
+
 **`frontend/tests/AppShell.test.tsx`** — Checks that a changed metadata dataset version invalidates cached dashboard queries.
 
 **`frontend/tests/MetricGrid.test.tsx`** — Verifies inspector metric omissions and the default grid's preservation of situational shares.
@@ -400,20 +411,20 @@ Production data operations are `python -m backend.scripts.sync_collisions --dry-
 
 ## Configuration notes and change boundaries
 
-**Vite configuration precedence needs attention.** Inspection of local Vite configuration resolution selected `frontend/vite.config.js`. The newer `.ts` file adds manual chunks and test inclusion/exclusion settings that are absent in the selected `.js` file. Treat the `.ts` file as intended source, and resolve the duplicate-config situation before assuming those newer options apply. This guide documents the situation without changing it.
+**Vite uses the TypeScript configuration.** `frontend/vite.config.ts` is the sole checked-in Vite configuration. `tsconfig.node.json` uses `noEmit`, and `.gitignore` excludes generated JavaScript, declarations, and incremental build metadata.
 
-**Source hash validation has two paths.** Direct construction of `DataStore` checks source hashes by default, and the test fixture uses that path. `DataStoreManager` loads a repository bundle with `validate_sources=False`; its active runtime path performs bundle validation rather than re-hashing the original processed sources. Rebuild local artifacts after changing checked-in inputs instead of relying on the API to detect stale source hashes.
+**Source hash validation has two paths.** Direct construction of `DataStore` checks source hashes by default, as does the test fixture. `DataStoreManager` loads a bundle without source-hash checks and validates the generated snapshot. After changing processed inputs, run `.venv/bin/python -m backend.scripts.build_artifacts` and restart the API. Readiness does not prove source freshness.
 
-**The development container is outdated.** Its Streamlit command references a missing app entry point. The current launch boundary is Uvicorn plus a compiled or separately served React frontend.
+**The development container uses local artifacts.** Its creation hook builds artifacts and React. Its startup hook runs Uvicorn. Restart the API after rebuilding artifacts, or restart the container. Vite development is optional and runs separately on port 5173.
 
 **Notebook environments need additional dependencies.** Matplotlib, Seaborn, Folium, scikit-learn, and the boosting libraries are imported by research notebooks but are not part of the backend dependency list. Installing the backend package alone does not reproduce the research environment.
 
 **One snapshot is held per worker process.** Locks protect refreshes within a process; multiple Uvicorn workers would each load and refresh their own snapshot. The checked-in launch command uses the default single-worker invocation. The memory test measures the collision frame, not total process memory or the combined old/new snapshot footprint.
 
-**Changes cross explicit boundaries.** A new metric usually touches builder aggregation, live bundle validation, API schemas, TypeScript contracts, display formatting, and metric tests. A new filter touches URL parsing, query keys, client parameter construction, server validation, and isolation tests. A boundary change affects IDs, assignment baselines, geometry, and both preparation paths. A layout change generally stays within the relevant component, CSS Module, tokens, and browser checks.
+**Changes cross explicit boundaries.** A new metric usually touches shared aggregation, bundle validation, Pydantic and Zod schemas, display formatting, and metric tests. Update contract tests when response fields change. A new filter touches URL parsing, query keys, client parameter construction, server validation, and isolation tests. A neighborhood-boundary change affects IDs, assignment baselines, geometry, and both preparation paths. A layout change generally stays within the relevant component, CSS Module, tokens, and browser checks.
 
 **Dataset dates describe the preserved snapshot.** The checked-in collision data ends August 31 2026 and the vehicle source ends January 23 2026. A live deployment may serve a newer published version; `/api/meta` is the browser's source of truth for that version's coverage.
 
 ## Evidence used
 
-The architecture and inventory were derived from the repository manifests, tracked source files, notebook cells, checked-in data metadata, configuration files, and test definitions at commit `b3c3386`. The processed Parquet row and column counts and the 94 boundary features were inspected. Local Vite resolution was checked to distinguish active configuration from intended configuration. This documentation pass did not run the application test suite or validate a live Render, Atlas, ArcGIS, or Figma environment.
+The original guide used commit `b3c3386` and inspected the processed dataset and 94 neighborhood polygons. The October 18 update checked setup, repository loading, publication, frontend configuration, and response contracts at `2a7fa31`. It replaces missing diagram assets with the Mermaid graph above. Deployment health and live dataset coverage require separate checks against Render, Atlas, and ArcGIS.

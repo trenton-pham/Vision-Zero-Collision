@@ -1,21 +1,21 @@
 # Vision Zero Collision Analysis (Seattle, WA)
 
-Motor-vehicle collisions pose a significant public health challenge, contributing to injuries and deaths each year. In order to support traffic safety for the growing population of Seattle, Washington, the Seattle Department of Transportation (SDOT) launched its [Vision Zero initiative](https://www.seattle.gov/transportation/projects-and-programs/safety-first/vision-zero) in 2015, with the goal of ending traffic deaths and serious injuries in Seattle by 2030.
+Seattle's Department of Transportation (SDOT) launched [Vision Zero](https://www.seattle.gov/transportation/projects-and-programs/safety-first/vision-zero) in 2015 to end traffic deaths and serious injuries by 2030. This project examines recorded collisions during that period.
 
-## Project Overview
+## Project overview
 
-This analysis investigates Seattle collision data from 2015 through the latest received incident date, focusing on changes in collision frequency, severity, and spatial patterns in the context of SDOT's Vision Zero initiative. The checked-in spatial dataset contains 106,050 collisions through August 31, 2026; 2026 is a partial year. A central finding across complete years is that while average annual collision frequency was lower from 2020 onwards, serious and fatal collisions became a larger share of recorded collisions, suggesting that lower collision volume does not necessarily mean safer streets.
+The checked-in spatial dataset contains 106,050 Seattle collisions from 2015 through August 31, 2026. The 2026 data covers a partial year. Across complete years, average annual collision counts fell after 2019, while the share of serious and fatal collisions rose.
 
-The project combines exploratory data analysis, geospatial analysis, and historical severity modeling with a public, read-only React + FastAPI dashboard. Neighborhood Explorer provides collision context for all 94 Seattle neighborhoods, while Citywide Analysis supports heatmap, KDE, spatial-shift, and downtown vs. outer-area comparisons. The analysis describes observed patterns; evaluating the causal impact of Vision Zero would require a separate study design.
+Notebooks cover exploratory analysis, spatial patterns, and historical severity modeling. A public, read-only React and FastAPI dashboard shows observed collision metrics for all 94 Seattle neighborhoods and citywide maps. These analyses do not establish the causal effect of Vision Zero.
 
-**Research Questions:**
+The research questions are:
 
-- How did the spatial distribution and severity of motor-vehicle collisions in Seattle change from pre-2020 to 2020 and onwards?
+- How did collision locations and severity change before 2020 and from 2020 onward?
 - Are high-density collision areas more likely to experience severe outcomes (injuries, serious injuries, fatalities)?
-- Which geographical areas show a concentration of collision burden and severity that warrants further investigation for Vision Zero planning?
-- How can collision risk analysis be expanded to better understand safe access to public transportation, walking, biking, and other urban mobility patterns?
+- Which areas have high collision counts or severity and need further investigation?
+- How can collision analysis expand to study safe access to transit, walking, and biking?
 
-## Tech Stack
+## Tech stack
 
 | Component | Technology |
 | --- | --- |
@@ -30,18 +30,18 @@ The project combines exploratory data analysis, geospatial analysis, and histori
 
 ## Datasets
 
-- `data/raw/SDOT_Collisions_All_Years.geojson` — all collision records (raw); cleaned outputs: `data/cleaned/Collision_All_Filtered.parquet` and `.geojson`. The cleaner also accepts the older singular filename, `SDOT_Collision_All_Years.geojson`.
-- `data/raw/SDOT_Vehicle.csv` — vehicle-level collision records (raw); cleaned outputs: `data/cleaned/Vehicle_Filtered.parquet` and `.csv`.
-- `data/processed/Collision_Processed.parquet` — checked-in spatial collision dataset used by the modeling notebook and local dashboard artifact builder, with engineered severity and grid features.
-- `data/processed/Neighborhood_Map_Atlas_Neighborhoods.geojson` — checked-in Seattle neighborhood boundaries containing 94 `S_HOOD` polygons.
-- `data/processed/cleaning_manifest.json` — checked-in source dates, hashes, row counts, quality checks, and partial-year information.
-- `data/dashboard/` — generated neighborhood assignments, annual/monthly aggregates, boundaries, and dashboard manifest.
+- `data/raw/SDOT_Collisions_All_Years.geojson` contains raw collision records. Cleaning writes `data/cleaned/Collision_All_Filtered.parquet` and `.geojson`. The cleaner also accepts the older filename `SDOT_Collision_All_Years.geojson`.
+- `data/raw/SDOT_Vehicle.csv` contains raw vehicle records. Cleaning writes `data/cleaned/Vehicle_Filtered.parquet` and `.csv`.
+- `data/processed/Collision_Processed.parquet` is the checked-in spatial dataset for the modeling notebook and local dashboard artifact builder. It includes severity and grid features.
+- `data/processed/Neighborhood_Map_Atlas_Neighborhoods.geojson` contains the 94 checked-in `S_HOOD` neighborhood polygons.
+- `data/processed/cleaning_manifest.json` records source dates, hashes, row counts, quality checks, and partial-year coverage.
+- `data/dashboard/` contains generated neighborhood assignments, annual and monthly aggregates, boundaries, and a dashboard manifest.
 
-The raw and cleaned datasets, processed collision GeoJSON, and generated dashboard artifacts are excluded from version control. The processed Parquet, neighborhood boundaries, and cleaning manifest are included so the local dashboard and modeling notebook can use the preserved snapshot without downloading the raw data.
+Git excludes raw and cleaned datasets, processed collision GeoJSON, and generated dashboard artifacts. The checked-in Parquet, boundaries, and manifest let you run the local dashboard and modeling notebook without downloading raw data.
 
-The checked-in cleaning manifest records 109,040 cleaned collisions, including 2,990 records excluded from spatial analysis because of missing geometry. Its collision source extends through August 31, 2026, while the vehicle source extends through January 23, 2026. Vehicle trends therefore have a different coverage window and are not part of the monthly dashboard refresh. Live dashboard coverage is reported by `/api/meta` and can differ from the checked-in snapshot.
+The cleaning manifest records 109,040 cleaned collisions. Spatial analysis excludes 2,990 of them because they lack geometry. Collision data ends August 31, 2026, and vehicle data ends January 23, 2026. The monthly dashboard refresh excludes vehicle data. Check `/api/meta` for live dashboard coverage, which may differ from this snapshot.
 
-## Cleaning Data
+## Clean the data
 
 | File | Description |
 | --- | --- |
@@ -50,13 +50,15 @@ The checked-in cleaning manifest records 109,040 cleaned collisions, including 2
 | `collision_clean.py` | Adds temporal features (`YEAR`, `MONTH`, `DAY`, `HOUR`, `Day_of_Week`, `Season`), standardizes missing categories, flags geometry quality, and engineers spatial/severity features |
 | `vehicle_clean.py` | Standardizes vehicle categories, validates vehicle keys, and separates records without matching collision keys |
 
-To reproduce the full cleaning workflow, download [SDOT Collisions All Years](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-all-years/about) as GeoJSON and [SDOT Collisions Vehicles](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-vehicles) as CSV, and save them under the raw filenames listed above. After installing the Python dependencies in **Local development**, run from the repository root:
+Download [SDOT Collisions All Years](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-all-years/about) as GeoJSON and [SDOT Collisions Vehicles](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-vehicles) as CSV. Save them under the raw filenames listed above. Install the Python dependencies in **Local development**, then run from the repository root:
 
 ```bash
 .venv/bin/python clean.py --start-year 2015 --end-year 2026
 ```
 
-The cleaner preserves raw categorical values alongside standardized fields and retains collisions with missing geometry in the all-collision output. Only valid Seattle point geometries enter the processed spatial dataset. Incident records without a recorded time retain an unknown `HOUR`. Use `--skip-geojson` when only Parquet and CSV outputs are needed; `geo.ipynb` currently reads the cleaned GeoJSON. This workflow replaces the processed snapshot; it is optional for running the application from the checked-in data.
+Cleaning replaces the processed snapshot. You do not need to run it to use the checked-in data. The cleaner keeps raw categories alongside standardized fields and retains collisions with missing geometry in the all-collision output. Only valid Seattle points enter the spatial dataset. Records without a known incident time keep an unknown `HOUR`.
+
+Use `--skip-geojson` if you only need Parquet and CSV. The spatial notebook still requires the cleaned GeoJSON. After cleaning, review the local builder's fixed baseline before rebuilding dashboard artifacts.
 
 ## Notebooks
 
@@ -67,37 +69,35 @@ The cleaner preserves raw categorical values alongside standardized fields and r
 | `notebooks/geo.ipynb` | Spatial analysis: Folium heatmap, composite severity, all/severe collision KDE maps, polygon-based downtown density comparisons, and GeoJSON export |
 | `notebooks/model.ipynb` | Historical grid-cell severity regression, target stabilization, and comparison of five tuned regressors |
 
-## Notebook Information
-
 ### `all_collisions_eda.ipynb`
 
-- Temporal trends: Monthly collision counts from 2015 through August 2026, alongside distributions by day of week, hour of day, and season.
-- Categorical breakdowns: Junction type, severity description, top 10 collision descriptions, weather, road condition, and light condition, including intersection-related monthly trends and severity proportions.
-- Pedestrian and cyclist involvement: Yearly mean involvement per collision using `PEDCOUNT + PEDCYLCOUNT`, supporting further investigation of vulnerable road users.
+- Plots monthly collisions from 2015 through August 2026 and distributions by day, hour, and season.
+- Summarizes junction type, severity, the top 10 collision descriptions, weather, road and light conditions, and intersection-related trends.
+- Calculates yearly mean pedestrian and cyclist involvement per collision using `PEDCOUNT + PEDCYLCOUNT`.
 
 ### `vehicle_eda.ipynb`
 
-- Vehicle category analysis: A pie chart summarizes the distribution of standardized vehicle categories, and yearly line plots show changes in vehicle involvement from 2015 onward.
+- Plots standardized vehicle categories and yearly vehicle involvement from 2015 onward.
 - Each row represents a vehicle involved in a collision. Vehicle counts and collision counts have different denominators.
 
 ### `geo.ipynb`
 
-- Interactive heatmap: A Folium-based heatmap weighted by vehicle count (`VEHCOUNT`) across all collisions from 2015 onward, providing an interactive map view of collision hotspots.
-- Severity index & KDE density estimation: A composite severity score (`SEVERITY = INJURIES + 3 × SERIOUSINJURIES + 5 × FATALITIES`) is computed per collision. Pre-2020 and 2020 onward severity distributions are compared using a Mann–Whitney U test, while Gaussian KDE maps show all collisions and collisions involving serious injuries or fatalities.
-- Downtown vs. outer Seattle comparison: Collisions are joined to neighborhood polygons, with downtown defined by `L_HOOD = 'Downtown'`. Projected polygon areas provide collision density per km², and yearly plots compare density and mean severity.
+- Maps collisions from 2015 onward with a Folium heatmap weighted by vehicle count, `VEHCOUNT`.
+- Calculates `SEVERITY = INJURIES + 3 × SERIOUSINJURIES + 5 × FATALITIES` per collision. A Mann-Whitney U test compares severity before 2020 with severity from 2020 onward. Gaussian KDE maps show all collisions and those involving serious injuries or fatalities.
+- Joins collisions to neighborhood polygons and defines downtown as `L_HOOD = 'Downtown'`. Projected areas give collision density per km². Yearly plots compare density and mean severity downtown and elsewhere in Seattle.
 - The notebook adds grid bins and combined pedestrian/cyclist involvement and exports `data/processed/Collision_Processed.geojson`. The cleaning workflow produces the canonical Parquet used by modeling and local dashboard artifacts.
 
 ### `model.ipynb`
 
-- Grid aggregation: Complete-year collisions through 2025 are grouped into occupied cells within a 150×150 latitude/longitude grid. Cell summaries include collision count, severity totals/means, vehicle and pedestrian/cyclist involvement, and temporal and intersection shares.
-- Severity target engineering: Raw mean severity is compared with a stabilized score that shrinks sparse cells toward a severity prior calculated from the training partition, with a smoothing weight of 10. Repeated 5-fold cross-validation selects the target.
-- Regression comparison: Decision Tree, Random Forest, XGBoost, LightGBM, and CatBoost regressors are tuned with GridSearchCV or RandomizedSearchCV and ranked by training cross-validation R².
-- Predictors: Cell coordinates, peak hour, night/weekend/seasonal ratios, average vehicle and pedestrian/cyclist involvement, and intersection share derived from `JUNCTIONTYPE`. Severity components, severity aggregates, collision count, and the former risk labels are excluded from the predictors. Median imputation is fitted within each cross-validation fold.
-- Evaluation: An 80/20 cell split is used, with held-out R², MAE, RMSE, actual-vs.-predicted plots, residual distributions, and feature importance plots. This estimates historical cell-level severity rather than future collision probability.
+- Groups complete-year collisions through 2025 into occupied cells in a 150×150 latitude and longitude grid. Cell summaries include counts, severity, vehicle involvement, pedestrian and cyclist involvement, and temporal and intersection shares.
+- Compares raw mean severity with a stabilized score. The latter shrinks sparse cells toward a training-partition severity prior with a smoothing weight of 10. Repeated 5-fold cross-validation selects the target.
+- Tunes Decision Tree, Random Forest, XGBoost, LightGBM, and CatBoost regressors with GridSearchCV or RandomizedSearchCV. Training cross-validation R² determines their rank.
+- Uses cell coordinates, peak hour, night, weekend and seasonal ratios, average vehicle and pedestrian/cyclist involvement, and intersection share derived from `JUNCTIONTYPE`. Predictors exclude severity components, severity aggregates, collision count, and former risk labels. Each cross-validation fold fits its own median imputation.
+- Uses an 80/20 cell split and reports held-out R², MAE, RMSE, predictions, residuals, and feature importance. The model estimates historical cell-level severity, not future collision probability.
 
-### Running the notebooks
+### Run the notebooks
 
-The application dependencies are defined in `pyproject.toml`; notebook visualization and modeling libraries are installed separately:
+`pyproject.toml` defines the application dependencies. Install notebook visualization and modeling libraries separately:
 
 ```bash
 .venv/bin/pip install jupyterlab matplotlib seaborn folium scikit-learn xgboost lightgbm catboost
@@ -105,21 +105,21 @@ cd notebooks
 ../.venv/bin/jupyter lab
 ```
 
-Run these commands after the Python setup in **Local development**. Starting Jupyter from `notebooks/` matches the notebooks' relative data paths. `model.ipynb` reads the checked-in Parquet directly; the EDA and spatial notebooks require the cleaned outputs from `clean.py`.
+Run these commands after the Python setup in **Local development**. Start Jupyter from `notebooks/` to match the relative data paths. `model.ipynb` reads the checked-in Parquet. The EDA and spatial notebooks require cleaned outputs from `clean.py`.
 
-## EDA Findings
+## EDA findings
 
-The comparisons below were recalculated from the checked-in `Collision_Processed.parquet`, using complete years: 2015–2019 versus 2020–2025. They describe the spatial subset; the all-collision EDA also includes records without geometry.
+These comparisons use the checked-in `Collision_Processed.parquet` and complete years, 2015 to 2019 versus 2020 to 2025. They describe the spatial subset. The all-collision EDA also includes records without geometry.
 
-- Average annual recorded collisions declined from about **12,364** in 2015–2019 to **7,007** in 2020–2025.
-- Serious/fatal collision records, identified by `MAXSEVERITYDESC`, increased from about **1.52%** to **3.42%** of all recorded collisions in the respective periods.
-- Mean composite severity per collision increased from about **0.362** to **0.481**, reinforcing the need to examine severity alongside frequency.
-- Intersection-related collisions accounted for about **39%** of pre-2020 and **43%** of 2020 onward records, using the notebook's at-intersection and intersection-related mid-block categories.
-- The dashboard's projected centroid comparison shows a shift of about **309 metres**, mainly south, between the two periods. A centroid shift summarizes average location and requires additional hotspot analysis to identify specific priority areas.
+- Average annual recorded collisions fell from about 12,364 to 7,007.
+- Serious and fatal collision records, identified by `MAXSEVERITYDESC`, rose from about 1.52% to 3.42% of recorded collisions.
+- Mean composite severity per collision rose from about 0.362 to 0.481.
+- Intersection-related collisions accounted for about 39% and 43% of records, respectively. This uses the notebook's at-intersection and intersection-related mid-block categories.
+- The dashboard's projected collision centroid shifted about 309 metres, mainly south. This describes the average location and does not identify individual hotspots.
 
-## Model Findings (in progress)
+## Model findings
 
-The saved outputs in `model.ipynb` report the following results for stabilized historical severity:
+Model development is ongoing. The saved outputs in `model.ipynb` report the following results for stabilized historical severity:
 
 | Model | 5-fold CV R² | Test R² | Test MAE | Test RMSE |
 | --- | --- | --- | --- | --- |
@@ -129,61 +129,57 @@ The saved outputs in `model.ipynb` report the following results for stabilized h
 | XGBoost | 0.215 | 0.230 | 0.074 | 0.108 |
 | Decision Tree | 0.143 | 0.158 | 0.079 | 0.113 |
 
-- Stabilized severity was selected over raw mean severity, with repeated cross-validation R² of **0.215 vs. 0.210** and lower fold-to-fold variation.
+- Stabilized severity had repeated cross-validation R² of 0.215 versus 0.210 for raw mean severity, with less variation between folds.
 - LightGBM ranked first by training cross-validation R², while CatBoost and Random Forest performed similarly.
-- The modest R² values indicate that much of the variation in historical severity remains unexplained. These results support further feature development and validation; the dashboard displays observed collision metrics and does not serve model predictions.
+- Much of the variation in historical severity remains unexplained. The dashboard displays observed collision metrics and does not serve model predictions.
 
-## Current Caveats
+## Limits
 
-- The COVID-19 period disrupted travel and collision patterns. Compare results with and without 2020–2021 as a sensitivity analysis before attributing changes to policy or long-term trends.
-- The checked-in 2026 data is partial, and recent records may be revised or arrive late. Some exploratory notebook comparisons include 2026; apply complete-year filters before comparing annual totals or pre/post averages. The model excludes 2026, and the dashboard excludes partial years from trend and spatial-shift comparisons.
+- The COVID-19 period disrupted travel and collision patterns. Compare results with and without 2020 and 2021 before attributing changes to policy or long-term trends.
+- The 2026 data is partial. Recent records may change or arrive late. Some notebook comparisons include 2026, so apply complete-year filters before comparing annual totals or period averages. The model excludes 2026. The dashboard excludes partial years from trend and spatial-shift comparisons.
 - Spatial findings exclude collisions without usable geometry. Missing-location records remain available in the cleaned data and are summarized in the cleaning manifest.
 - Collision counts, composite severity, and KDE describe observed burden. Exposure measures such as traffic volume, population, transit ridership, or pedestrian activity are needed to estimate collision risk per trip or per person.
-- The model uses a random split of historical grid cells. Temporal validation and spatial holdouts are needed to assess future prediction and generalization to other areas; the latitude/longitude bins also have unequal physical dimensions.
-- Spatial methods differ by workflow: `geo.ipynb` uses neighborhood polygons and projected areas for downtown density, while the dashboard uses a rectangular downtown boundary for count/severity comparisons. Notebook heatmaps are vehicle-weighted; dashboard heatmaps count collisions. KDE is calculated in latitude/longitude and shown as relative density in the dashboard.
-- The dashboard is currently deployed on Render's free tier, which provides 512 MB of RAM and 0.1 CPU, constraining dataset loading and spatial calculations. Additionally, the system enters a sleep state, so slow startups (~1 minute) will occur. Current optimization work focuses on reducing memory usage and improving loading and calculation times. Monthly data ingestion runs separately through GitHub Actions.
+- The model uses a random split of historical grid cells. Temporal validation and spatial holdouts are needed to assess future prediction and generalization to other areas. The latitude and longitude bins also have unequal physical dimensions.
+- `geo.ipynb` uses neighborhood polygons and projected areas for downtown density. The dashboard uses a rectangular downtown boundary for count and severity comparisons. Notebook heatmaps weight vehicles, while dashboard heatmaps count collisions. The dashboard calculates KDE in latitude and longitude and displays relative density.
+- The dashboard uses Render's free tier. Its memory and CPU limits constrain dataset loading and spatial calculations. Idle services sleep and take about a minute to wake. Monthly ingestion runs separately through GitHub Actions.
 
-## Next Steps
+## Next steps
 
-- Enhancing modeling: Add temporal and spatial validation, examine sparse-cell uncertainty, and test features derived from earlier observation periods for future-severity analysis.
-- Refining spatial analysis: Use a projected grid and consistent downtown boundaries across notebooks and the dashboard, and incorporate exposure-adjusted collision rates.
-- Expanding into public transportation and urban studies: Overlay collisions with bus stops, light rail stations, high-frequency transit corridors, bike lanes, school zones, and pedestrian-heavy areas to study safe access to transit.
-- Building an equity and access layer: Compare collision burden by neighborhood, transit access, and vulnerable road user involvement to identify areas for further street-safety investigation.
+- Add temporal and spatial validation, measure sparse-cell uncertainty, and test predictors from earlier observation periods for future-severity analysis.
+- Use a projected grid, align downtown boundaries across notebooks and the dashboard, and calculate exposure-adjusted collision rates.
+- Overlay transit stops and corridors, bike lanes, school zones, and pedestrian-heavy areas to study safe access to transit.
+- Compare collision burden by neighborhood, transit access, and vulnerable road user involvement.
 
-## Learning Outcomes
+## Learning outcomes
 
-- Working with government-sourced data and handling missing values and formatting issues, along with feature engineering on raw records.
-- Applying geospatial tools, such as GeoPandas and Folium for spatial data manipulation and visualizations.
-- Performing kernel density estimation (KDE) with SciPy to visualize spatial collision distributions.
-- Building and comparing supervised regression models with target stabilization, hyperparameter tuning, and held-out evaluation.
-- Translating notebook analysis into an interactive React + FastAPI dashboard for public-facing exploration.
-- Building reproducible analytical artifacts and a validated, versioned MongoDB publication pipeline.
-- Connecting data science methods to urban safety, public transportation access, and Vision Zero policy questions.
+The project covers government-data cleaning, GeoPandas and Folium maps, SciPy KDE, and regression with target stabilization and held-out evaluation. It also turns notebook analysis into a React and FastAPI dashboard with reproducible artifacts and versioned MongoDB publication. The research questions concern street safety and transit access.
 
 ## Dashboard
 
-The full-stack application provides two complementary views of observed collision patterns:
+The dashboard has two views:
 
 | View | Description |
 | --- | --- |
 | Neighborhood Explorer | Map and searchable neighborhood selection, all-severity collision/injury context, and annual or monthly trends |
 | Citywide Analysis | Independent year/severity filters, collision heatmap, KDE density, pre/post-2020 centroid shift, and downtown vs. outer-area comparisons |
 
-Deployment link: https://seattle-collision-dashboard.onrender.com
+[Open the dashboard](https://seattle-collision-dashboard.onrender.com).
 
 ### Product rules
 
 - Neighborhood metrics always include every severity level. Citywide severity filters cannot enter neighborhood API requests.
 - Composite severity is `INJURIES + 3 × SERIOUSINJURIES + 5 × FATALITIES`.
-- Night share uses only collisions with a recorded incident time; date-only timestamps have an unknown hour.
-- With no neighborhood selected, Neighborhood Explorer shows all-severity Seattle citywide summary statistics and trends. Selecting a neighborhood replaces the inspector with local statistics; clearing it restores the citywide baseline.
+- Night share uses only collisions with a recorded incident time. Date-only timestamps have an unknown hour.
+- With no neighborhood selected, Neighborhood Explorer shows all-severity Seattle statistics and trends. Selecting a neighborhood shows local statistics. Clearing it restores the citywide baseline.
 - Neighborhood Explorer inspector grids omit Night and Weekend distribution shares without removing those measures from the API or Citywide Analysis.
-- Annual trend is the default; `grain=monthly` shows zero-filled monthly observations from January 2015 through the latest received month.
+- Annual trend is the default. `grain=monthly` shows zero-filled monthly observations from January 2015 through the latest received month.
 - Partial years are labeled with the latest received incident date and excluded from trend and spatial-shift comparisons.
 - Trend comparisons use non-overlapping first and last three-year averages only when at least six complete years are present.
-- The dashboard remains public and read-only; publication and rollback use a separate ingestion identity with database write access.
+- The dashboard is public and read-only. Publication and rollback use a separate ingestion identity with database write access.
 
 See [PRODUCT.md](./PRODUCT.md), [FIGMA.md](./FIGMA.md), and [DESIGN.md](./DESIGN.md) for the product and visual contracts.
+
+The [architecture guide](./docs/architecture/architecture-guide.md) describes request handling, dataset publication, response validation, and the source files behind them.
 
 ## Repository layout
 
@@ -205,7 +201,7 @@ data/dashboard/              Reproducible generated artifacts (gitignored)
 
 ## Local development
 
-Use Python 3.11 and Node 22 to match Docker and CI. The Python package supports Python 3.11 through 3.14. Run these commands from the repository root; raw data downloads and notebook dependencies are optional for this setup.
+Use Python 3.11 and Node 22 to match Docker and CI. The Python package supports Python 3.11 through 3.14. Run these commands from the repository root. You do not need raw data downloads or notebook dependencies.
 
 ```bash
 python3.11 -m venv .venv
@@ -230,13 +226,19 @@ cd frontend
 npm run dev
 ```
 
-Open the Vite URL printed in that terminal (normally [http://localhost:5173](http://localhost:5173)). Vite proxies `/api` and `/healthz` to port 8000.
+Open the Vite URL printed in that terminal, normally [http://localhost:5173](http://localhost:5173). Vite proxies `/api` and `/healthz` to port 8000.
 
 Local development defaults to `DASHBOARD_DATA_BACKEND=artifacts`. This path is deterministic and does not require MongoDB credentials.
 
+### Dev containers and Codespaces
+
+Open the repository in a dev container or Codespaces. The container supplies Python 3.11 and Node 22, installs dependencies, generates dashboard artifacts, and builds the frontend. Python and frontend dependencies use container volumes, separate from the host's `.venv` and `frontend/node_modules`. It starts FastAPI on port 8000 when the container starts. Open the forwarded port to use the dashboard. Server logs are in `/tmp/dashboard-api.log`.
+
+For frontend development, run `npm run dev -- --host 0.0.0.0` from `frontend` and open forwarded port 5173. After changing processed inputs, rebuild the artifacts and restart the API as described below.
+
 ### Configuration
 
-`.env.example` lists the environment settings. The application reads exported environment variables; copying that file to `.env` alone does not load them.
+`.env.example` lists the environment settings. Export the variables before starting the application. Copying the file to `.env` does not load them.
 
 | Variable | Default / Purpose |
 | --- | --- |
@@ -254,7 +256,9 @@ Run:
 .venv/bin/python -m backend.scripts.build_artifacts
 ```
 
-The build hashes the processed collision Parquet and neighborhood GeoJSON, assigns spatial records by polygon containment with a nearest-neighborhood fallback within 25 metres, and writes assigned-record, zero-filled annual, and zero-filled monthly Parquet artifacts with a manifest. Monthly artifacts cover 94 neighborhoods plus a citywide scope and stop at the latest observed month. If artifacts are absent or their source hashes are stale, the API reports degraded health and `/readyz` returns 503; rebuild the artifacts before using data endpoints.
+The builder hashes the processed collision Parquet and neighborhood GeoJSON. It assigns collisions by polygon containment, with a nearest-neighborhood fallback within 25 metres. It writes assigned records, zero-filled annual and monthly aggregates, boundaries, and a manifest. Monthly aggregates cover 94 neighborhoods plus a citywide scope and end at the latest observed month.
+
+Rebuild artifacts after changing either processed input, then restart the API. Stop and rerun Uvicorn locally, or restart the dev container. The API validates the generated snapshot but does not compare its source hashes with the processed files. A healthy `/readyz` response does not prove the artifacts are current. Missing or invalid artifacts prevent initial loading and leave `/readyz` at HTTP 503. Direct `DataStore` construction and the artifact tests also check source hashes.
 
 The checked-in spatial snapshot's regression baseline is:
 
@@ -264,13 +268,13 @@ The checked-in spatial snapshot's regression baseline is:
 - 106,050 total collision records
 - 94 unique neighborhoods
 
-The local builder enforces this preserved row-count and assignment baseline. Replacing the processed source requires reviewing the baseline and related tests; the production sync validates changing live datasets separately.
+The local builder enforces this row-count and assignment baseline. If you replace the processed source, review the baseline and related tests. Production sync validates changing live datasets separately.
 
 ## Monthly MongoDB pipeline
 
-Production uses MongoDB as the durable source. Each collision and aggregate document is tagged with an immutable dataset version. A run writes and validates the entire new version before atomically switching the `dataset_state.activeVersion` pointer; failed runs leave the current dashboard untouched. The API checks for a new active version every 60 seconds and swaps its in-memory snapshot only after loading and validating it.
+Production stores versioned collision and aggregate documents in MongoDB. A sync writes and validates a new version before switching `dataset_state.activeVersion`. Failures before that switch leave the active version unchanged. After a failed job, check the active version before retrying or rolling back. The API checks for a new version every 60 seconds and loads and validates it before replacing its in-memory snapshot.
 
-The ingestion job queries the ArcGIS object-ID list, downloads records in batches of 1,000, verifies that the layer did not change mid-download, validates collision fields and geometry, assigns neighborhoods, and reconciles annual and monthly totals. Its uploaded manifest reports the source and spatial row counts, accepted exclusions, normalized hash, and difference from the checked-in 106,050-record baseline. Historical edits and deletions are captured because every monthly run is a full authoritative sync. Vehicle data is intentionally not part of this dashboard refresh.
+The ingestion job queries the ArcGIS object-ID list and downloads records in batches of 1,000. It checks for source edits during the download, validates collision fields and geometry, assigns neighborhoods, and reconciles annual and monthly totals. The uploaded manifest records source and spatial row counts, accepted exclusions, the normalized hash, and the difference from the 106,050-record baseline. Each monthly run downloads the full source, so it captures historical edits and deletions. It does not refresh vehicle data.
 
 The publication gate checks both source feature count and usable spatial collision count for decreases greater than 1%.
 
@@ -280,9 +284,11 @@ Configure these secrets in the repository's GitHub `production` environment:
 - `ATLAS_PUBLIC_KEY` and `ATLAS_PRIVATE_KEY`: Atlas API credentials allowed to create temporary project IP access-list entries
 - `ATLAS_PROJECT_ID`: Atlas project identifier
 
-The [Monthly collision sync workflow](./.github/workflows/monthly-collision-sync.yml) is configured for 3:17 AM America/Los_Angeles on the 8th of each month and can also be started manually in dry-run mode. Its runner IP is admitted to Atlas for two hours. Failed runs appear as failed Actions checks. [GitHub scheduled workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) run from the default branch, can be delayed, and are disabled in public repositories after 60 days without activity; schedule notifications follow the settings of the user who last modified the cron schedule.
+The [Monthly collision sync workflow](./.github/workflows/monthly-collision-sync.yml) runs at 3:17 AM America/Los_Angeles on the 8th of each month. You can also start it manually and choose dry-run mode. It admits the runner IP to Atlas for two hours. Failures appear as failed Actions checks.
 
-To run the sync manually, use the ingestion user's write credentials and ensure your machine's outbound IP is allowed in Atlas. Dry-run validates the candidate without publishing a new active version:
+[GitHub scheduled workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) run from the default branch and may be delayed. GitHub disables schedules in public repositories after 60 days without activity. Schedule notifications follow the settings of the user who last changed the cron schedule.
+
+To run the sync manually, use the ingestion user's write credentials and allow your machine's outbound IP in Atlas. Dry-run validates the candidate without publishing it:
 
 ```bash
 export DASHBOARD_DATA_BACKEND=mongodb
@@ -292,11 +298,13 @@ export MONGODB_DATABASE=seattle_collision
 .venv/bin/python -m backend.scripts.sync_collisions
 ```
 
-To roll back atomically to the immediately previous published version:
+To restore the retained previous dataset, use the same write credentials. Record `datasetVersion` and `dataAsOf` from `/readyz` before running:
 
 ```bash
 .venv/bin/python -m backend.scripts.rollback_dataset
 ```
+
+After the next refresh, normally within 60 seconds, check `/readyz` again and confirm `datasetVersion` matches the command's output. Rollback swaps the active and previous versions. Running it again reverses the rollback. The first publication has no previous version. Each publication keeps the active and previous datasets and attempts to prune older ones, so this command cannot step through the full publication history.
 
 After investigating a source decrease greater than 1%, a manual operator can pass `--allow-row-decrease` to the sync command.
 
@@ -342,7 +350,7 @@ The multi-stage image builds React with Node 22 and serves the compiled applicat
 
 [Render Free services](https://render.com/docs/free) sleep after 15 minutes without inbound traffic and take about a minute to wake. [Atlas Free clusters](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/) have storage and throughput limits and do not include managed backups. Account for these constraints when choosing hosting for a public deployment.
 
-## Credits & Sources
+## Credits and sources
 
 - [Seattle Open Data Portal](https://data.seattle.gov)
 - [SDOT Collisions All Years](https://data-seattlecitygis.opendata.arcgis.com/datasets/SeattleCityGIS::sdot-collisions-all-years/about)

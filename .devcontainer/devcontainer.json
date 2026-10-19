@@ -1,11 +1,23 @@
 {
-  "name": "Python 3",
+  "name": "Seattle collision dashboard",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${devcontainerId}-venv,target=${containerWorkspaceFolder}/.venv,type=volume",
+    "source=${devcontainerId}-node-modules,target=${containerWorkspaceFolder}/frontend/node_modules,type=volume"
+  ],
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    }
+  },
+  "containerEnv": {
+    "DASHBOARD_DATA_BACKEND": "artifacts"
+  },
   "customizations": {
     "codespaces": {
       "openFiles": [
-        "README.md",
-        "app.py"
+        "README.md"
       ]
     },
     "vscode": {
@@ -16,17 +28,16 @@
       ]
     }
   },
-  "updateContentCommand": "[ -f packages.txt ] && sudo apt update && sudo apt upgrade -y && sudo xargs apt install -y <packages.txt; [ -f requirements.txt ] && pip3 install --user -r requirements.txt; pip3 install --user streamlit; echo '✅ Packages installed and Requirements met'",
-  "postAttachCommand": {
-    "server": "streamlit run app.py --server.enableCORS false --server.enableXsrfProtection false"
-  },
+  "postCreateCommand": "sudo chown vscode:vscode .venv frontend/node_modules && python -m venv .venv && .venv/bin/python -m pip install -e '.[test]' && .venv/bin/python -m backend.scripts.build_artifacts && npm --prefix frontend ci --legacy-peer-deps && npm --prefix frontend run build",
+  "postStartCommand": "nohup .venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/dashboard-api.log 2>&1 &",
   "portsAttributes": {
-    "8501": {
+    "8000": {
       "label": "Application",
       "onAutoForward": "openPreview"
     }
   },
   "forwardPorts": [
-    8501
+    8000,
+    5173
   ]
 }
