@@ -54,6 +54,28 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('map resolution lifecycle', () => {
+  it('announces completion only after selected context arrives and retains the requested scope while loading', async () => {
+    let complete: (value: typeof neighborhoodContext) => void = () => {}
+    vi.spyOn(api, 'neighborhoodContext').mockImplementation(() => new Promise((resolve) => { complete = resolve }))
+    const { user } = setup()
+    await user.type(await screen.findByRole('combobox', { name: 'Neighborhood' }), 'Ball')
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('heading', { name: 'Ballard' })).toBeInTheDocument()
+    expect(screen.getByText('Loading Ballard statistics…')).toBeInTheDocument()
+    expect(screen.getByText('Ballard selected. Loading statistics.')).toBeInTheDocument()
+    expect(screen.queryByText(/Ballard statistics updated/)).not.toBeInTheDocument()
+    await act(async () => { complete(neighborhoodContext) })
+    await waitFor(() => expect(screen.getByText('Ballard statistics updated for 2021 to 2025.')).toBeInTheDocument())
+  })
+
+  it('shows one recoverable context error instead of duplicating it for the trend', async () => {
+    vi.spyOn(api, 'neighborhoodContext').mockRejectedValue(new Error('Context unavailable'))
+    const { user } = setup()
+    await user.type(await screen.findByRole('combobox', { name: 'Neighborhood' }), 'Ball')
+    await user.keyboard('{Enter}')
+    expect(await screen.findAllByRole('alert')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Retry request' })).toBeInTheDocument()
+  })
   it('rejects a reply after the browser URL changes before React commits navigation', async () => {
     const pending = pendingResolution()
     const request = vi.spyOn(api, 'resolveNeighborhood').mockReturnValue(pending.promise)
@@ -80,7 +102,7 @@ describe('map resolution lifecycle', () => {
     if (navigation === 'back') await user.click(screen.getByRole('button', { name: 'Back' }))
     if (navigation === 'citywide') await user.click(screen.getByRole('link', { name: 'Citywide' }))
     if (navigation === 'manual') {
-      await user.type(screen.getByRole('combobox', { name: 'NEIGHBORHOOD' }), 'Ball')
+      await user.type(screen.getByRole('combobox', { name: 'Neighborhood' }), 'Ball')
       await user.keyboard('{Enter}')
     }
     if (navigation === 'unmount') view.unmount()

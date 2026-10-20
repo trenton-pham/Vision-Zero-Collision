@@ -1,14 +1,16 @@
-.chart { height: 250px; position: relative; }
-.legend { position: absolute; z-index: 2; left: 48px; top: 10px; display: flex; gap: 18px; color: var(--text-muted); text-transform: uppercase; font: 600 .6rem/1 var(--font-display); letter-spacing: .08em; }
-.legend span { display: inline-flex; align-items: center; gap: 7px; }
-.legend i { width: 19px; height: 3px; display: block; }
-.collisionSwatch { background: var(--selection); box-shadow: 0 4px 0 color-mix(in srgb, var(--selection) 26%, transparent); }
+.chart { height: 260px; position: relative; }
+.legend { position: absolute; z-index: 2; left: 24px; top: 12px; display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--text-secondary); font-size: .75rem; line-height: 1.4; }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.legend i { width: 20px; height: 3px; display: block; }
+.collisionSwatch { background: var(--selection); }
 .severitySwatch { background: var(--support); }
-.selectionMarker { position: absolute; z-index: 3; top: 9px; left: 31px; width: 7px; height: 7px; border: 2px solid var(--selection); background: var(--panel); animation: trend-marker-pulse 600ms 360ms ease-out both; }
-.partialMarker { position: absolute; top: 12px; right: 8px; color: var(--caution); font: 600 .65rem/1 var(--font-display); letter-spacing: .1em; }
-@keyframes trend-marker-pulse {
-  0% { opacity: 0; transform: scale(.5); box-shadow: 0 0 0 0 color-mix(in srgb, var(--selection) 70%, transparent); }
-  45% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 8px transparent; }
-  100% { opacity: 0; transform: scale(1); }
-}
-@media (max-width: 760px) { .partialMarker { top: 32px; } }
+.partialMarker { margin: 0; padding: 12px 20px; color: var(--caution); font-size: .8125rem; line-height: 1.5; }
+.dataTable { padding: 0 20px 12px; color: var(--text-secondary); font-size: .875rem; }
+.dataTable summary { min-height: 44px; display: list-item; padding: 12px 0; cursor: pointer; }
+.tableScroll { max-height: 320px; overflow: auto; }
+.dataTable table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.dataTable caption { text-align: left; padding: 12px 0; color: var(--text-primary); }
+.dataTable th, .dataTable td { text-align: right; padding: 12px 8px; border-bottom: 1px solid var(--border); }
+.dataTable th:first-child { text-align: left; }
+.dataTable thead th { color: var(--text-primary); font-weight: 500; }
+@media (max-width: 600px) { .chart { height: 240px; } .legend { left: 16px; } .dataTable { padding-inline: 16px; } .dataTable th,.dataTable td { padding: 10px 4px; font-size: .75rem; } }

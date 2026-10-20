@@ -49,12 +49,12 @@ test('all response schemas accept real local endpoint payloads', async ({ reques
 
 test('invalid map links normalize without adding a history entry', async ({ page }) => {
   await page.goto('/neighborhoods?start=2025&end=2025')
-  await expect(page.getByRole('heading', { name: 'Locate burden. Read context.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Neighborhood Explorer' })).toBeVisible()
   const before = await page.evaluate(() => history.length)
   await page.goto('/neighborhoods?start=2021&end=2025&metric=injuries&grain=monthly&severity=bogus,unknown')
   await expect(page).not.toHaveURL(/metric=/)
   await expect(page).toHaveURL(/severity=unknown/)
-  await expect(page.getByRole('combobox', { name: 'MAP METRIC' })).toHaveValue('collisionCount')
+  await expect(page.getByRole('combobox', { name: 'Map metric' })).toHaveValue('collisionCount')
   expect(new URL(page.url()).searchParams.get('grain')).toBe('monthly')
   expect(await page.evaluate(() => history.length)).toBe(before + 1)
   await page.goBack()

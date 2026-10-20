@@ -10,54 +10,77 @@ function deferred() {
 
 test('map and keyboard selector share URL-backed neighborhood state', async ({ page }) => {
   await page.goto('/neighborhoods?start=2015&end=2026')
-  await expect(page.getByRole('heading', { name: 'Locate burden. Read context.' })).toBeVisible()
-  const picker = page.getByRole('combobox', { name: 'NEIGHBORHOOD' })
+  await expect(page.getByRole('heading', { name: 'Neighborhood Explorer' })).toBeVisible()
+  const picker = page.getByRole('combobox', { name: 'Neighborhood' })
   await picker.fill('Ballard')
   await expect(page.getByRole('option', { name: 'Ballard' })).toBeVisible()
   await picker.press('Enter')
   await expect(page).toHaveURL(/neighborhood=ballard/)
+  const details = page.locator('#neighborhood-details')
+  if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click()
   await expect(page.getByRole('heading', { name: 'Ballard', exact: true })).toBeVisible()
   await expect(page.getByText('2026 partial · records received through August 31, 2026')).toBeVisible()
 })
 
 test('empty selection shows citywide context and supports URL-backed monthly grain', async ({ page }) => {
   await page.goto('/neighborhoods?start=2015&end=2026')
-  await expect(page.getByRole('heading', { name: 'Seattle citywide · annual collisions and severity burden' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Collision trends' })).toBeVisible()
   const citywideInspector = page.getByRole('complementary', { name: 'Seattle citywide context' })
+  if (await citywideInspector.locator('#neighborhood-details').getAttribute('open') === null) await citywideInspector.locator('#neighborhood-details > summary').click()
   await expect(citywideInspector.getByRole('heading', { name: 'Seattle citywide', exact: true })).toBeVisible()
   await expect(citywideInspector.getByText('106,050', { exact: true })).toBeVisible()
   await expect(citywideInspector.getByText('Night', { exact: true })).toHaveCount(0)
   await expect(citywideInspector.getByText('Weekend', { exact: true })).toHaveCount(0)
   await page.getByRole('button', { name: 'Monthly' }).click()
   await expect(page).toHaveURL(/grain=monthly/)
-  await expect(page.getByRole('heading', { name: 'Seattle citywide · monthly collisions and severity burden' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Collision trends' })).toBeVisible()
   await expect(page.getByText(/2026 partial · received through aug 31/i)).toBeVisible()
 
-  const picker = page.getByRole('combobox', { name: 'NEIGHBORHOOD' })
+  const picker = page.getByRole('combobox', { name: 'Neighborhood' })
   await picker.fill('Ballard')
   await picker.press('Enter')
   const neighborhoodInspector = page.getByRole('complementary', { name: 'Selected neighborhood context' })
+  if (await neighborhoodInspector.locator('#neighborhood-details').getAttribute('open') === null) await neighborhoodInspector.locator('#neighborhood-details > summary').click()
   await expect(neighborhoodInspector.getByRole('heading', { name: 'Ballard', exact: true })).toBeVisible()
   await expect(neighborhoodInspector.getByText('Night', { exact: true })).toHaveCount(0)
   await expect(neighborhoodInspector.getByText('Weekend', { exact: true })).toHaveCount(0)
-  await expect(page.getByRole('heading', { name: 'Ballard · monthly collisions and severity burden' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Collision trends' })).toBeVisible()
   await page.getByRole('button', { name: 'Clear neighborhood selection' }).click()
   await expect(page.getByRole('complementary', { name: 'Seattle citywide context' })).toContainText('106,050')
-  await expect(page.getByRole('heading', { name: 'Seattle citywide · monthly collisions and severity burden' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Collision trends' })).toBeVisible()
 })
 
 test('citywide context follows the selected year range', async ({ page }) => {
   await page.goto('/neighborhoods?start=2025&end=2025')
   const citywideInspector = page.getByRole('complementary', { name: 'Seattle citywide context' })
+  if (await citywideInspector.locator('#neighborhood-details').getAttribute('open') === null) await citywideInspector.locator('#neighborhood-details > summary').click()
   await expect(citywideInspector).toContainText('2025—2025 · all severity levels')
   await expect(citywideInspector.getByText('5,629', { exact: true })).toBeVisible()
 })
 
+test('heatmap scale waits for density data instead of showing an invalid range', async ({ page }) => {
+  const pending = deferred()
+  await page.route('**/api/citywide/heatmap?**', async (route) => {
+    await pending.promise
+    await route.continue()
+  })
+  await page.goto('/citywide?start=2025&end=2025')
+  try {
+    await expect(page.getByText('Collisions per grid cell', { exact: true })).toBeVisible()
+    await expect(page.getByText(/^≤.* collisions$/)).toHaveCount(0)
+    await expect(page.getByText(/^1–0 collisions$/)).toHaveCount(0)
+  } finally {
+    pending.release()
+  }
+  await expect(page.getByText(/^≤[1-9]\d* collisions$/)).toBeVisible()
+})
+
 test('citywide analysis exposes independent severity controls', async ({ page }) => {
   await page.goto('/citywide?start=2021&end=2025')
+  if (await page.locator('#severity-filters').getAttribute('open') === null) await page.locator('#severity-filters > summary').click()
   await page.getByText('Fatal', { exact: true }).click()
   await expect(page).toHaveURL(/severity=fatal/)
-  await expect(page.getByRole('heading', { name: 'Trace the citywide signal.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Citywide Analysis' })).toBeVisible()
   await expect(page.getByText('Complete-year spatial shift')).toBeVisible()
   await page.getByText('Unknown', { exact: true }).click()
   await expect(page).toHaveURL(/severity=fatal%2Cunknown/)
@@ -68,6 +91,7 @@ test('citywide analysis exposes independent severity controls', async ({ page })
 test('citywide Canvas stays painted through layers, zoom, and data changes', async ({ page }) => {
   const pageErrors: Error[] = []
   page.on('pageerror', (error) => pageErrors.push(error))
+  await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/citywide?start=2025&end=2025')
   const map = page.locator('.leaflet-container')
   const canvas = map.locator('.leaflet-overlay-pane canvas')
@@ -94,7 +118,7 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
   const heatmap = await readCanvas()
   await page.getByRole('tab', { name: 'KDE density' }).click()
   await expect(page).toHaveURL(/layer=kde/)
-  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
   await expect.poll(async () => {
     const density = await readCanvas()
     return density.densityPainted && density.image !== heatmap.image
@@ -126,6 +150,7 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
     const url = new URL(response.url())
     return url.pathname === '/api/citywide/summary' && url.searchParams.get('severity') === 'fatal'
   })
+  if (await page.locator('#severity-filters').getAttribute('open') === null) await page.locator('#severity-filters > summary').click()
   await page.getByText('Fatal', { exact: true }).click()
   await expect(page.getByRole('checkbox', { name: 'Fatal', exact: true })).toBeChecked()
   await expect(page).toHaveURL(/severity=fatal(?:&|$)/)
@@ -133,7 +158,7 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
   const fatal = citywideSummarySchema.parse(fatalPayload)
   const collisionCount = page.locator('dt').filter({ hasText: /^Collisions$/ }).locator('..').locator('dd')
   await expect(collisionCount).toHaveText(new Intl.NumberFormat('en-US').format(fatal.metrics.collisionCount))
-  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
   await expect.poll(async () => {
     const filtered = await readCanvas()
     return filtered.painted && filtered.image !== beforeFilter.image
@@ -151,7 +176,7 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
   await expect(collisionCount).toHaveText(new Intl.NumberFormat('en-US').format(partial.metrics.collisionCount))
   expect(partial.warnings.length).toBeGreaterThan(0)
   for (const warning of partial.warnings) await expect(page.getByText(warning, { exact: false })).toBeVisible()
-  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
   await expect.poll(async () => {
     const changed = await readCanvas()
     return changed.painted && changed.image !== beforeYearChange.image
@@ -161,7 +186,7 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
   const neighborhoodLink = page.getByRole('link', { name: 'Neighborhood Explorer', exact: true })
   if (await neighborhoodLink.isVisible()) await neighborhoodLink.click()
   else await page.getByRole('link', { name: 'Neighborhoods', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Locate burden. Read context.' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Neighborhood Explorer' })).toBeVisible()
   await expect(page.locator('path.leaflet-interactive').first()).toBeVisible()
   expect(pageErrors).toEqual([])
 })
@@ -171,8 +196,9 @@ test('invalid severity links normalize in place and retain Unknown', async ({ pa
   const before = await page.evaluate(() => history.length)
   await page.goto('/citywide?start=2025&end=2025&severity=bogus,unknown')
   await expect(page).toHaveURL(/severity=unknown(?:&|$)/)
+  if (await page.locator('#severity-filters').getAttribute('open') === null) await page.locator('#severity-filters > summary').click()
   await expect(page.getByText('Unknown', { exact: true })).toBeVisible()
-  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
   expect(await page.evaluate(() => history.length)).toBe(before + 1)
   await page.goBack()
   await expect(page).toHaveURL(/\/neighborhoods\?start=2025&end=2025/)
@@ -236,7 +262,7 @@ test('manual selection wins over a pending map resolution', async ({ page }) => 
   await expect(map).toBeVisible()
   await map.click({ position: { x: 100, y: 100 } })
   await expect.poll(() => requests).toBeGreaterThanOrEqual(1)
-  const picker = page.getByRole('combobox', { name: 'NEIGHBORHOOD' })
+  const picker = page.getByRole('combobox', { name: 'Neighborhood' })
   await picker.fill('Ballard')
   await picker.press('Enter')
   await expect(page).toHaveURL(/neighborhood=ballard/)
@@ -271,10 +297,11 @@ for (const route of ['neighborhoods', 'citywide']) {
     await page.goto(`/${route}?start=2020&end=2025`)
     await expect(page.locator('.leaflet-container')).toBeVisible()
     if (route === 'citywide') {
+      if (await page.locator('#severity-filters').getAttribute('open') === null) await page.locator('#severity-filters > summary').click()
       await page.getByText('Fatal', { exact: true }).click()
       await expect(page.getByRole('checkbox', { name: 'Fatal', exact: true })).toBeChecked()
       await page.getByRole('tab', { name: 'KDE density' }).click()
-      await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+      await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
     }
     const results = await new AxeBuilder({ page }).include('#main-content').analyze()
     expect(results.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([])
@@ -292,9 +319,9 @@ test('capture finish-review surface', async ({ page }, testInfo) => {
     animations: 'disabled',
   })
   await page.goto('/citywide?start=2018&end=2026&severity=serious-injury,fatal')
-  await expect(page.getByRole('heading', { name: 'Trace the citywide signal.' })).toBeVisible()
-  await expect(page.getByText('Spatial field')).toBeVisible()
-  await expect(page.getByText('Computing citywide analysis')).toBeHidden()
+  await expect(page.getByRole('heading', { name: 'Citywide Analysis' })).toBeVisible()
+  await expect(page.getByText('Collision map')).toBeVisible()
+  await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
   await page.screenshot({
     path: `../.impeccable/review/${testInfo.project.name}-citywide.png`,
     fullPage: true,
@@ -364,7 +391,7 @@ for (const navigation of ['years', 'grain']) {
     else {
       await page.getByRole('button', { name: 'Monthly' }).click()
       await expect(page).toHaveURL(/grain=monthly/)
-      await expect(page.getByRole('heading', { name: 'Seattle citywide · monthly collisions and severity burden' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Collision trends' })).toBeVisible()
     }
     const expected = new URL(page.url()).searchParams
     await expect(page.getByRole('complementary', { name: 'Seattle citywide context' })).toContainText(`${expected.get('start')}—${expected.get('end')}`)

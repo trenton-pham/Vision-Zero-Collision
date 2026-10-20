@@ -1,6 +1,7 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useTheme } from '../lib/theme'
 import { GeoJSON, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import { geoJSON, type PathOptions } from 'leaflet'
+import { DomEvent, geoJSON, type PathOptions } from 'leaflet'
 import type { Feature } from 'geojson'
 import type { NeighborhoodFeatureCollection, NeighborhoodMetricSet, NeighborhoodProperties } from '../lib/contracts'
 import type { MapMetric } from '../lib/mapMetrics'
@@ -15,13 +16,30 @@ function metricNumber(metric: NeighborhoodMetricSet | undefined, key: MapMetric)
 
 function FitSelected({ collection, selectedId, pulseKey }: { collection: NeighborhoodFeatureCollection; selectedId: string | null; pulseKey: number }) {
   const map = useMap()
-  useEffect(() => {
-    if (!selectedId) return
+  useLayoutEffect(() => {
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
+    observer.observe(map.getContainer())
+    return () => observer.disconnect()
+  }, [map])
+  useLayoutEffect(() => {
     const feature = collection.features.find((item) => item.properties.id === selectedId)
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (feature) map.fitBounds(geoJSON(feature).getBounds(), { padding: [42, 42], maxZoom: 14, animate: !reduceMotion })
+    const bounds = geoJSON(feature ?? collection).getBounds()
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: feature ? 14 : 11, animate: Boolean(feature) && !reduceMotion })
   }, [collection, map, pulseKey, selectedId])
   return null
+}
+
+function ResetMap({ collection }: { collection: NeighborhoodFeatureCollection }) {
+  const map = useMap()
+  const button = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (button.current) DomEvent.disableClickPropagation(button.current)
+  }, [])
+  return <button ref={button} className={styles.reset} type="button" onClick={() => {
+    const bounds = geoJSON(collection).getBounds()
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 11, animate: false })
+  }}>Reset map</button>
 }
 
 function ClickResolver({ onClick }: { onClick: (lat: number, lng: number) => void }) {
@@ -48,18 +66,21 @@ export function NeighborhoodMap({
   onResolve: (lat: number, lng: number) => void
   busy: boolean
 }) {
+  const { resolvedTheme } = useTheme()
+  const light = resolvedTheme === 'light'
   const byId = useMemo(() => new Map(metrics.map((metric) => [metric.id, metric])), [metrics])
-  const maximum = Math.max(1, ...metrics.map((metric) => metricNumber(metric, metricKey)))
+  const maximum = Math.max(0, ...metrics.map((metric) => metricNumber(metric, metricKey)))
   const style = (feature?: Feature<GeoJSON.Geometry, NeighborhoodProperties>): PathOptions => {
     const id = feature?.properties.id ?? ''
     const selected = id === selectedId
-    const ratio = Math.sqrt(metricNumber(byId.get(id), metricKey) / maximum)
+    const ratio = Math.sqrt(metricNumber(byId.get(id), metricKey) / Math.max(1, maximum))
     return {
-      color: selected ? '#2f84ff' : '#46627d',
+      color: selected ? (light ? '#1463c9' : '#2f84ff') : (light ? '#526779' : '#66839e'),
       weight: selected ? 3 : 1,
-      fillColor: selected ? '#155ec6' : `rgb(${10 + Math.round(12 * ratio)}, ${39 + Math.round(57 * ratio)}, ${60 + Math.round(102 * ratio)})`,
+      fillColor: selected ? (light ? '#1463c9' : '#155ec6') : light
+        ? `rgb(${218 - Math.round(137 * ratio)}, ${232 - Math.round(96 * ratio)}, ${242 - Math.round(43 * ratio)})`
+        : `rgb(${10 + Math.round(12 * ratio)}, ${39 + Math.round(57 * ratio)}, ${60 + Math.round(102 * ratio)})`,
       fillOpacity: selected ? 0.72 : 0.6,
-      className: selected && pulseKey > 0 ? styles.selectionPulsePath : undefined,
     }
   }
   return (
@@ -67,15 +88,16 @@ export function NeighborhoodMap({
       <MapContainer className={styles.map} center={CENTER} zoom={11} zoomControl attributionControl aria-label="Interactive Seattle neighborhood collision map">
         <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
         <GeoJSON
-          key={`${metricKey}-${selectedId}-${metrics.length}-${pulseKey}-${geometryRevision}`}
+          key={geometryRevision}
           data={collection}
           style={style}
         />
+        <ResetMap collection={collection}/>
         <ClickResolver onClick={onResolve}/>
         <FitSelected collection={collection} selectedId={selectedId} pulseKey={pulseKey}/>
       </MapContainer>
-      <div className={styles.legend} aria-hidden="true"><span>LOW</span><i/><span>HIGH</span></div>
-      <div className={styles.hint}>{busy ? 'RESOLVING LOCATION' : 'CLICK A POLYGON OR SEARCH BY NAME'}</div>
+      <div className={styles.legend} aria-label="Neighborhood map scale"><span>0</span><i/><span>{maximum.toLocaleString()} (highest)</span></div>
+      <div className={styles.hint}>{busy ? 'Finding neighborhood…' : 'Choose a neighborhood on the map or search by name'}</div>
     </div>
   )
 }

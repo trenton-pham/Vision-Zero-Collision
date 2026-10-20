@@ -6,7 +6,7 @@
   --panel-active: #102742;
   --text-primary: #f2f7fb;
   --text-secondary: #b8c7d5;
-  --text-muted: #7890a8;
+  --text-muted: #91a7bc;
   --border: #203247;
   --border-strong: #36506a;
   --selection: #2f84ff;
@@ -15,7 +15,36 @@
   --caution-soft: #2a2111;
   --fatal: #f05252;
   --focus: #79b6ff;
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --map-background: #06111c;
+  --map-tile-filter: grayscale(1) invert(1) brightness(.65) contrast(1.1);
+  --map-overlay: rgba(6, 17, 28, .96);
+  --map-fill-low: #0a273c;
+  --map-fill-high: #1660a2;
   --font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --font-body: 'IBM Plex Sans', system-ui, sans-serif;
 }
 
+:root[data-theme='light'] {
+  --canvas: #f3f6f8;
+  --panel-deep: #e8eef3;
+  --panel: #ffffff;
+  --panel-raised: #ffffff;
+  --panel-active: #e0ecfb;
+  --text-primary: #13283b;
+  --text-secondary: #40576a;
+  --text-muted: #526779;
+  --border: #c9d5df;
+  --border-strong: #93a8ba;
+  --selection: #1463c9;
+  --support: #007f8b;
+  --caution: #986000;
+  --caution-soft: #fff3dc;
+  --fatal: #bd333c;
+  --focus: #1463c9;
+  --map-background: #edf2f6;
+  --map-tile-filter: grayscale(1) brightness(1.03);
+  --map-overlay: rgba(243, 246, 248, .97);
+  --map-fill-low: #dae8f2;
+  --map-fill-high: #5188c7;
+}

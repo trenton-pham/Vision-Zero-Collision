@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { DatasetMetaProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
 import { receivedThrough } from '../lib/format'
+import { useTheme } from '../lib/theme'
 import { ErrorState, LoadingState } from './States'
 import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
@@ -20,7 +21,7 @@ function YearRangeControl() {
   return (
     <div className={styles.yearControl} aria-label="Observed year range">
       <div className={styles.yearMeta}>
-        <span>OBSERVED YEARS</span>
+        <span>Observed years</span>
         <strong>{draftYears[0]} — {draftYears[1]}</strong>
       </div>
       <Slider.Root
@@ -44,12 +45,13 @@ function YearRangeControl() {
         <Slider.Thumb className={styles.thumb} aria-label="Start year" />
         <Slider.Thumb className={`${styles.thumb} ${styles.partialThumb}`} aria-label="End year" />
       </Slider.Root>
-      {partial && <span className={styles.partial}>PARTIAL THROUGH {receivedThroughDate}</span>}
+      {partial && <span className={styles.partial}>Partial through {receivedThroughDate}</span>}
     </div>
   )
 }
 
 function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: ReactNode }) {
+  const { theme, setTheme } = useTheme()
   return (
       <div className={styles.shell}>
         <aside className={styles.rail} aria-label="Primary navigation">
@@ -59,24 +61,35 @@ function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: Rea
           </NavLink>
           <nav className={styles.nav}>
             <NavLink aria-label="Neighborhood Explorer" title="Neighborhood Explorer" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/neighborhoods">
-              <MapIcon/>
+              <MapIcon/><span>Neighborhoods</span>
             </NavLink>
             <NavLink aria-label="Citywide Analysis" title="Citywide Analysis" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/citywide">
-              <AnalysisIcon/>
+              <AnalysisIcon/><span>Citywide</span>
             </NavLink>
           </nav>
           <div className={styles.dataStatus}>
             <span className={styles.statusDot}/>
-            <span>DATA AS OF</span>
-            <strong>{dataAsOf ?? 'LOADING'}</strong>
+            <span>Data as of</span>
+            <strong>{dataAsOf ?? 'Loading'}</strong>
           </div>
         </aside>
         <header className={styles.header}>
-          <div className={styles.mobileBrand}><SeattleMark/><span>SEATTLE COLLISION</span></div>
+          <div className={styles.mobileBrand}><SeattleMark/><span>Seattle Collision</span></div>
           <nav className={styles.mobileNav} aria-label="Mobile navigation">
             <NavLink to="/neighborhoods">Neighborhoods</NavLink>
             <NavLink to="/citywide">Citywide</NavLink>
           </nav>
+          <label className={styles.themeControl}>
+            <span>Appearance</span>
+            <select value={theme} onChange={(event) => {
+              const value = event.target.value
+              if (value === 'system' || value === 'light' || value === 'dark') setTheme(value)
+            }}>
+              <option value="system">System</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>
           {dataAsOf && <YearRangeControl/>}
         </header>
         <main id="main-content" className={styles.main}>{children}</main>

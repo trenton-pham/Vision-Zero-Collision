@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { TrendChart } from '../src/components/TrendChart'
 import type { AnnualMetric, DatasetMeta } from '../src/lib/contracts'
@@ -36,14 +37,23 @@ const monthly = [1, 2].map((month) => ({
 }))
 
 describe('TrendChart partial-year metadata', () => {
+  it('marks incomplete annual observations and exposes their exact values', async () => {
+    const user = userEvent.setup()
+    render(<DatasetMetaProvider meta={meta}><TrendChart annual={annual} monthly={monthly} grain="annual"/></DatasetMetaProvider>)
+    expect(screen.getByRole('img')).toHaveAccessibleName(/Dashed segments distinguish incomplete annual observations/)
+    await user.click(screen.getByText('View annual chart data'))
+    expect(screen.getByRole('table')).toHaveAccessibleName('Annual collisions and weighted severity totals')
+    expect(screen.getByRole('cell', { name: '10' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Partial year' })).toBeInTheDocument()
+  })
   it('uses the current dataset year and received-through date', () => {
     render(
       <DatasetMetaProvider meta={meta}>
-        <TrendChart annual={annual} monthly={monthly} grain="monthly" pulseKey={0}/>
+        <TrendChart annual={annual} monthly={monthly} grain="monthly"/>
       </DatasetMetaProvider>,
     )
 
-    expect(screen.getByText('2027 PARTIAL · RECEIVED THROUGH FEB 28')).toBeInTheDocument()
+    expect(screen.getByText(/2027 partial · received through FEB 28/i)).toBeInTheDocument()
     expect(screen.getByRole('img')).toHaveAccessibleName(/2027 observations are partial/i)
   })
 })

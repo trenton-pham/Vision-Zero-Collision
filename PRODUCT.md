@@ -47,7 +47,7 @@ The product joins deterministic neighborhood assignment with transparent, route-
 
 ## Brand Commitments
 
-The binding visual direction is a “Civic Safety Operations Console” derived from the supplied dark transit-operations and scientific-instrument references. The system uses a near-black navy field, hairline blue-gray dividers, mostly square panels with 0–4 px radii, condensed display typography, restrained body typography, and tabular numerics. Electric blue denotes selection, amber denotes partial or caution states, red is reserved for fatalities, and cyan supports analytical context. Glassmorphism, pill-heavy controls, generic rounded cards, oversized marketing heroes, and inherited Streamlit styling are explicitly excluded.
+The binding visual direction is a "Civic Safety Operations Console" based on the supplied transit-operations and scientific-instrument references. Users can choose System, Light or Dark. Dark mode uses navy backgrounds; light mode uses pale backgrounds and navy text. Both use thin blue-gray dividers, mostly square panels, condensed headings, sentence-case body labels and tabular numbers. Blue denotes selection, amber marks partial data or caution, red marks fatalities or errors, and cyan supports analysis. Avoid glass effects, pill controls, rounded cards, oversized marketing headers and inherited Streamlit styling.
 
 ## Evidence on Hand
 

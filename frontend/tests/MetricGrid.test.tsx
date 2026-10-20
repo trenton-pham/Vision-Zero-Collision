@@ -20,6 +20,12 @@ const metrics: NeighborhoodMetricSet = {
 }
 
 describe('MetricGrid', () => {
+  it('keeps labels visible and uses missing values while statistics load', () => {
+    render(<MetricGrid metrics={undefined} variant="inspector"/>)
+    expect(screen.getByText('Fatalities').closest('div')).toHaveTextContent('Fatalities—')
+    expect(screen.getByText('Collisions').closest('div')).toHaveTextContent('Collisions—')
+    expect(screen.queryByText('0', { exact: true })).not.toBeInTheDocument()
+  })
   it('removes situational distribution metrics from the inspector variant', () => {
     render(<MetricGrid metrics={metrics} variant="inspector"/>)
 

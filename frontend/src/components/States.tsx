@@ -2,7 +2,7 @@ import { AlertIcon } from './Icons'
 import styles from './States.module.css'
 
 export function LoadingState({ label = 'Loading observed data' }: { label?: string }) {
-  return <div className={styles.state} role="status"><span className={styles.loader}/><strong>{label}</strong><span>Reading versioned dashboard artifacts.</span></div>
+  return <div className={styles.state} role="status"><span className={styles.loader}/><strong>{label}</strong><span>Loading the latest available collision records.</span></div>
 }
 
 export function ErrorState({ error, onRetry }: { error: Error; onRetry?: () => void }) {

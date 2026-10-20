@@ -28,6 +28,10 @@ __pycache__/
 .ruff_cache/
 *.egg-info/
 
-.impeccable/review/
+.impeccable/
+.audit/
+.playwright-mcp/
+DESIGN.md
+FIGMA.md
 
 .DS_Store
