@@ -23,7 +23,6 @@
 .methodNote p { margin: 0 0 12px; }
 details.methodNote { padding: 0 16px; }
 details.methodNote > summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
-.updated { animation: data-arrive 140ms ease-out; }
 .trendSection { margin-top: 24px; border: 1px solid var(--border); background: var(--panel); }
 .trendHead { padding: 20px; display: flex; justify-content: space-between; align-items: start; gap: 24px; border-bottom: 1px solid var(--border); }
 .trendHead h2 { font-size: 1.5rem; }
@@ -37,8 +36,6 @@ details.methodNote > summary { min-height: 44px; padding: 12px 0; cursor: pointe
 .comparison span { grid-column: 1 / -1; color: var(--text-secondary); font-size: .75rem; }
 .comparison strong { color: var(--support); font-weight: 500; }
 .comparison strong.bad { color: var(--fatal); }
-@keyframes data-arrive { from { opacity: .65; } to { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .updated { animation-duration: 80ms; } }
 @media (max-width: 1200px) { .command { grid-template-columns: 1fr 1fr; } .metricSelect { grid-column: 2; } }
 @media (max-width: 960px) {
   .workspace { display: flex; flex-direction: column; gap: 20px; }

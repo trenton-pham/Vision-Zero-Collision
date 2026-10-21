@@ -67,11 +67,16 @@ export function NeighborhoodPicker({
           autoComplete="off"
           placeholder={`Search ${options.length} neighborhoods`}
           aria-describedby={open ? `${listId}-count` : undefined}
-          onPointerDown={() => { setPopup('pointer'); setActiveIndex(0) }}
+          onPointerDown={() => {
+            if (open) return
+            setPopup('pointer')
+            setActiveIndex(0)
+          }}
           value={query}
           onFocus={() => { setPopup((current) => current === 'pointer' ? 'pointer' : 'keyboard'); setActiveIndex(0) }}
           onChange={(event) => { setQuery(event.target.value); setPopup('keyboard'); setActiveIndex(0) }}
           onKeyDown={(event) => {
+            if (open) setPopup('keyboard')
             if (event.key === 'ArrowDown') { event.preventDefault(); setPopup('keyboard'); setActiveIndex((value) => Math.max(0, Math.min(open ? value + 1 : 0, matches.length - 1))) }
             if (event.key === 'ArrowUp') { event.preventDefault(); setPopup('keyboard'); setActiveIndex((value) => Math.max(value - 1, 0)) }
             if (event.key === 'Enter' && open && activeMatch) { event.preventDefault(); choose(activeMatch) }

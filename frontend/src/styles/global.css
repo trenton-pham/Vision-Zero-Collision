@@ -13,12 +13,12 @@ button, a, input, select, [tabindex] { outline-offset: 3px; }
 .skip-link { position: fixed; top: 8px; left: 8px; z-index: 9999; padding: 10px 14px; border: 1px solid var(--selection); background: var(--canvas); transform: translateY(-160%); }
 .skip-link:focus { transform: translateY(0); }
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0,0,0,0) !important; white-space: nowrap !important; border: 0 !important; }
-@media (pointer: fine), (pointer: coarse) {
-  button:not(:disabled):not([role="slider"]) { transition: transform 100ms var(--ease-out); }
-  button:not(:disabled):not([role="slider"]):active:not(:focus-visible) { transform: scale(.98); transition: none; }
-}
+html[data-input-modality="pointer"] :is(button:not(:disabled):not([aria-disabled="true"]):not([role="slider"]), .leaflet-control-zoom a:not(.leaflet-disabled):not([aria-disabled="true"]), [data-press-feedback]:not([aria-disabled="true"]):not(input:disabled + [data-press-feedback])) { transition: transform 100ms var(--ease-out); }
+html[data-input-modality="pointer"] :is(button:not(:disabled):not([aria-disabled="true"]):not([role="slider"]), .leaflet-control-zoom a:not(.leaflet-disabled):not([aria-disabled="true"])):active,
+html[data-input-modality="pointer"] label:active > [data-press-feedback]:not([aria-disabled="true"]):not(input:disabled + [data-press-feedback]) { transform: scale(.98); transition: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; }
-  button:not(:disabled):not([role="slider"]) { transition: opacity 80ms var(--ease-out); }
-  button:not(:disabled):not([role="slider"]):active:not(:focus-visible) { transform: none; opacity: .85; }
+  html[data-input-modality="pointer"] :is(button:not(:disabled):not([aria-disabled="true"]):not([role="slider"]), .leaflet-control-zoom a:not(.leaflet-disabled):not([aria-disabled="true"]), [data-press-feedback]:not([aria-disabled="true"]):not(input:disabled + [data-press-feedback])) { transition: opacity 80ms var(--ease-out); }
+  html[data-input-modality="pointer"] :is(button:not(:disabled):not([aria-disabled="true"]):not([role="slider"]), .leaflet-control-zoom a:not(.leaflet-disabled):not([aria-disabled="true"])):active,
+  html[data-input-modality="pointer"] label:active > [data-press-feedback]:not([aria-disabled="true"]):not(input:disabled + [data-press-feedback]) { transform: none; opacity: .85; transition: none; }
 }

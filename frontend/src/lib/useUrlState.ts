@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useDatasetMeta } from './dataset'
 import { isCitywideSeverity, type CitywideSeverity } from './severity'
 import { parseMapMetric, type MapMetric } from './mapMetrics'
+import { snapshotMotion, type MotionStamp } from './motion'
 
 function toYear(value: string | null, fallback: number, minimum: number, maximum: number) {
   if (value === null || value.trim() === '') return fallback
@@ -47,7 +48,7 @@ export function useDashboardParams() {
   }, [rawMetric, mapMetric, rawSeverity, canonicalSeverity, setSearchParams])
 
   const update = useCallback(
-    (changes: Record<string, string | number | null>) => {
+    (changes: Record<string, string | number | null>, motion = snapshotMotion()) => {
       setSearchParams((current) => {
         const next = new URLSearchParams(current)
         Object.entries(changes).forEach(([key, value]) => {
@@ -55,7 +56,7 @@ export function useDashboardParams() {
           else next.set(key, String(value))
         })
         return next
-      }, { replace: false })
+      }, { replace: false, state: { dashboardMotion: motion } })
     },
     [setSearchParams],
   )
@@ -71,7 +72,7 @@ export function useDashboardParams() {
     minimumYear,
     maximumYear,
     setYears: (start: number, end: number) => update({ start, end }),
-    setNeighborhood: (id: string | null) => update({ neighborhood: id }),
+    setNeighborhood: (id: string | null, motion?: MotionStamp) => update({ neighborhood: id }, motion),
     setMapMetric: (metric: MapMetric) => update({ metric }),
     setTrendGrain: (grain: 'annual' | 'monthly') => update({ grain: grain === 'annual' ? null : grain }),
     setCityLayer: (layer: 'heatmap' | 'kde') => update({ layer }),

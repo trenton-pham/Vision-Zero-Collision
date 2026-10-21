@@ -6,6 +6,7 @@ import { api } from '../lib/api'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { useDatasetMeta } from '../lib/dataset'
+import { snapshotMotion, useStatisticsFade, type MotionStamp, type StatisticsRetry } from '../lib/motion'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodMap } from '../components/NeighborhoodMap'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
@@ -40,8 +41,8 @@ export function NeighborhoodExplorer() {
     enabled: !state.neighborhood,
   })
 
-  function select(id: string | null, name?: string | null) {
-    state.setNeighborhood(id)
+  function select(id: string | null, name?: string | null, motion?: MotionStamp) {
+    state.setNeighborhood(id, motion)
     setSelectionPulse((value) => value + 1)
     setAnnouncement(id === state.neighborhood
       ? `${name ?? id ?? 'Seattle citywide'} selected. Statistics are unchanged.`
@@ -70,6 +71,7 @@ export function NeighborhoodExplorer() {
   }
 
   async function resolve(lat: number, lng: number) {
+    const motion = snapshotMotion()
     invalidateResolution()
     const committedLocation = currentSelection.current.location
     const requestLocation = `${committedLocation.pathname}${committedLocation.search}${committedLocation.hash}`
@@ -86,7 +88,7 @@ export function NeighborhoodExplorer() {
     try {
       const result = await api.resolveNeighborhood(lat, lng, controller.signal)
       if (!isCurrent()) return
-      currentSelection.current.select(result.id, result.name)
+      currentSelection.current.select(result.id, result.name, motion)
       if (!result.id) setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
     } catch (error) {
       if (isCurrent()) {
@@ -103,6 +105,9 @@ export function NeighborhoodExplorer() {
   const initialLoading = geo.isLoading || summary.isLoading
   const initialError = geo.error ?? summary.error
   const activeQuery = state.neighborhood ? context : citywideTrend
+  const statisticsIdentity = JSON.stringify([state.neighborhood, state.startYear, state.endYear])
+  const statisticsRetry = useRef<StatisticsRetry | null>(null)
+  const statistics = useStatisticsFade({ identity: statisticsIdentity, revision: activeQuery.dataUpdatedAt, ready: activeQuery.isSuccess, failed: activeQuery.isError && !activeQuery.isFetching, retry: statisticsRetry.current })
   const inspectorName = state.neighborhood
     ? context.data?.neighborhood.name ?? geo.data?.features.find((feature) => feature.properties.id === state.neighborhood)?.properties.name ?? 'Selected neighborhood'
     : 'Seattle citywide'
@@ -119,7 +124,7 @@ export function NeighborhoodExplorer() {
   }
 
   return (
-    <div className={styles.page}>
+    <div ref={statistics} className={styles.page}>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
       <section className={styles.command} aria-label="Neighborhood controls">
         <div>
@@ -154,12 +159,15 @@ export function NeighborhoodExplorer() {
               <h2>{inspectorName}</h2>
               <p>{state.startYear}—{state.endYear} · all severity levels</p>
             </div>
-            {activeQuery.error && <ErrorState error={activeQuery.error} onRetry={() => void activeQuery.refetch()}/>}
-            <div key={activeQuery.dataUpdatedAt} className={`${styles.valuePanel} ${activeQuery.data ? styles.updated : ''}`}>
+            {activeQuery.error && <ErrorState error={activeQuery.error} onRetry={() => {
+              statisticsRetry.current = { identity: statisticsIdentity, stamp: snapshotMotion(), afterRevision: activeQuery.dataUpdatedAt }
+              void activeQuery.refetch()
+            }}/>}
+            <div className={styles.valuePanel}>
               <div className={styles.primaryBurden}>
                 <span>Severity burden</span>
-                <strong>{metricValue(activeQuery.data?.metrics.totalSeverity ?? null)}</strong>
-                <small>{activeQuery.data ? `Mean ${metricValue(activeQuery.data.metrics.meanSeverity, 'decimal')} per collision` : <span role={activeQuery.isLoading ? 'status' : undefined}>{activeQuery.error ? 'Statistics unavailable' : `Loading ${inspectorName} statistics…`}</span>}</small>
+                <strong data-statistic>{metricValue(activeQuery.data?.metrics.totalSeverity ?? null)}</strong>
+                <small data-statistic>{activeQuery.data ? `Mean ${metricValue(activeQuery.data.metrics.meanSeverity, 'decimal')} per collision` : <span role={activeQuery.isLoading ? 'status' : undefined}>{activeQuery.error ? 'Statistics unavailable' : `Loading ${inspectorName} statistics…`}</span>}</small>
               </div>
             </div>
             <details id="neighborhood-details" className={styles.inspectorDetails} open={detailsOpen} onToggle={(event) => setDetailsOpen(event.currentTarget.open)}>
@@ -191,8 +199,8 @@ export function NeighborhoodExplorer() {
           {activeQuery.data && <div className={styles.comparison}>
             {activeQuery.data.comparison.status === 'available' ? <>
               <span>{activeQuery.data.comparison.firstPeriod.years.join(', ')} vs {activeQuery.data.comparison.lastPeriod.years.join(', ')} · annual averages</span>
-              <strong className={(activeQuery.data.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.collisionChangePercent)} collisions</strong>
-              <strong className={(activeQuery.data.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.severityChangePercent)} burden</strong>
+              <strong data-statistic className={(activeQuery.data.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.collisionChangePercent)} collisions</strong>
+              <strong data-statistic className={(activeQuery.data.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.severityChangePercent)} burden</strong>
             </> : <><span>Trend comparison</span><strong>Insufficient complete years</strong></>}
           </div>}
         </div>

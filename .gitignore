@@ -33,5 +33,6 @@ __pycache__/
 .playwright-mcp/
 DESIGN.md
 FIGMA.md
+PRODUCT.md
 
 .DS_Store

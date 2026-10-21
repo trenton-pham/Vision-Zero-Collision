@@ -7,6 +7,7 @@ import { DatasetMetaProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
 import { receivedThrough } from '../lib/format'
 import { useTheme } from '../lib/theme'
+import { useMotionInput } from '../lib/motion'
 import { ErrorState, LoadingState } from './States'
 import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
@@ -98,6 +99,7 @@ function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: Rea
 }
 
 export function AppShell() {
+  useMotionInput()
   const queryClient = useQueryClient()
   const previousVersion = useRef<string | null>(null)
   const meta = useQuery({

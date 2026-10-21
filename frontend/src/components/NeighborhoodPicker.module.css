@@ -10,7 +10,7 @@
   .clear:hover { color: var(--text-primary); }
   .list li:hover { color: var(--text-primary); background: var(--panel-active); }
 }
-.popup { position: absolute; top: calc(100% + 4px); left: 0; right: 0; border: 1px solid var(--border-strong); background: var(--panel-raised); }
+.popup { position: absolute; top: calc(100% + 4px); left: 0; right: 0; border: 1px solid var(--border-strong); background: var(--panel-raised); opacity: 1; transform: translateY(0); transform-origin: top left; }
 .resultCount { margin: 0; padding: 10px 14px; color: var(--text-secondary); font: 400 .75rem/1.5 var(--font-body); }
 .list { max-height: 320px; overflow: auto; margin: 0; padding: 4px; list-style: none; }
 .list li { min-height: 44px; display: flex; align-items: center; padding: 0 10px; color: var(--text-secondary); cursor: pointer; font: 400 .875rem/1.5 var(--font-body); }
@@ -18,9 +18,13 @@
 .list li[aria-selected="true"] { color: var(--selection); }
 .list li[aria-selected="true"]::after { content: 'Selected'; margin-left: auto; color: var(--text-secondary); font: 500 .75rem/1.4 var(--font-body); }
 .list .noResults { color: var(--text-muted); cursor: default; }
-.pointerEntrance { animation: pickerEnter 160ms var(--ease-out, cubic-bezier(.23, 1, .32, 1)); }
-@keyframes pickerEnter { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+.pointerEntrance { transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out); }
+@starting-style {
+  .pointerEntrance { opacity: 0; transform: translateY(-4px); }
+}
 @media (prefers-reduced-motion: reduce) {
-  .pointerEntrance { animation-name: pickerFade; animation-duration: 80ms; }
-  @keyframes pickerFade { from { opacity: .65; } to { opacity: 1; } }
+  .pointerEntrance { transition: opacity 80ms var(--ease-out); }
+  @starting-style {
+    .pointerEntrance { opacity: .65; transform: none; }
+  }
 }

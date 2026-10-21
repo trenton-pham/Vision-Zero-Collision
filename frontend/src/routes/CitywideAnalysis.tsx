@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CitywideMap } from '../components/CitywideMap'
@@ -9,6 +9,7 @@ import { api } from '../lib/api'
 import { integer, metricValue } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
+import { snapshotMotion, useStatisticsFade, type StatisticsRetry } from '../lib/motion'
 import styles from './CitywideAnalysis.module.css'
 
 function yearSpan(years: number[] | undefined) {
@@ -29,13 +30,20 @@ export function CitywideAnalysis() {
   const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error
   const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
   const latestCompleteDowntownYear = completeDowntownYears.at(-1)
+  const statisticsIdentity = JSON.stringify([state.startYear, state.endYear, [...state.severities].sort()])
+  const summaryRetry = useRef<StatisticsRetry | null>(null)
+  const shiftRetry = useRef<StatisticsRetry | null>(null)
+  const downtownRetry = useRef<StatisticsRetry | null>(null)
+  const summaryStatistics = useStatisticsFade({ identity: statisticsIdentity, revision: summary.dataUpdatedAt, ready: summary.isSuccess && !summary.isPlaceholderData, failed: summary.isError && !summary.isFetching, retry: summaryRetry.current, selector: '[data-statistics-summary] [data-statistic]' })
+  const shiftStatistics = useStatisticsFade<HTMLElement>({ identity: statisticsIdentity, revision: shift.dataUpdatedAt, ready: shift.isSuccess, failed: shift.isError && !shift.isFetching, retry: shiftRetry.current })
+  const downtownStatistics = useStatisticsFade<HTMLElement>({ identity: statisticsIdentity, revision: downtown.dataUpdatedAt, ready: downtown.isSuccess, failed: downtown.isError && !downtown.isFetching, retry: downtownRetry.current })
 
   function toggleSeverity(value: CitywideSeverity) {
     state.setSeverities(state.severities.includes(value) ? state.severities.filter((item) => item !== value) : [...state.severities, value])
   }
 
   return (
-    <div className={styles.page}>
+    <div ref={summaryStatistics} className={styles.page}>
       <section className={styles.command}>
         <div>
           <h1>Citywide Analysis</h1>
@@ -45,19 +53,25 @@ export function CitywideAnalysis() {
           <summary>Severity filters · {state.severities.length ? `${state.severities.length} selected` : 'all levels'}</summary>
           <fieldset className={styles.severity}>
             <legend className="sr-only">Severity</legend>
-            {CITYWIDE_SEVERITIES.map(([value, label]) => <label key={value}><input type="checkbox" checked={state.severities.includes(value)} onChange={() => toggleSeverity(value)}/><span><CheckIcon/>{label}</span></label>)}
+            {CITYWIDE_SEVERITIES.map(([value, label]) => <label key={value}><input type="checkbox" checked={state.severities.includes(value)} onChange={() => toggleSeverity(value)}/><span data-press-feedback><CheckIcon/>{label}</span></label>)}
             {state.severities.length > 0 && <button type="button" onClick={() => state.setSeverities([])}>Show all levels</button>}
           </fieldset>
         </details>
       </section>
 
       {summary.isLoading && <LoadingState label="Computing citywide analysis"/>}
-      {!summary.isLoading && (summary.isFetching || layerQuery.isFetching || shift.isFetching || downtown.isFetching) && <p className={styles.updating} role="status">Computing citywide analysis. Updating the selected years and severity levels…</p>}
-      {firstError && <ErrorState error={firstError} onRetry={() => { void summary.refetch(); void layerQuery.refetch(); void shift.refetch(); void downtown.refetch() }}/>}
+      <p className={styles.updating} role="status">{!summary.isLoading && (summary.isFetching || layerQuery.isFetching || shift.isFetching || downtown.isFetching) ? 'Computing citywide analysis…' : ''}</p>
+      {firstError && <ErrorState error={firstError} onRetry={() => {
+        const stamp = snapshotMotion()
+        summaryRetry.current = { identity: statisticsIdentity, stamp, afterRevision: summary.dataUpdatedAt }
+        shiftRetry.current = { identity: statisticsIdentity, stamp, afterRevision: shift.dataUpdatedAt }
+        downtownRetry.current = { identity: statisticsIdentity, stamp, afterRevision: downtown.dataUpdatedAt }
+        void summary.refetch(); void layerQuery.refetch(); void shift.refetch(); void downtown.refetch()
+      }}/>}
       {summary.data && !summary.isLoading && (
         <>
           {summary.data.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning} · excluded from spatial shift and downtown comparison</div>)}
-          <div aria-busy={summary.isFetching}><MetricGrid metrics={summary.data.metrics} compact variant="headline"/></div>
+          <div data-statistics-summary aria-busy={summary.isFetching}><MetricGrid metrics={summary.data.metrics} compact variant="headline"/></div>
           <div className={styles.workspace} aria-busy={summary.isFetching || layerQuery.isFetching}>
             <section className={styles.mapColumn}>
               <div className={styles.panelBar}>
@@ -81,7 +95,7 @@ export function CitywideAnalysis() {
             <aside className={styles.analysisRail}>
               <section className={styles.analysisCard}>
                 <h2 className={styles.cardLabel}>Complete-year spatial shift</h2>
-                <strong className={styles.shiftValue}>{shift.data?.shiftMeters == null ? '—' : `${integer.format(shift.data.shiftMeters)} m`}</strong>
+                <strong ref={shiftStatistics} data-statistic={shift.data?.shiftMeters != null ? '' : undefined} className={styles.shiftValue}>{shift.data?.shiftMeters == null ? '—' : `${integer.format(shift.data.shiftMeters)} m`}</strong>
                 <p>{shift.data?.status === 'available' ? `${yearSpan(shift.data.before.years)} average collision location to ${yearSpan(shift.data.after.years)} average location.` : 'The selected range needs complete years on both sides of 2020.'}</p>
                 {shift.data?.excludedYears.length ? <small>Excluded: {shift.data.excludedYears.join(', ')} partial</small> : null}
               </section>
@@ -103,11 +117,11 @@ export function CitywideAnalysis() {
               </section>
               <section className={styles.analysisCard}>
                 <h2 className={styles.cardLabel}>Downtown mean severity</h2>
-                <div className={styles.splitMetric}><strong>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong><span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'no complete year in range' : 'Loading comparison'}</span></div>
+                <div className={styles.splitMetric}><strong ref={downtownStatistics} data-statistic={latestCompleteDowntownYear?.downtownMeanSeverity != null ? '' : undefined}>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong><span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'no complete year in range' : 'Loading comparison'}</span></div>
               </section>
             </aside>
           </div>
-          <details className={styles.secondaryMetrics}>
+          <details data-statistics-summary className={styles.secondaryMetrics}>
             <summary>More collision measures</summary>
             <MetricGrid metrics={summary.data.metrics} variant="secondary"/>
             <p className={styles.mapNote}>Severity burden = injuries + 3 × serious injuries + 5 × fatalities. Mean severity divides this total by collisions. Neighborhood Explorer always includes every severity level.</p>

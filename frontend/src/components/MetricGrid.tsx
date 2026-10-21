@@ -28,7 +28,7 @@ export function MetricGrid({ metrics, compact = false, variant = 'default' }: Pr
     <dl className={`${styles.grid} ${compact ? styles.compact : ''}`}>
       {cells.map(({ label, value, tone }) => (
         <div className={`${styles.cell} ${tone ? styles[tone] : ''}`} key={label}>
-          <dt>{label}</dt><dd>{value}</dd>
+          <dt>{label}</dt><dd data-statistic>{value}</dd>
         </div>
       ))}
     </dl>
