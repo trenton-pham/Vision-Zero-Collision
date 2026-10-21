@@ -6,7 +6,7 @@ import { api } from '../lib/api'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { useDatasetMeta } from '../lib/dataset'
-import { snapshotMotion, useStatisticsFade, type MotionStamp, type StatisticsRetry } from '../lib/motion'
+import { snapshotMotion, useContentEntrance, useGrainReveal, useRouteEntrance, useStatisticsFade, type MotionStamp, type StatisticsRetry } from '../lib/motion'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodMap } from '../components/NeighborhoodMap'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
@@ -18,6 +18,7 @@ export function NeighborhoodExplorer() {
   const state = useDashboardParams()
   const meta = useDatasetMeta()
   const location = useLocation()
+  const entrance = useRouteEntrance()
   const [announcement, setAnnouncement] = useState('')
   const [resolving, setResolving] = useState(false)
   const [selectionPulse, setSelectionPulse] = useState(0)
@@ -108,6 +109,10 @@ export function NeighborhoodExplorer() {
   const statisticsIdentity = JSON.stringify([state.neighborhood, state.startYear, state.endYear])
   const statisticsRetry = useRef<StatisticsRetry | null>(null)
   const statistics = useStatisticsFade({ identity: statisticsIdentity, revision: activeQuery.dataUpdatedAt, ready: activeQuery.isSuccess, failed: activeQuery.isError && !activeQuery.isFetching, retry: statisticsRetry.current })
+  const mapEntrance = useContentEntrance<HTMLElement>(!!geo.data && summary.isSuccess && !summary.isPlaceholderData, entrance)
+  const inspectorEntrance = useContentEntrance<HTMLDivElement>(activeQuery.isSuccess, entrance)
+  const trendEntrance = useContentEntrance<HTMLDivElement>(activeQuery.isSuccess, entrance)
+  const grainReveal = useGrainReveal(state.trendGrain)
   const inspectorName = state.neighborhood
     ? context.data?.neighborhood.name ?? geo.data?.features.find((feature) => feature.properties.id === state.neighborhood)?.properties.name ?? 'Selected neighborhood'
     : 'Seattle citywide'
@@ -146,7 +151,7 @@ export function NeighborhoodExplorer() {
       {initialError && <ErrorState error={initialError} onRetry={() => { void geo.refetch(); void summary.refetch() }}/>}
       {geo.data && summary.data && (
         <div className={styles.workspace}>
-          <section className={styles.mapPanel} aria-label="Neighborhood map">
+          <section ref={mapEntrance} className={styles.mapPanel} aria-label="Neighborhood map">
             <div className={styles.panelLabel}><span>{summary.isPlaceholderData ? 'Updating map for selected years…' : '94 Seattle neighborhoods'}</span><strong>{MAP_METRICS.find(([value]) => value === state.mapMetric)?.[1]}</strong></div>
             <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedId={state.neighborhood} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/>
           </section>
@@ -163,31 +168,33 @@ export function NeighborhoodExplorer() {
               statisticsRetry.current = { identity: statisticsIdentity, stamp: snapshotMotion(), afterRevision: activeQuery.dataUpdatedAt }
               void activeQuery.refetch()
             }}/>}
-            <div className={styles.valuePanel}>
-              <div className={styles.primaryBurden}>
-                <span>Severity burden</span>
-                <strong data-statistic>{metricValue(activeQuery.data?.metrics.totalSeverity ?? null)}</strong>
-                <small data-statistic>{activeQuery.data ? `Mean ${metricValue(activeQuery.data.metrics.meanSeverity, 'decimal')} per collision` : <span role={activeQuery.isLoading ? 'status' : undefined}>{activeQuery.error ? 'Statistics unavailable' : `Loading ${inspectorName} statistics…`}</span>}</small>
+            <div ref={inspectorEntrance}>
+              <div className={styles.valuePanel}>
+                <div className={styles.primaryBurden}>
+                  <span>Severity burden</span>
+                  <strong data-statistic>{metricValue(activeQuery.data?.metrics.totalSeverity ?? null)}</strong>
+                  <small data-statistic>{activeQuery.data ? `Mean ${metricValue(activeQuery.data.metrics.meanSeverity, 'decimal')} per collision` : <span role={activeQuery.isLoading ? 'status' : undefined}>{activeQuery.error ? 'Statistics unavailable' : `Loading ${inspectorName} statistics…`}</span>}</small>
+                </div>
               </div>
-            </div>
-            <details id="neighborhood-details" className={styles.inspectorDetails} open={detailsOpen} onToggle={(event) => setDetailsOpen(event.currentTarget.open)}>
-              <summary>Collision and injury details</summary>
-              {activeQuery.data?.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning}</div>)}
-              {!activeQuery.data && meta.partialYears.some((year) => year >= state.startYear && year <= state.endYear) && <div className={styles.warning}>Partial-year observations are excluded from trend comparisons.</div>}
-              <MetricGrid metrics={activeQuery.data?.metrics} variant="inspector"/>
-              <details className={styles.methodNote}>
-                <summary>About these measures</summary>
-                <p>Severity burden = injuries + 3 × serious injuries + 5 × fatalities. It is a weighted total, not a measure of future risk.</p>
-                <p>{state.neighborhood
-                  ? 'Neighborhood results include all severity levels, independent of Citywide Analysis filters.'
-                  : 'Seattle totals include every collision record, including records not assigned to a neighborhood. Select a neighborhood to compare local conditions.'}</p>
+              <details id="neighborhood-details" className={styles.inspectorDetails} open={detailsOpen} onToggle={(event) => setDetailsOpen(event.currentTarget.open)}>
+                <summary>Collision and injury details</summary>
+                {activeQuery.data?.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning}</div>)}
+                {!activeQuery.data && meta.partialYears.some((year) => year >= state.startYear && year <= state.endYear) && <div className={styles.warning}>Partial-year observations are excluded from trend comparisons.</div>}
+                <MetricGrid metrics={activeQuery.data?.metrics} variant="inspector"/>
+                <details className={styles.methodNote}>
+                  <summary>About these measures</summary>
+                  <p>Severity burden = injuries + 3 × serious injuries + 5 × fatalities. It is a weighted total, not a measure of future risk.</p>
+                  <p>{state.neighborhood
+                    ? 'Neighborhood results include all severity levels, independent of Citywide Analysis filters.'
+                    : 'Seattle totals include every collision record, including records not assigned to a neighborhood. Select a neighborhood to compare local conditions.'}</p>
+                </details>
               </details>
-            </details>
+            </div>
           </aside>
         </div>
       )}
 
-      <section className={styles.trendSection} aria-label={`${trendScope} collision trend`}>
+      <section data-motion-surface className={styles.trendSection} aria-label={`${trendScope} collision trend`}>
         <div className={styles.trendHead}>
           <div className={styles.trendTitle}>
             <div><h2>Collision trends</h2><p>{trendScope} · {state.trendGrain} observations</p></div>
@@ -204,10 +211,10 @@ export function NeighborhoodExplorer() {
             </> : <><span>Trend comparison</span><strong>Insufficient complete years</strong></>}
           </div>}
         </div>
-        <div className={styles.trendBody} aria-busy={activeQuery.isFetching}>
+        <div ref={trendEntrance} className={styles.trendBody} aria-busy={activeQuery.isFetching}>
           {activeQuery.isLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
           {activeQuery.error && !activeQuery.data && <p className={styles.methodNote}>Trend unavailable. Retry the statistics request above to restore this chart.</p>}
-          {activeQuery.data && <TrendChart annual={activeQuery.data.annual} monthly={activeQuery.data.monthly} grain={state.trendGrain}/>}
+          {activeQuery.data && <TrendChart chartRef={grainReveal} annual={activeQuery.data.annual} monthly={activeQuery.data.monthly} grain={state.trendGrain}/>}
         </div>
       </section>
     </div>

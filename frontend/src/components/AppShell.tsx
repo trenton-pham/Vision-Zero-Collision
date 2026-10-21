@@ -1,16 +1,27 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate, type NavLinkProps } from 'react-router-dom'
 import { api } from '../lib/api'
 import { DatasetMetaProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
 import { receivedThrough } from '../lib/format'
 import { useTheme } from '../lib/theme'
-import { useMotionInput } from '../lib/motion'
+import { snapshotMotion, useMotionInput } from '../lib/motion'
 import { ErrorState, LoadingState } from './States'
 import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
+
+function DashboardLink({ to, ...props }: Omit<NavLinkProps, 'to' | 'onClick'> & { to: string }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  return <NavLink {...props} to={to} onClick={(event) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
+      || (props.target && props.target !== '_self') || location.pathname === to) return
+    event.preventDefault()
+    navigate(to, { state: { dashboardMotion: snapshotMotion(), dashboardEntry: true } })
+  }}/>
+}
 
 function YearRangeControl() {
   const { startYear, endYear, minimumYear, maximumYear, setYears } = useDashboardParams()
@@ -20,7 +31,7 @@ function YearRangeControl() {
   const partial = meta.partialYears.includes(draftYears[1])
   const receivedThroughDate = receivedThrough(meta.dataAsOf)
   return (
-    <div className={styles.yearControl} aria-label="Observed year range">
+    <div data-motion-controls className={styles.yearControl} aria-label="Observed year range">
       <div className={styles.yearMeta}>
         <span>Observed years</span>
         <strong>{draftYears[0]} — {draftYears[1]}</strong>
@@ -56,17 +67,17 @@ function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: Rea
   return (
       <div className={styles.shell}>
         <aside className={styles.rail} aria-label="Primary navigation">
-          <NavLink className={styles.brand} to="/neighborhoods" aria-label="Seattle Collision Dashboard">
+          <DashboardLink className={styles.brand} to="/neighborhoods" aria-label="Seattle Collision Dashboard">
             <SeattleMark />
             <span>SCD</span>
-          </NavLink>
+          </DashboardLink>
           <nav className={styles.nav}>
-            <NavLink aria-label="Neighborhood Explorer" title="Neighborhood Explorer" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/neighborhoods">
+            <DashboardLink aria-label="Neighborhood Explorer" title="Neighborhood Explorer" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/neighborhoods">
               <MapIcon/><span>Neighborhoods</span>
-            </NavLink>
-            <NavLink aria-label="Citywide Analysis" title="Citywide Analysis" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/citywide">
+            </DashboardLink>
+            <DashboardLink aria-label="Citywide Analysis" title="Citywide Analysis" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/citywide">
               <AnalysisIcon/><span>Citywide</span>
-            </NavLink>
+            </DashboardLink>
           </nav>
           <div className={styles.dataStatus}>
             <span className={styles.statusDot}/>
@@ -77,8 +88,8 @@ function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: Rea
         <header className={styles.header}>
           <div className={styles.mobileBrand}><SeattleMark/><span>Seattle Collision</span></div>
           <nav className={styles.mobileNav} aria-label="Mobile navigation">
-            <NavLink to="/neighborhoods">Neighborhoods</NavLink>
-            <NavLink to="/citywide">Citywide</NavLink>
+            <DashboardLink to="/neighborhoods">Neighborhoods</DashboardLink>
+            <DashboardLink to="/citywide">Citywide</DashboardLink>
           </nav>
           <label className={styles.themeControl}>
             <span>Appearance</span>

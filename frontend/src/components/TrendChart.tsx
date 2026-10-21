@@ -2,12 +2,14 @@ import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ResponsiveCont
 import type { AnnualMetric, MonthlyMetric } from '../lib/contracts'
 import { useDatasetMeta } from '../lib/dataset'
 import { receivedThrough } from '../lib/format'
+import type { Ref } from 'react'
 import styles from './TrendChart.module.css'
 
 type Props = {
   annual: AnnualMetric[]
   monthly: MonthlyMetric[]
   grain: 'annual' | 'monthly'
+  chartRef?: Ref<HTMLDivElement>
 }
 
 function monthLabel(value: unknown) {
@@ -26,7 +28,7 @@ function monthTick(value: unknown) {
   return `${shortMonth} '${String(year).slice(-2)}`
 }
 
-export function TrendChart({ annual, monthly, grain }: Props) {
+export function TrendChart({ annual, monthly, grain, chartRef }: Props) {
   const meta = useDatasetMeta()
   const data = grain === 'monthly' ? monthly : annual
   const xKey = grain === 'monthly' ? 'period' : 'year'
@@ -42,7 +44,7 @@ export function TrendChart({ annual, monthly, grain }: Props) {
   if (finalMonth && !monthlyTicks.includes(finalMonth)) monthlyTicks.push(finalMonth)
   return (
     <div>
-      <div className={styles.chart} role="img" aria-label={`${grain === 'monthly' ? 'Monthly' : 'Annual'} trend chart. Blue area shows collision count. Teal line shows total severity burden. ${partial ? `The ${partialYear} observations are partial. ${grain === 'annual' ? 'Dashed segments distinguish incomplete annual observations.' : ''}` : ''}`}>
+      <div ref={chartRef} className={styles.chart} role="img" aria-label={`${grain === 'monthly' ? 'Monthly' : 'Annual'} trend chart. Blue area shows collision count. Teal line shows total severity burden. ${partial ? `The ${partialYear} observations are partial. ${grain === 'annual' ? 'Dashed segments distinguish incomplete annual observations.' : ''}` : ''}`}>
         <div className={styles.legend} aria-hidden="true">
           <span><i className={styles.collisionSwatch}/>Collisions</span>
           <span><i className={styles.severitySwatch}/>Severity burden</span>
