@@ -1,50 +1,34 @@
 import { expect, test } from '@playwright/test'
 import { z } from 'zod'
-import {
-  citywideSummarySchema,
-  citywideTrendContextSchema,
-  datasetMetaSchema,
-  downtownComparisonResponseSchema,
-  heatmapResponseSchema,
-  kdeResponseSchema,
-  neighborhoodContextSchema,
-  neighborhoodFeatureCollectionSchema,
-  neighborhoodMetricSetSchema,
-  resolveResponseSchema,
-  spatialShiftResponseSchema,
-} from '../../src/lib/contracts'
+import { citywideBundleSchema, datasetMetaSchema, explorerBundleSchema, neighborhoodBundleSchema, neighborhoodFeatureCollectionSchema, releaseManifestSchema, resolverBundleSchema } from '../../src/lib/contracts'
 
-test('all response schemas accept real local endpoint payloads', async ({ request }) => {
+test('all static schemas accept real local release payloads', async ({ request }) => {
+  const manifest = releaseManifestSchema.parse(await (await request.get('/data/current.json')).json())
+  const root = `/data/releases/${manifest.releaseId}`
   const endpoints: { path: string; schema: z.ZodType }[] = [
-    { path: '/api/meta', schema: datasetMetaSchema },
-    { path: '/api/neighborhoods/geojson', schema: neighborhoodFeatureCollectionSchema },
-    { path: '/api/neighborhoods/resolve?lat=47.668&lng=-122.386', schema: resolveResponseSchema },
-    { path: '/api/neighborhoods/resolve?lat=0&lng=0', schema: resolveResponseSchema },
+    { path: 'meta.json', schema: datasetMetaSchema },
+    { path: 'neighborhoods.geojson', schema: neighborhoodFeatureCollectionSchema },
+    { path: 'resolver.json', schema: resolverBundleSchema },
+    { path: 'neighborhoods/ballard.json', schema: neighborhoodBundleSchema },
   ]
-  for (const range of ['start_year=2015&end_year=2026', 'start_year=2025&end_year=2025', 'start_year=2026&end_year=2026']) {
-    endpoints.push(
-      { path: `/api/neighborhoods/summary?${range}`, schema: z.array(neighborhoodMetricSetSchema) },
-      { path: `/api/neighborhoods/ballard/context?${range}`, schema: neighborhoodContextSchema },
-      { path: `/api/neighborhoods/citywide-trend?${range}`, schema: citywideTrendContextSchema },
-      { path: `/api/citywide/summary?${range}`, schema: citywideSummarySchema },
-      { path: `/api/citywide/heatmap?${range}&severity=unknown`, schema: heatmapResponseSchema },
-      { path: `/api/citywide/kde?${range}&severity=fatal`, schema: kdeResponseSchema },
-      { path: `/api/citywide/spatial-shift?${range}`, schema: spatialShiftResponseSchema },
-      { path: `/api/citywide/downtown-comparison?${range}`, schema: downtownComparisonResponseSchema },
-    )
+  for (const range of ['2015-2026', '2025-2025', '2026-2026']) {
+    endpoints.push({ path: `explorer/${range}.json`, schema: explorerBundleSchema })
+    for (const mask of [0, 8, 16, 31]) endpoints.push({ path: `citywide/${range}/${mask}.json`, schema: citywideBundleSchema })
   }
   for (const { path, schema } of endpoints) {
-    const response = await request.get(path)
+    expect(manifest.files[path], path).toBeDefined()
+    const response = await request.get(`${root}/${path}`)
     expect(response.ok(), path).toBe(true)
-    const payload: unknown = await response.json()
-    expect(schema.safeParse(payload).success, path).toBe(true)
+    const body = await response.body()
+    expect(body.length).toBe(manifest.files[path]?.size)
+    const checksum = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new Uint8Array(body))), (value) => value.toString(16).padStart(2, '0')).join('')
+    expect(checksum).toBe(manifest.files[path]?.sha256)
+    expect(schema.safeParse(await response.json()).success, path).toBe(true)
   }
-  const response = await request.get('/api/citywide/spatial-shift?start_year=2026&end_year=2026')
-  const payload: unknown = await response.json()
-  const shift = spatialShiftResponseSchema.parse(payload)
-  expect(shift.status).toBe('insufficient_periods')
-  expect(shift.before.collisionCount).toBe(0)
-  expect(shift.after.collisionCount).toBe(0)
+  const bundle = citywideBundleSchema.parse(await (await request.get(`${root}/citywide/2026-2026/0.json`)).json())
+  expect(bundle.spatialShift.status).toBe('insufficient_periods')
+  expect(bundle.spatialShift.before.collisionCount).toBe(0)
+  expect(bundle.spatialShift.after.collisionCount).toBe(0)
 })
 
 test('invalid map links normalize without adding a history entry', async ({ page }) => {

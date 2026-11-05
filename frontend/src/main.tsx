@@ -12,6 +12,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { App } from './App'
 import { ThemeProvider } from './lib/theme'
 
+window.addEventListener('vite:preloadError', (event) => {
+  const key = 'collision-dashboard-chunk-reload'
+  const failedBuild = `${import.meta.url}\n${window.location.href}`
+  if (sessionStorage.getItem(key) === failedBuild) return
+  sessionStorage.setItem(key, failedBuild)
+  event.preventDefault()
+  window.location.reload()
+})
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 60_000, retry: 1, refetchOnWindowFocus: false } },
 })

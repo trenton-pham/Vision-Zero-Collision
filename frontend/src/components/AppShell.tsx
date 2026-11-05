@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
 import { NavLink, Outlet, useLocation, useNavigate, type NavLinkProps } from 'react-router-dom'
-import { api } from '../lib/api'
-import { DatasetMetaProvider, useDatasetMeta } from '../lib/dataset'
+import { api, ReleaseUnavailableError } from '../lib/api'
+import { ReleaseProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
 import { receivedThrough } from '../lib/format'
 import { useTheme } from '../lib/theme'
@@ -112,31 +112,26 @@ function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: Rea
 export function AppShell() {
   useMotionInput()
   const queryClient = useQueryClient()
-  const previousVersion = useRef<string | null>(null)
-  const meta = useQuery({
-    queryKey: ['meta'],
-    queryFn: ({ signal }) => api.meta(signal),
+  const recoveredRelease = useRef<string | null>(null)
+  const release = useQuery({
+    queryKey: ['release'],
+    queryFn: ({ signal }) => api.release(signal),
     staleTime: 300_000,
     refetchInterval: 300_000,
   })
+  const recoverRelease = useCallback((error: unknown) => {
+    if (!(error instanceof ReleaseUnavailableError) || error.releaseId !== release.data?.releaseId || recoveredRelease.current === error.releaseId) return
+    recoveredRelease.current = error.releaseId
+    void queryClient.fetchQuery({ queryKey: ['release'], queryFn: ({ signal }) => api.release(signal), staleTime: 0 }).catch(() => {})
+  }, [queryClient, release.data?.releaseId])
 
-  useEffect(() => {
-    const nextVersion = meta.data?.datasetVersion
-    if (!nextVersion) return
-    if (previousVersion.current && previousVersion.current !== nextVersion) {
-      void queryClient.invalidateQueries({
-        predicate: (query) => query.queryKey[0] !== 'meta',
-      })
-    }
-    previousVersion.current = nextVersion
-  }, [meta.data?.datasetVersion, queryClient])
+  useEffect(() => queryClient.getQueryCache().subscribe((event) => {
+    if (event.type === 'updated' && event.action.type === 'error') recoverRelease(event.query.state.error)
+  }), [queryClient, recoverRelease])
 
-  return (
-    <DatasetMetaProvider meta={meta.data}>
-      <ShellContent dataAsOf={meta.data?.dataAsOf}>
-        {meta.error && <ErrorState error={meta.error} onRetry={() => void meta.refetch()}/>}
-        {meta.data ? <Outlet/> : !meta.error && <LoadingState label="Loading dataset metadata"/>}
-      </ShellContent>
-    </DatasetMetaProvider>
-  )
+  const content = <ShellContent dataAsOf={release.data?.meta.dataAsOf}>
+    {release.error && <ErrorState error={release.error} onRetry={() => void release.refetch()}/>}
+    {release.data ? <Outlet/> : !release.error && <LoadingState label="Loading dataset metadata"/>}
+  </ShellContent>
+  return release.data ? <ReleaseProvider release={release.data} recoverRelease={recoverRelease}>{content}</ReleaseProvider> : content
 }

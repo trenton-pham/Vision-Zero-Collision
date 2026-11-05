@@ -206,3 +206,48 @@ export const downtownComparisonResponseSchema = z.object({
   })),
 })
 export type DowntownComparisonResponse = z.infer<typeof downtownComparisonResponseSchema>
+
+const digestSchema = z.string().regex(/^[a-f0-9]{64}$/)
+const releasePathSchema = z.string().regex(/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+$/).refine((path) => !path.split('/').includes('..'))
+export const releaseManifestSchema = z.object({
+  schemaVersion: z.literal(1),
+  releaseId: digestSchema,
+  datasetVersion: z.string(),
+  codeRevision: z.string(),
+  dependencyFingerprint: z.string(),
+  meta: datasetMetaSchema,
+  files: z.record(releasePathSchema, z.object({ sha256: digestSchema, size: z.number().int().nonnegative() })),
+})
+export type ReleaseManifest = z.infer<typeof releaseManifestSchema>
+
+export const explorerBundleSchema = z.object({
+  summary: z.array(neighborhoodMetricSetSchema),
+  citywideTrend: citywideTrendContextSchema,
+})
+export const neighborhoodBundleSchema = z.object({ contexts: z.record(z.string().regex(/^\d{4}-\d{4}$/), neighborhoodContextSchema) })
+export const citywideBundleSchema = z.object({
+  summary: citywideSummarySchema,
+  heatmap: heatmapResponseSchema,
+  kde: kdeResponseSchema,
+  spatialShift: spatialShiftResponseSchema,
+  downtownComparison: downtownComparisonResponseSchema,
+})
+const resolverGeometrySchema = neighborhoodGeometrySchema.refine((geometry) => {
+  const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates
+  return polygons.length > 0 && polygons.every((polygon) => polygon.length > 0 && polygon.every((ring) => {
+    const first = ring[0]
+    const last = ring.at(-1)
+    return ring.length >= 4 && first && last && first[0] === last[0] && first[1] === last[1]
+  }))
+}, 'Resolver polygons must have closed rings with at least four positions.')
+export const resolverBundleSchema = z.object({
+  projection: z.string().min(1),
+  features: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    area: z.number().nonnegative(),
+    geometry: resolverGeometrySchema,
+    projectedGeometry: resolverGeometrySchema,
+  })).min(1),
+})
+export type ResolverBundle = z.infer<typeof resolverBundleSchema>

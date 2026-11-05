@@ -32,7 +32,7 @@
       ]
     }
   },
-  "postCreateCommand": "sudo rm -f /etc/apt/sources.list.d/yarn.list && sudo chown vscode:vscode .venv frontend/node_modules && python -m venv .venv && .venv/bin/python -m pip install -e '.[test]' && .venv/bin/python -m backend.scripts.build_artifacts && npm --prefix frontend ci --legacy-peer-deps && npm --prefix frontend run build",
+  "postCreateCommand": "sudo rm -f /etc/apt/sources.list.d/yarn.list && sudo chown vscode:vscode .venv frontend/node_modules && python -m pip install --user uv && uv sync --frozen --extra test && .venv/bin/python -m backend.scripts.build_artifacts && .venv/bin/python -m backend.scripts.export_static --output build/export --verify && npm --prefix frontend ci --legacy-peer-deps && npm --prefix frontend run build && .venv/bin/python -m backend.scripts.static_release assemble --export-dir build/export --frontend-dir frontend/dist --output build/site --archive-output build/current-release.tar.gz",
   "postStartCommand": "nohup .venv/bin/uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload > /tmp/dashboard-api.log 2>&1 &",
   "portsAttributes": {
     "8000": {

@@ -6,17 +6,16 @@ export default defineConfig({
   timeout: 30_000,
   expect: { timeout: 8_000 },
   fullyParallel: false,
+  workers: 1,
   reporter: [['list']],
   use: {
     baseURL: 'http://127.0.0.1:4173',
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: process.env.CI
-      ? 'cd .. && python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 4173'
-      : 'cd .. && .venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 4173',
-    url: 'http://127.0.0.1:4173/healthz',
-    reuseExistingServer: true,
+    command: 'wrangler dev --local --port 4173 --config ../wrangler.jsonc',
+    url: 'http://127.0.0.1:4173/data/current.json',
+    reuseExistingServer: false,
     timeout: 120_000,
   },
   projects: [

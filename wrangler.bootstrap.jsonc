@@ -1,0 +1,11 @@
+{
+  "$schema": "./frontend/node_modules/wrangler/config-schema.json",
+  "name": "vision-zero-collision",
+  "compatibility_date": "2026-11-05",
+  "workers_dev": false,
+  "preview_urls": true,
+  "assets": {
+    "directory": "./deployment/bootstrap",
+    "not_found_handling": "none"
+  }
+}
