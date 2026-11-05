@@ -30,8 +30,12 @@ Frontend API entrypoints accept the release manifest explicitly. Query keys incl
 
 ## Verification status
 
-Implementation and independent code review are complete. Verification results and remaining live gates are recorded in `static-migration-verification.md`. Existing README modeling edits and the notebook edits belong to the user and are excluded from the migration publication.
+Implementation, independent code review, hosted checks, and live cutover are complete. The public dashboard is [vision-zero-collision.rice-farmer-bot.workers.dev](https://vision-zero-collision.rice-farmer-bot.workers.dev). Cloudflare version `16b59408-4e03-40f8-a855-f93a9794ac93` serves release `678bbee3b43575afef7ff81e1f5f9542d1aca36d5c6366e2e6d0aa8d9ccc224e` from migration commit `4f8a5252397bbb0d76a79af6fd8da615d6bf772e`.
 
-Local checks passed: 101 backend tests including isolated MongoDB integration, 141 frontend unit tests, 114 serial desktop/mobile browser tests, 138 Python/browser resolver examples, and five archive-policy tests. The full checked-in snapshot export passed independent HTTP API comparison. The local static-site browser smoke completed without runtime data requests.
+The active dataset contains 106,799 collisions through October 5, 2026, version `20261008T172723Z-fbef0eb54182`. Atlas was unchanged during publication. Both views, real map clicks, and the post-Render-suspension desktop/mobile smoke passed with runtime data connections blocked. A fresh production visit after nineteen minutes without test traffic rendered map data in 2.66 seconds in one unthrottled observation.
 
-Cloudflare authentication and private bootstrap are complete. The current Atlas export passed independent verification: 106,799 records through October 5, dataset `20261008T172723Z-fbef0eb54182`, release `aab9f54b607c29a8697e3f76a1d1389a76c918f6e63fcc20e8563292d86098f7`. Public cutover remains a separate gate. Render has not been suspended.
+Verification includes 101 backend tests with real isolated MongoDB, 141 frontend unit tests, 114 serial browser tests, all analytical filter exports compared against the reference HTTP API, 232 live-geometry browser/Python cases, archive-policy regressions, actual GitHub archive restoration, an isolated Cloudflare version rollback, and isolated MongoDB rollback. Results and scope are recorded in [the verification record](static-migration-verification.md).
+
+Render is suspended with automatic deployment off. Its configuration and last deployment `7c03b224fbf18ae021e57c04aee641898fd88c10` are retained temporarily for recovery. Production credentials and the website address are configured in GitHub; the main-branch publication workflow completed successfully, including temporary Atlas access cleanup.
+
+The user's existing README modeling edits and notebook edits were preserved and excluded from migration publication. Generated releases, credentials, and local verification receipts remain outside Git.
