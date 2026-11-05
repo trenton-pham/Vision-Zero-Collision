@@ -1,6 +1,6 @@
 # Static dashboard publication
 
-The production target is `https://vision-zero-collision.rice-farmer-bot.workers.dev`. Treat it as live only after the production publication and browser checks succeed. Render remains available until cutover is verified.
+The live dashboard is [vision-zero-collision.rice-farmer-bot.workers.dev](https://vision-zero-collision.rice-farmer-bot.workers.dev). Production publication and desktop/mobile browser checks passed on November 5, 2026. The legacy Render service is suspended; its configuration and last deployment (`7c03b224fbf18ae021e57c04aee641898fd88c10`) are retained temporarily as a recovery reference.
 
 React and versioned JSON responses are served directly by Cloudflare Workers Static Assets. There is no Worker request handler, production Python process, or browser database connection. Python/FastAPI remains the reference implementation and local development server. Atlas retains immutable datasets and the authoritative monthly synchronization process.
 
@@ -78,15 +78,34 @@ Each candidate includes its frontend, all analytical responses, a content-derive
 
 Before promotion, assembly checks every checksum, the 20,000-file and 25-MiB-per-file limits, unexpected source/raw-data files, and credential patterns. It retains the preceding release's data and hashed frontend assets. Each recovery archive contains only its own current release to prevent recursive growth. Two promoted archives are retained with a combined 200-MiB cap. Failed candidates do not displace promoted archives.
 
+The initial complete hosted verification and publication took 45.4 minutes. These calculations run in publication; visitors receive the existing static release while later publications are prepared.
+
 The workflow uploads a version without production traffic, checks its preview's files, cache policies, deep links and missing-data responses, saves its recovery archive, then promotes that exact version and enables its workers.dev address. Post-promotion smoke tests check the public origin. Archive restoration also checks the live pointer against the retained archive; a missing or inconsistent recovery archive stops publication for operator recovery.
 
 Atlas and website publication are separate boundaries. Atlas can advance while website export fails. The website keeps its last coherent release; a new `publish-only` run can complete publication without downloading ArcGIS again. The workflow summary reports these outcomes separately.
 
 ## Recovery and cutover
 
-For a website regression, dispatch `website-rollback` with the UUID of a version whose `collision-static-RUN_ID-VERSION_UUID` archive is retained. The workflow validates the archive and preview before restoring that version. The database remains unchanged.
+For a website regression:
 
-For a bad source dataset, run the existing `backend.scripts.rollback_dataset` command with the separate ingestion identity, then dispatch a new `publish-only` run. Confirm the resulting public manifest's `datasetVersion` and `dataAsOf`. A website-only rollback does not undo an Atlas publication, and a later normal publication will use Atlas's active dataset.
+1. In this workflow's GitHub Actions artifacts, locate the earlier `collision-static-RUN_ID-VERSION_UUID` archive. Copy the version UUID from its name. Use a version with a retained production archive, not the initial bootstrap or an unpromoted preview.
+2. Open **Actions → Collision data and static website → Run workflow**, select **main**, choose **website-rollback**, and enter that UUID in **worker_version**. Leave **dry_run** off to perform the restore.
+3. Start a new run. The workflow validates the retained archive and that version's preview, then restores the same Cloudflare version.
+4. Check the successful promotion and the public `/data/current.json` against the restored archive's dataset version. Atlas remains unchanged.
+
+The first successful publication creates one recovery archive. The policy retains up to two as later publications succeed.
+
+Let any active production publication finish before a manual Atlas rollback. For a bad source dataset, the existing rollback command restores Atlas's retained **previousVersion**. It requires the separate ingestion identity with database write access.
+
+Create a private, Git-ignored `.env.atlas-ingest` containing `DASHBOARD_DATA_BACKEND=mongodb`, `MONGODB_DATABASE=seattle_collision`, and the ingestion identity's `MONGODB_URI`. Use restrictive file permissions. Then, from the repository root:
+
+```sh
+env -u MONGODB_URI -u MONGODB_DATABASE -u DASHBOARD_DATA_BACKEND \
+  uv run --frozen --env-file .env.atlas-ingest \
+  python -m backend.scripts.rollback_dataset
+```
+
+The command prints the resulting dataset version. Start a new **publish-only** workflow run on **main** to export and publish that now-active version. Confirm the public manifest's `datasetVersion` and `dataAsOf`. A website-only rollback does not undo an Atlas publication, and a later normal publication uses Atlas's active dataset.
 
 If promotion succeeded but a later workflow step failed, use the pre-promotion recovery archive and the actual Cloudflare deployment record. Do not assume the failed workflow means production never changed. If the production pointer and latest retained archive disagree, reconcile the deployed version and archive before resuming automated publication.
 
