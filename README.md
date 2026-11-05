@@ -39,7 +39,7 @@ The research questions are:
 
 Git excludes raw and cleaned datasets, processed collision GeoJSON, and generated dashboard artifacts. The checked-in Parquet, boundaries, and manifest let you run the local dashboard and modeling notebook without downloading raw data.
 
-The cleaning manifest records 109,040 cleaned collisions. Spatial analysis excludes 2,990 of them because they lack geometry. Collision data ends August 31, 2026, and vehicle data ends January 23, 2026. The monthly dashboard refresh excludes vehicle data. Check `/api/meta` for live dashboard coverage, which may differ from this snapshot.
+The cleaning manifest records 109,040 cleaned collisions. Spatial analysis excludes 2,990 of them because they lack geometry. Collision data ends August 31, 2026, and vehicle data ends January 23, 2026. The monthly dashboard refresh excludes vehicle data. Check `meta` in `/data/current.json` for live dashboard coverage, which may differ from this snapshot.
 
 ## Clean the data
 
