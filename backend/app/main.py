@@ -180,6 +180,11 @@ def root_head() -> Response:
     return Response(status_code=204)
 
 
+STATIC_DATA = ROOT / "build/export/data"
+if STATIC_DATA.exists():
+    app.mount("/data", StaticFiles(directory=STATIC_DATA), name="static-data")
+
+
 if FRONTEND_DIST.exists():
     assets = FRONTEND_DIST / "assets"
     if assets.exists():
@@ -190,7 +195,7 @@ if FRONTEND_DIST.exists():
         candidate = FRONTEND_DIST / full_path
         if candidate.is_file() and FRONTEND_DIST in candidate.resolve().parents:
             return FileResponse(candidate)
-        if full_path.startswith("api/"):
+        if full_path.startswith(("api/", "data/")):
             raise HTTPException(status_code=404, detail="API route not found")
         return FileResponse(FRONTEND_DIST / "index.html")
 

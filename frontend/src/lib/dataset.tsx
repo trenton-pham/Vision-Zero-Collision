@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react'
-import type { DatasetMeta } from './contracts'
+import type { DatasetMeta, ReleaseManifest } from './contracts'
 
 const currentYear = new Date().getFullYear()
 
@@ -23,5 +23,21 @@ export function DatasetMetaProvider({ meta, children }: { meta?: DatasetMeta; ch
 
 export function useDatasetMeta() {
   return useContext(DatasetMetaContext)
+}
+
+const ReleaseContext = createContext<{ release: ReleaseManifest; recoverRelease: (error: unknown) => void } | null>(null)
+
+export function ReleaseProvider({ release, recoverRelease, children }: {
+  release: ReleaseManifest
+  recoverRelease: (error: unknown) => void
+  children: ReactNode
+}) {
+  return <ReleaseContext.Provider value={{ release, recoverRelease }}><DatasetMetaProvider meta={release.meta}>{children}</DatasetMetaProvider></ReleaseContext.Provider>
+}
+
+export function useRelease() {
+  const context = useContext(ReleaseContext)
+  if (!context) throw new Error('Dashboard data requires a release manifest.')
+  return context
 }
 

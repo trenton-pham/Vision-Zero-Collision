@@ -6,7 +6,7 @@ services:
     region: oregon
     dockerfilePath: ./Dockerfile
     healthCheckPath: /readyz
-    autoDeploy: true
+    autoDeploy: false
     envVars:
       - key: DASHBOARD_DATA_BACKEND
         value: mongodb

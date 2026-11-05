@@ -26,7 +26,7 @@ The research questions are:
 | Modeling | Scikit-learn, XGBoost, LightGBM, CatBoost |
 | Dashboard | React, TypeScript, Vite, React-Leaflet, Recharts |
 | API & Data Storage | FastAPI, local Parquet artifacts, MongoDB Atlas |
-| Deployment & Refresh | Docker, Render, GitHub Actions |
+| Deployment & Refresh | Cloudflare Workers Static Assets, GitHub Actions; retained Render reference |
 
 ## Datasets
 
@@ -143,7 +143,7 @@ Model development is ongoing. The saved outputs in `model.ipynb` report the foll
 - Collision counts, composite severity, and KDE describe observed burden. Exposure measures such as traffic volume, population, transit ridership, or pedestrian activity are needed to estimate collision risk per trip or per person.
 - The model uses a random split of historical grid cells. Temporal validation and spatial holdouts are needed to assess future prediction and generalization to other areas. The latitude and longitude bins also have unequal physical dimensions.
 - `geo.ipynb` uses neighborhood polygons and projected areas for downtown density. The dashboard uses a rectangular downtown boundary for count and severity comparisons. Notebook heatmaps weight vehicles, while dashboard heatmaps count collisions. The dashboard calculates KDE in latitude and longitude and displays relative density.
-- The dashboard uses Render's free tier. Its memory and CPU limits constrain dataset loading and spatial calculations. Idle services sleep and take about a minute to wake. Monthly ingestion runs separately through GitHub Actions.
+- The static publication path serves precomputed results from Cloudflare without a sleeping application server. Atlas ingestion remains in GitHub Actions. The existing Render deployment remains available until the static cutover is verified.
 
 ## Next steps
 
@@ -165,7 +165,7 @@ The dashboard has two views:
 | Neighborhood Explorer | Map and searchable neighborhood selection, all-severity collision/injury context, and annual or monthly trends |
 | Citywide Analysis | Independent year/severity filters, collision heatmap, KDE density, pre/post-2020 centroid shift, and downtown vs. outer-area comparisons |
 
-[Open the dashboard](https://seattle-collision-dashboard.onrender.com).
+[Open the existing dashboard](https://seattle-collision-dashboard.onrender.com). The [static hosting guide](./docs/deployment/static-hosting.md) covers the Cloudflare target, setup, verification, publication, and recovery.
 
 ### Product rules
 
@@ -201,6 +201,8 @@ data/dashboard/              Reproducible generated artifacts (gitignored)
 ```
 
 ## Local development
+
+The dashboard now reads generated static files. Follow the [static hosting guide](./docs/deployment/static-hosting.md#local-development-and-verification) for the locked Python environment, export, and static browser verification. The development container generates these files during setup. FastAPI remains available as the analytical reference and serves the local export under `/data`.
 
 ### Dev containers and Codespaces (recommended)
 
@@ -241,6 +243,7 @@ python3.11 -m venv .venv
 .venv/bin/pip install -e '.[test]'
 export DASHBOARD_DATA_BACKEND=artifacts
 .venv/bin/python -m backend.scripts.build_artifacts
+.venv/bin/python -m backend.scripts.export_static --output build/export --verify
 npm --prefix frontend ci --legacy-peer-deps
 npm --prefix frontend run build
 .venv/bin/uvicorn backend.app.main:app --reload
@@ -268,7 +271,7 @@ Run from the repository root in the container terminal:
 .venv/bin/python -m backend.scripts.build_artifacts
 ```
 
-The builder hashes the processed collision Parquet and neighborhood GeoJSON. It assigns collisions by polygon containment, with a nearest-neighborhood fallback within 25 metres. It writes assigned records, zero-filled annual and monthly aggregates, boundaries, and a manifest. Monthly aggregates cover 94 neighborhoods plus a citywide scope and end at the latest observed month.
+The builder hashes the processed collision Parquet and neighborhood GeoJSON. It assigns collisions by polygon containment, with a nearest-neighborhood fallback within 25 metres. It writes assigned records, zero-filled annual and monthly aggregates, boundaries, and a manifest. Monthly aggregates cover 94 neighborhoods plus a citywide scope and end at the latest observed month. After rebuilding them, regenerate `build/export` with `python -m backend.scripts.export_static --output build/export --verify` so the browser receives the new snapshot.
 
 Rebuild artifacts after changing either processed input, then restart the container. For optional native development, stop and rerun Uvicorn. The API validates the generated snapshot but does not compare its source hashes with the processed files. A healthy `/readyz` response does not prove the artifacts are current. Missing or invalid artifacts prevent initial loading and leave `/readyz` at HTTP 503. Direct `DataStore` construction and the artifact tests also check source hashes.
 
@@ -334,13 +337,15 @@ mkdir -p ../.impeccable/review
 npm run test:e2e
 ```
 
-Playwright starts its own FastAPI server on port 4173 and exercises 1440 px desktop and 390 px mobile layouts, keyboard-only neighborhood selection, URL restoration, route-specific filters, partial-year behavior, and automated accessibility checks. The review directory stores browser-test screenshots.
+After building and assembling `build/site` as described in the static hosting guide, Playwright starts a local Wrangler static server on port 4173. It exercises 1440 px desktop and 390 px mobile layouts, keyboard-only neighborhood selection, URL restoration, route-specific filters, partial-year behavior, release recovery, and automated accessibility checks. The review directory stores browser-test screenshots.
 
 The [October 18, 2026 verification record](./.audit/onboarding-verification.md) covers application commit `2a7fa31`, including its live deployment and browser checks. Those historical results do not establish that later commits are deployed. Container checks performed after later changes must be recorded separately. Direct Atlas inspection was blocked during that audit.
 
 MongoDB integration tests run when `MONGODB_TEST_URI` is set. Use a separate test database instance; GitHub Actions supplies MongoDB 8.2 as a service container.
 
-## Docker
+## Docker (retained Render reference)
+
+The Docker configuration below documents the previous Render API deployment. Keep its last deployed image available during cutover. Use the development container or the static hosting guide for the new dashboard; a newly built legacy image does not include the static export.
 
 Build from the repository root. Running the image requires an already published MongoDB dataset and a read-only runtime URI:
 
@@ -356,6 +361,8 @@ docker run --rm -p 8000:8000 \
 The multi-stage image builds React with Node 22 and serves the compiled application with FastAPI on Python 3.11. It contains no production dataset.
 
 ## Render and Atlas setup
+
+These are the retained deployment's setup instructions. Use the [static hosting guide](./docs/deployment/static-hosting.md) for new publications. Disable live Render autodeploy before merging the migration, then suspend the service only after Cloudflare is verified with the current published Atlas dataset.
 
 1. Create an Atlas Free cluster in AWS `us-west-2` and create separate read-only runtime and read/write ingestion database users.
 2. Create the Render service from `render.yaml`, set its `MONGODB_URI` secret to the read-only user, and add all [outbound IP ranges shown for the Render service](https://render.com/docs/outbound-ip-addresses) to the Atlas project IP access list.

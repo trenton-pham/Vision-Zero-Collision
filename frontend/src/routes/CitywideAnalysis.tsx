@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { CitywideMap } from '../components/CitywideMap'
 import { CheckIcon } from '../components/Icons'
 import { MetricGrid } from '../components/MetricGrid'
 import { EmptyState, ErrorState, LoadingState } from '../components/States'
 import { api } from '../lib/api'
+import { useRelease } from '../lib/dataset'
 import { integer, metricValue } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
@@ -21,12 +22,23 @@ export function CitywideAnalysis() {
   const state = useDashboardParams()
   const entrance = useRouteEntrance()
   const [filtersOpen, setFiltersOpen] = useState(() => !window.matchMedia('(max-width: 600px)').matches)
-  const queryKey = [state.startYear, state.endYear, state.severities]
-  const summary = useQuery({ queryKey: ['citywide-summary', ...queryKey], queryFn: ({ signal }) => api.citywideSummary(state.startYear, state.endYear, state.severities, signal), placeholderData: keepPreviousData })
-  const heatmap = useQuery({ queryKey: ['citywide-heatmap', ...queryKey], queryFn: ({ signal }) => api.heatmap(state.startYear, state.endYear, state.severities, signal), enabled: state.cityLayer === 'heatmap' })
-  const kde = useQuery({ queryKey: ['citywide-kde', ...queryKey], queryFn: ({ signal }) => api.kde(state.startYear, state.endYear, state.severities, signal), enabled: state.cityLayer === 'kde' })
-  const shift = useQuery({ queryKey: ['citywide-shift', ...queryKey], queryFn: ({ signal }) => api.spatialShift(state.startYear, state.endYear, state.severities, signal) })
-  const downtown = useQuery({ queryKey: ['citywide-downtown', ...queryKey], queryFn: ({ signal }) => api.downtownComparison(state.startYear, state.endYear, state.severities, signal) })
+  const { release } = useRelease()
+  const bundle = useQuery({
+    queryKey: ['citywide', release.releaseId, state.startYear, state.endYear, state.severities],
+    queryFn: ({ signal }) => api.citywide(release, state.startYear, state.endYear, state.severities, signal),
+    placeholderData: (previous, query) => query?.queryKey[1] === release.releaseId ? previous : undefined,
+    staleTime: Infinity,
+  })
+  const summary = { ...bundle, data: bundle.data?.summary }
+  const currentBundle = {
+    ...bundle,
+    data: bundle.isPlaceholderData ? undefined : bundle.data,
+    isSuccess: bundle.isSuccess && !bundle.isPlaceholderData,
+  }
+  const heatmap = { ...currentBundle, data: currentBundle.data?.heatmap }
+  const kde = { ...currentBundle, data: currentBundle.data?.kde }
+  const shift = { ...currentBundle, data: currentBundle.data?.spatialShift }
+  const downtown = { ...currentBundle, data: currentBundle.data?.downtownComparison }
   const layerQuery = state.cityLayer === 'heatmap' ? heatmap : kde
   const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error
   const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
@@ -41,7 +53,7 @@ export function CitywideAnalysis() {
 
   const headlineEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && !summary.isPlaceholderData, entrance)
   const mapEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && !summary.isPlaceholderData && layerQuery.isSuccess, entrance)
-  const shiftEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && shift.isSuccess && shift.data.shiftMeters != null, entrance)
+  const shiftEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && shift.isSuccess && shift.data?.shiftMeters != null, entrance)
   const downtownChartEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && downtown.isSuccess, entrance)
   const downtownMeanEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && downtown.isSuccess && latestCompleteDowntownYear?.downtownMeanSeverity != null, entrance)
 
@@ -73,7 +85,7 @@ export function CitywideAnalysis() {
         summaryRetry.current = { identity: statisticsIdentity, stamp, afterRevision: summary.dataUpdatedAt }
         shiftRetry.current = { identity: statisticsIdentity, stamp, afterRevision: shift.dataUpdatedAt }
         downtownRetry.current = { identity: statisticsIdentity, stamp, afterRevision: downtown.dataUpdatedAt }
-        void summary.refetch(); void layerQuery.refetch(); void shift.refetch(); void downtown.refetch()
+        void bundle.refetch()
       }}/>}
       {summary.data && !summary.isLoading && (
         <>

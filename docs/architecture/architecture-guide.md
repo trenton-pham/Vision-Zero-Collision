@@ -2,6 +2,8 @@
 
 Developer reference. Updated October 18, 2026 against repository snapshot `2a7fa31` and the setup corrections in this change.
 
+The new production delivery path is described in the [static hosting guide](../deployment/static-hosting.md). It publishes the existing Python calculations as versioned JSON alongside React on Cloudflare. This guide's FastAPI request flow remains the local reference and legacy Render architecture; production visitors no longer require that API.
+
 The project is a public, read-only analytics application backed by a validated, in-memory collision dataset. React renders two workspaces, FastAPI calculates and serves their analytics, and an independent ingestion command publishes replacement datasets to MongoDB. The same API can instead load reproducible local Parquet artifacts. Historical notebooks and vehicle cleaning support research; they do not participate in a browser request.
 
 This guide describes request handling, dataset refreshes, API contracts, and the source files used by the application and research workflows. The file reference excludes installed dependencies, credentials, caches, raw downloads, and review captures. Generated data files are described separately.

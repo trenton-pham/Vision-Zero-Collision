@@ -1,13 +1,24 @@
-name: Monthly collision sync
+name: Collision data and static website
 
 on:
+  pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: "17 3 8 * *"
-      timezone: "America/Los_Angeles"
+      timezone: America/Los_Angeles
   workflow_dispatch:
     inputs:
+      action:
+        description: Publish the current Atlas dataset, refresh first, or roll back only the website
+        type: choice
+        options: [publish-only, refresh-and-publish, website-rollback]
+        default: publish-only
+      worker_version:
+        description: Retained Cloudflare version UUID for website rollback
+        type: string
       dry_run:
-        description: Validate the source without publishing it
+        description: Validate without publishing Atlas or website
         type: boolean
         default: false
       allow_row_decrease:
@@ -16,102 +27,295 @@ on:
         default: false
 
 concurrency:
-  group: monthly-collision-sync
-  cancel-in-progress: false
+  group: ${{ github.event_name == 'pull_request' && format('collision-check-{0}', github.event.number) || 'collision-production-publication' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  verify:
+    if: github.repository == 'trenton-pham/Vision-Zero-Collision'
     runs-on: ubuntu-latest
     services:
       mongodb:
         image: mongo:8.2
-        ports:
-          - 27017:27017
+        ports: ['27017:27017']
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+          --health-interval 10s --health-timeout 5s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip
-      - run: pip install -e '.[test]'
-      - run: python -m backend.scripts.build_artifacts
-      - run: pytest backend/tests -q
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra test
+      - run: uv run --frozen python -m backend.scripts.build_artifacts
+      - run: uv run --frozen pytest backend/tests -q
         env:
           MONGODB_TEST_URI: mongodb://127.0.0.1:27017
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --legacy-peer-deps
         working-directory: frontend
-      - run: npm test
+      - run: npm test && npm run build
         working-directory: frontend
-      - run: npm run build
-        working-directory: frontend
+      - run: uv run --frozen python -m backend.scripts.resolver_fixtures --real --output build/resolver-fixtures.json
+      - run: node --experimental-strip-types frontend/scripts/check-resolver.mjs build/resolver-fixtures.json
+      - run: node frontend/scripts/publication-archives.mjs --self-check
+      - run: node --test frontend/scripts/publication-archives.test.mjs
+      - run: uv run --frozen python -m backend.scripts.export_static --output build/export --backend artifacts --verify
+      - run: uv run --frozen python -m backend.scripts.static_release assemble --export-dir build/export --frontend-dir frontend/dist --output build/site --archive-output build/current-release.tar.gz
       - run: npx playwright install --with-deps chromium
-        working-directory: frontend
-      - run: mkdir -p ../.impeccable/review
         working-directory: frontend
       - run: npm run test:e2e
         working-directory: frontend
 
-  sync:
-    needs: test
+  publish:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      actions: write
+    env:
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
+      ACTION: ${{ inputs.action || 'publish-only' }}
+      MONGODB_DATABASE: seattle_collision
+      WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@v4
+      - name: Require a new production run
+        id: attempt
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          test "$RUN_ATTEMPT" = '1' || { echo 'Start a new workflow_dispatch publish-only run instead of rerunning this attempt.'; exit 1; }
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: pip
-      - run: pip install .
-
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - name: Restore last successful production archive
+        id: previous
+        uses: actions/github-script@v7
+        env:
+          ROLLBACK_VERSION: ${{ inputs.worker_version }}
+        with:
+          script: |
+            const { restore } = await import(`${process.env.GITHUB_WORKSPACE}/frontend/scripts/publication-archives.mjs`)
+            if (process.env.ACTION === 'website-rollback' && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(process.env.ROLLBACK_VERSION || '')) throw new Error('Provide a retained Worker version UUID')
+            await restore({github, context, core, version: process.env.ACTION === 'website-rollback' ? process.env.ROLLBACK_VERSION : ''})
+      - name: Validate recovered archive
+        if: steps.previous.outputs.found == 'true'
+        run: |
+          python - <<'PY'
+          import os, zipfile
+          from pathlib import Path
+          from backend.scripts.static_release import extract_archive
+          folder = Path(os.environ['RUNNER_TEMP']) / 'previous-release'
+          with zipfile.ZipFile(folder / 'artifact.zip') as archive:
+              if archive.namelist() != ['current-release.tar.gz'] or archive.infolist()[0].file_size > 100 * 1024 * 1024:
+                  raise ValueError('Unexpected GitHub archive contents')
+              (folder / 'current-release.tar.gz').write_bytes(archive.read('current-release.tar.gz'))
+          extract_archive(folder / 'current-release.tar.gz', folder / 'site')
+          PY
+      - name: Verify production matches its recovery archive
+        if: env.ACTION != 'website-rollback' && env.DRY_RUN != 'true'
+        env:
+          WEBSITE_URL: ${{ vars.STATIC_WEBSITE_URL }}
+        run: |
+          flags=()
+          if [[ -d "$RUNNER_TEMP/previous-release/site" ]]; then flags+=(--previous-site "$RUNNER_TEMP/previous-release/site"); fi
+          uv run --frozen python -m backend.scripts.static_release preflight --url "$WEBSITE_URL" "${flags[@]}"
       - name: Temporarily allow this runner in Atlas
+        id: atlas
+        if: env.ACTION != 'website-rollback'
         env:
           ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
           ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
           ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
         run: |
           runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+          python -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "$runner_ip"
+          echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
           delete_after="$(date --utc --date='+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
-          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" '[{ipAddress: $ip, comment: "GitHub monthly collision sync", deleteAfterDate: $expires}]')"
-          curl --fail --silent --show-error --digest \
-            --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-            --header 'Accept: application/vnd.atlas.2023-01-01+json' \
-            --header 'Content-Type: application/json' \
-            --request POST \
-            --data "$payload" \
+          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" '[{ipAddress:$ip,comment:"GitHub collision publication",deleteAfterDate:$expires}]')"
+          curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+            --header 'Accept: application/vnd.atlas.2023-01-01+json' --header 'Content-Type: application/json' \
+            --request POST --data "$payload" --output /dev/null \
             "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList"
           sleep 20
-
-      - name: Download, validate, and publish
+      - name: Refresh Atlas from ArcGIS
+        id: sync
+        if: github.event_name == 'schedule' || env.ACTION == 'refresh-and-publish'
         env:
           DASHBOARD_DATA_BACKEND: mongodb
           MONGODB_URI: ${{ secrets.MONGODB_INGEST_URI }}
-          MONGODB_DATABASE: seattle_collision
-          DRY_RUN: ${{ inputs.dry_run || 'false' }}
           ALLOW_ROW_DECREASE: ${{ inputs.allow_row_decrease || 'false' }}
         run: |
           flags=()
-          if [[ "$DRY_RUN" == "true" ]]; then flags+=(--dry-run); fi
-          if [[ "$ALLOW_ROW_DECREASE" == "true" ]]; then flags+=(--allow-row-decrease); fi
-          python -m backend.scripts.sync_collisions "${flags[@]}" --manifest-output "$RUNNER_TEMP/ingestion-manifest.json"
-
-      - name: Upload ingestion manifest
-        if: always()
+          if [[ "$DRY_RUN" == 'true' ]]; then flags+=(--dry-run); fi
+          if [[ "$ALLOW_ROW_DECREASE" == 'true' ]]; then flags+=(--allow-row-decrease); fi
+          uv run --frozen python -m backend.scripts.sync_collisions "${flags[@]}" --manifest-output "$RUNNER_TEMP/ingestion-manifest.json" > "$RUNNER_TEMP/sync.log" 2>&1
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          result = json.loads((Path(os.environ['RUNNER_TEMP']) / 'ingestion-manifest.json').read_text())
+          status = result['status']
+          if status not in {'published', 'no_change', 'dry_run'}:
+              raise ValueError('Unexpected Atlas synchronization status')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('status=' + status + '\n')
+              if status != 'dry_run':
+                  version = result['datasetVersion']
+                  if not isinstance(version, str) or not version or any(c in version for c in '\r\n'):
+                      raise ValueError('Invalid published Atlas dataset version')
+                  output.write('dataset_version=' + version + '\n')
+          PY
+      - name: Export the published Atlas dataset
+        if: env.ACTION != 'website-rollback' && (env.DRY_RUN != 'true' || steps.sync.outputs.status == '')
+        env:
+          DASHBOARD_DATA_BACKEND: mongodb
+          MONGODB_URI: ${{ secrets.MONGODB_EXPORT_URI }}
+          SYNC_DATASET_VERSION: ${{ steps.sync.outputs.dataset_version }}
+        run: |
+          flags=()
+          if [[ -n "$SYNC_DATASET_VERSION" ]]; then flags+=(--dataset-version "$SYNC_DATASET_VERSION"); fi
+          uv run --frozen python -m backend.scripts.export_static --output build/export --backend mongodb --verify "${flags[@]}" > "$RUNNER_TEMP/export.log" 2>&1
+      - name: Build and assemble current plus previous
+        if: env.ACTION != 'website-rollback' && (env.DRY_RUN != 'true' || steps.sync.outputs.status == '')
+        run: |
+          npm --prefix frontend run build
+          flags=()
+          if [[ -f "$RUNNER_TEMP/previous-release/current-release.tar.gz" ]]; then flags+=(--previous-archive "$RUNNER_TEMP/previous-release/current-release.tar.gz"); fi
+          uv run --frozen python -m backend.scripts.static_release assemble --export-dir build/export --frontend-dir frontend/dist --output build/site --archive-output build/current-release.tar.gz "${flags[@]}"
+      - name: Prepare retained website rollback
+        if: env.ACTION == 'website-rollback'
+        env:
+          TARGET_VERSION: ${{ inputs.worker_version }}
+        run: |
+          mkdir -p build
+          cp -R "$RUNNER_TEMP/previous-release/site" build/site
+          cp "$RUNNER_TEMP/previous-release/current-release.tar.gz" build/current-release.tar.gz
+          echo "VERSION_ID=$TARGET_VERSION" >> "$GITHUB_ENV"
+      - name: Upload candidate without promotion
+        if: env.DRY_RUN != 'true' && env.ACTION != 'website-rollback'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          WRANGLER_OUTPUT_FILE_PATH: ${{ runner.temp }}/version-upload.ndjson
+        run: |
+          frontend/node_modules/.bin/wrangler versions upload --config wrangler.jsonc --tag "$GITHUB_SHA"
+          uv run --frozen python -m backend.scripts.static_release upload-result --file "$WRANGLER_OUTPUT_FILE_PATH" > "$RUNNER_TEMP/upload.json"
+          echo "VERSION_ID=$(jq -r .version_id "$RUNNER_TEMP/upload.json")" >> "$GITHUB_ENV"
+          echo "PREVIEW_URL=$(jq -r .preview_url "$RUNNER_TEMP/upload.json")" >> "$GITHUB_ENV"
+      - name: Resolve rollback preview URL
+        if: env.DRY_RUN != 'true' && env.ACTION == 'website-rollback'
+        env:
+          WEBSITE_URL: ${{ vars.STATIC_WEBSITE_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          url = urlparse(os.environ['WEBSITE_URL'])
+          if url.scheme != 'https' or not url.hostname or not url.hostname.endswith('.workers.dev') or url.path not in ('', '/'):
+              raise ValueError('Set STATIC_WEBSITE_URL to the verified production workers.dev URL')
+          prefix = os.environ['VERSION_ID'].split('-')[0]
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('PREVIEW_URL=https://' + prefix + '-' + url.hostname + '\n')
+          PY
+      - name: Smoke uploaded version before promotion
+        if: env.DRY_RUN != 'true'
+        run: uv run --frozen python -m backend.scripts.static_release smoke --site build/site --url "$PREVIEW_URL"
+      - name: Install browser for candidate verification
+        if: env.DRY_RUN != 'true'
+        run: npm --prefix frontend exec -- playwright install --with-deps chromium
+      - name: Exercise the candidate dashboard in a browser
+        if: env.DRY_RUN != 'true'
+        run: node frontend/scripts/smoke-dashboard.mjs "$PREVIEW_URL"
+      - name: Refuse an outdated main revision
+        if: env.DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest="$(gh api repos/trenton-pham/Vision-Zero-Collision/commits/main --jq .sha)"
+          test "$latest" = "$GITHUB_SHA" || { echo 'Main changed during this run. Re-run from current main.'; exit 1; }
+      - name: Save candidate recovery archive before promotion
+        if: env.DRY_RUN != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: collision-ingestion-manifest-${{ github.run_id }}
-          path: ${{ runner.temp }}/ingestion-manifest.json
-          if-no-files-found: warn
+          name: collision-static-${{ github.run_id }}-${{ env.VERSION_ID }}
+          path: build/current-release.tar.gz
+          compression-level: 0
+          if-no-files-found: error
           retention-days: 90
+      - name: Promote tested version
+        id: promote
+        if: env.DRY_RUN != 'true'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: frontend/node_modules/.bin/wrangler versions deploy "$VERSION_ID@100%" --yes --config wrangler.jsonc
+      - name: Enable the production workers.dev address
+        if: steps.promote.outcome == 'success'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: frontend/node_modules/.bin/wrangler triggers deploy --config wrangler.jsonc
+      - name: Smoke production
+        if: steps.promote.outcome == 'success'
+        env:
+          WEBSITE_URL: ${{ vars.STATIC_WEBSITE_URL }}
+        run: uv run --frozen python -m backend.scripts.static_release smoke --site build/site --url "$WEBSITE_URL"
+      - name: Retain two bounded production archives
+        if: always() && steps.attempt.outcome == 'success'
+        env:
+          PROMOTED: ${{ steps.promote.outcome }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { prune } = await import(`${process.env.GITHUB_WORKSPACE}/frontend/scripts/publication-archives.mjs`)
+            await prune({github, context, promoted: process.env.PROMOTED === 'success'})
+      - name: Remove temporary Atlas access even after failure
+        if: always() && steps.atlas.outputs.runner_ip != ''
+        env:
+          ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
+          ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
+          ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
+          RUNNER_IP: ${{ steps.atlas.outputs.runner_ip }}
+        run: |
+          curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+            --header 'Accept: application/vnd.atlas.2023-01-01+json' --request DELETE --output /dev/null \
+            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$RUNNER_IP"
+      - name: Report Atlas and website publication separately
+        if: always()
+        env:
+          ATLAS_STATUS: ${{ steps.sync.outputs.status }}
+          DATASET_VERSION: ${{ steps.sync.outputs.dataset_version }}
+          WEBSITE_STATUS: ${{ steps.promote.outcome }}
+        run: |
+          python - <<'PY'
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('Atlas refresh: ' + (os.environ['ATLAS_STATUS'] or 'not run or failed; inspect refresh step') + '\n\n')
+              output.write('Atlas result datasetVersion: ' + (os.environ['DATASET_VERSION'] or 'not reported') + '\n\n')
+              output.write('Website promotion: ' + (os.environ['WEBSITE_STATUS'] or 'not attempted') + '\n\n')
+              output.write('Cloudflare version: ' + os.environ.get('VERSION_ID', 'not uploaded') + '\n')
+          PY

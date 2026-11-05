@@ -17,6 +17,8 @@ frontend/test-results/
 frontend/playwright-report/
 frontend/.impeccable/
 frontend/*.tsbuildinfo
+build/
+.wrangler/
 frontend/vite.config.js
 frontend/vite.config.d.ts
 frontend/playwright.config.js

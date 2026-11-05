@@ -6,9 +6,9 @@ import { BrowserRouter, Link, Route, Routes, useNavigate } from 'react-router-do
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api } from '../src/lib/api'
 import type { NeighborhoodFeatureCollection, ResolveResponse } from '../src/lib/contracts'
-import { DatasetMetaProvider } from '../src/lib/dataset'
+import { ReleaseProvider } from '../src/lib/dataset'
 import { NeighborhoodExplorer } from '../src/routes/NeighborhoodExplorer'
-import { citywideTrendContext, datasetMeta, metrics, neighborhoodContext } from './fixtures'
+import { citywideTrendContext, releaseManifest, metrics, neighborhoodContext } from './fixtures'
 
 vi.mock('../src/components/NeighborhoodMap', () => ({
   NeighborhoodMap: ({ onResolve }: { onResolve: (lat: number, lng: number) => void }) => <button onClick={() => onResolve(47.6, -122.3)}>Resolve map</button>,
@@ -36,10 +36,10 @@ function setup() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
   const user = userEvent.setup()
   const view = render(
-    <QueryClientProvider client={queryClient}><DatasetMetaProvider meta={datasetMeta}><BrowserRouter><Navigation/><Suspense fallback={<div>Loading route</div>}><Routes>
+    <QueryClientProvider client={queryClient}><ReleaseProvider release={releaseManifest} recoverRelease={() => {}}><BrowserRouter><Navigation/><Suspense fallback={<div>Loading route</div>}><Routes>
       <Route path="/neighborhoods" element={<NeighborhoodExplorer/>}/>
       <Route path="/citywide" element={<div>Citywide route</div>}/>
-    </Routes></Suspense></BrowserRouter></DatasetMetaProvider></QueryClientProvider>,
+    </Routes></Suspense></BrowserRouter></ReleaseProvider></QueryClientProvider>,
   )
   return { user, view, queryClient }
 }
@@ -47,9 +47,8 @@ function setup() {
 beforeEach(() => {
   window.history.replaceState(null, '', '/neighborhoods?start=2021&end=2025')
   vi.spyOn(api, 'neighborhoods').mockResolvedValue(neighborhoods)
-  vi.spyOn(api, 'neighborhoodSummary').mockResolvedValue([metrics])
+  vi.spyOn(api, 'explorer').mockResolvedValue({ summary: [metrics], citywideTrend: citywideTrendContext })
   vi.spyOn(api, 'neighborhoodContext').mockResolvedValue(neighborhoodContext)
-  vi.spyOn(api, 'citywideNeighborhoodTrend').mockResolvedValue(citywideTrendContext)
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -82,7 +81,7 @@ describe('map resolution lifecycle', () => {
     const { user } = setup()
     await user.click(await screen.findByRole('button', { name: 'Resolve map' }))
     window.history.pushState(null, '', '/citywide')
-    expect(request.mock.calls[0]?.[2]?.aborted).toBe(false)
+    expect(request.mock.calls[0]?.[3]?.aborted).toBe(false)
     await act(async () => { pending.resolve(assigned); await pending.promise })
     expect(window.location.pathname).toBe('/citywide')
     expect(window.location.search).toBe('')
@@ -95,7 +94,7 @@ describe('map resolution lifecycle', () => {
     await screen.findByRole('button', { name: 'Resolve map' })
     if (navigation === 'back') await user.click(screen.getByRole('button', { name: 'Monthly' }))
     await user.click(screen.getByRole('button', { name: 'Resolve map' }))
-    const signal = request.mock.calls[0]?.[2]
+    const signal = request.mock.calls[0]?.[3]
     expect(signal).toBeDefined()
     if (navigation === 'years') await user.click(screen.getByRole('button', { name: 'Years' }))
     if (navigation === 'grain') await user.click(screen.getByRole('button', { name: 'Monthly' }))
@@ -120,7 +119,7 @@ describe('map resolution lifecycle', () => {
     const { user } = setup()
     await user.click(await screen.findByRole('button', { name: 'Resolve map' }))
     await user.click(screen.getByRole('button', { name: 'Resolve map' }))
-    expect(request.mock.calls[0]?.[2]?.aborted).toBe(true)
+    expect(request.mock.calls[0]?.[3]?.aborted).toBe(true)
     await act(async () => { second.resolve(assigned); await second.promise })
     expect(new URL(window.location.href).searchParams.get('neighborhood')).toBe('fremont')
     const location = window.location.href

@@ -1,5 +1,5 @@
+import { mockReleaseUpdates } from './static-helpers'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { datasetMetaSchema } from '../../src/lib/contracts'
 
 type RevealRecord = {
   duration: ReturnType<KeyframeEffect['getTiming']>['duration']
@@ -63,7 +63,7 @@ function checkFade(entries: RevealRecord[], duration: number, start: number) {
     expect(entry.visible).toBe(true)
     expect(entry.duration).toBe(duration)
     expect(entry.easing).toBe(easing)
-    expect(Number(entry.frames[0]?.opacity)).toBeCloseTo(start)
+    expect(Number(entry.frames[0]?.opacity), JSON.stringify(entry)).toBeCloseTo(start)
     expect(Number(entry.frames.at(-1)?.opacity)).toBe(1)
     expect(entry.frames.every((frame) => frame.transform === undefined)).toBe(true)
   }
@@ -83,16 +83,16 @@ async function navigation(page: Page, route: 'citywide' | 'neighborhoods', keybo
 
 test.beforeEach(async ({ page }) => { await instrument(page) })
 
-test('content reveal: cold regions become available independently and fade only once', async ({ page }) => {
+test('content reveal: bundled explorer regions fade once after data arrives', async ({ page }) => {
   let releaseTrend = () => {}
   const trendGate = new Promise<void>((resolve) => { releaseTrend = resolve })
-  await page.route('**/api/neighborhoods/citywide-trend?*', async (route) => { await trendGate; await route.continue() })
+  await page.route('**/data/releases/*/explorer/*.json', async (route) => { await trendGate; await route.continue() })
   try {
     await page.goto('/neighborhoods?start=2018&end=2025')
-    await expect(page.locator('.leaflet-container')).toBeVisible()
-    await expect.poll(async () => (await records(page)).filter((entry) => entry.map).length).toBeGreaterThan(0)
+    await expect(page.getByText('Loading observed data')).toBeVisible()
     expect((await records(page)).some((entry) => entry.chart)).toBe(false)
     releaseTrend()
+    await expect(page.locator('.leaflet-container')).toBeVisible()
     await expect(page.getByRole('img', { name: /^Annual trend chart/ })).toBeVisible()
     await expect.poll(async () => (await records(page)).filter((entry) => entry.chart).length).toBeGreaterThan(0)
     checkFade(await records(page), 160, .65)
@@ -109,7 +109,7 @@ test('content reveal: cold regions become available independently and fade only 
 })
 
 test('content reveal: errors and placeholders do not enter as completed data', async ({ page }) => {
-  await page.route('**/api/neighborhoods/citywide-trend?*', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Trend temporarily unavailable' }) }))
+  await page.route('**/data/releases/*/explorer/*.json', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Trend temporarily unavailable' }) }))
   await page.goto('/neighborhoods?start=2018&end=2025')
   await expect(page.getByText('Trend temporarily unavailable', { exact: true })).toBeVisible()
   expect((await records(page)).some((entry) => entry.chart)).toBe(false)
@@ -230,7 +230,7 @@ test('content reveal: delayed route regions retain the navigation input without 
   await load(page)
   let release = () => {}
   const gate = new Promise<void>((resolve) => { release = resolve })
-  await page.route('**/api/citywide/summary?*', async (route) => { await gate; await route.continue() })
+  await page.route('**/data/releases/*/citywide/*/*.json', async (route) => { await gate; await route.continue() })
   try {
     await page.locator('a[href="/citywide"]:visible').first().click()
     await expect(page.getByRole('heading', { name: 'Citywide Analysis', exact: true })).toBeVisible()
@@ -272,14 +272,10 @@ test('content reveal: automatic dataset refresh leaves ready regions stationary'
     }
   })
   let refresh = false
-  await page.route('**/api/meta', async (route) => {
-    const response = await route.fetch()
-    const meta = datasetMetaSchema.parse(await response.json())
-    await route.fulfill({ response, json: refresh ? { ...meta, datasetVersion: `${meta.datasetVersion}-reveal-test` } : meta })
-  })
+  await mockReleaseUpdates(page, (release) => refresh ? { ...release, releaseId: 'f'.repeat(64) } : release)
   try {
     await load(page)
-    const refreshed = page.waitForResponse((response) => response.url().includes('/neighborhoods/citywide-trend?') && response.ok())
+    const refreshed = page.waitForResponse((response) => response.url().includes('/explorer/') && response.ok())
     refresh = true
     await refreshed
     await expect(page.getByRole('complementary', { name: /context$/ })).toHaveAttribute('aria-busy', 'false')

@@ -1,26 +1,30 @@
 import { z } from 'zod'
 import {
-  citywideSummarySchema,
-  citywideTrendContextSchema,
-  datasetMetaSchema,
-  downtownComparisonResponseSchema,
-  heatmapResponseSchema,
-  kdeResponseSchema,
-  neighborhoodContextSchema,
+  citywideBundleSchema,
+  explorerBundleSchema,
+  neighborhoodBundleSchema,
   neighborhoodFeatureCollectionSchema,
-  neighborhoodMetricSetSchema,
-  resolveResponseSchema,
-  spatialShiftResponseSchema,
+  releaseManifestSchema,
+  resolverBundleSchema,
+  type ReleaseManifest,
 } from './contracts'
-import type { CitywideSeverity } from './severity'
+import { CITYWIDE_SEVERITIES, type CitywideSeverity } from './severity'
+
+export class ReleaseUnavailableError extends Error {
+  constructor(readonly releaseId: string) {
+    super('This dataset release is no longer available. Checking for the current release.')
+  }
+}
 
 function isAbortError(error: unknown) {
   return error !== null && typeof error === 'object' && 'name' in error && error.name === 'AbortError'
 }
 
-async function request<T>(path: string, schema: z.ZodType<T>, signal?: AbortSignal): Promise<T> {
+async function request<T>(path: string, schema: z.ZodType<T>, signal?: AbortSignal, release?: ReleaseManifest): Promise<T> {
   const response = await fetch(path, { signal })
+  signal?.throwIfAborted()
   if (!response.ok) {
+    if (release && (response.status === 404 || response.status === 410)) throw new ReleaseUnavailableError(release.releaseId)
     let message = `Request failed (${response.status})`
     try {
       const body: unknown = await response.json()
@@ -45,35 +49,33 @@ async function request<T>(path: string, schema: z.ZodType<T>, signal?: AbortSign
   return result.data
 }
 
-function years(startYear: number, endYear: number) {
-  return new URLSearchParams({ start_year: String(startYear), end_year: String(endYear) })
-}
-
-function citywideParams(startYear: number, endYear: number, severities: CitywideSeverity[]) {
-  const params = years(startYear, endYear)
-  severities.forEach((severity) => params.append('severity', severity))
-  return params
+function releaseRequest<T>(release: ReleaseManifest, path: string, schema: z.ZodType<T>, signal?: AbortSignal) {
+  if (!Object.hasOwn(release.files, path)) throw new Error('The requested dashboard data is not included in this release.')
+  return request(`/data/releases/${release.releaseId}/${path}`, schema, signal, release)
 }
 
 export const api = {
-  meta: (signal?: AbortSignal) => request('/api/meta', datasetMetaSchema, signal),
-  neighborhoods: (signal?: AbortSignal) => request('/api/neighborhoods/geojson', neighborhoodFeatureCollectionSchema, signal),
-  neighborhoodSummary: (startYear: number, endYear: number, signal?: AbortSignal) =>
-    request(`/api/neighborhoods/summary?${years(startYear, endYear)}`, z.array(neighborhoodMetricSetSchema), signal),
-  neighborhoodContext: (id: string, startYear: number, endYear: number, signal?: AbortSignal) =>
-    request(`/api/neighborhoods/${encodeURIComponent(id)}/context?${years(startYear, endYear)}`, neighborhoodContextSchema, signal),
-  citywideNeighborhoodTrend: (startYear: number, endYear: number, signal?: AbortSignal) =>
-    request(`/api/neighborhoods/citywide-trend?${years(startYear, endYear)}`, citywideTrendContextSchema, signal),
-  resolveNeighborhood: (lat: number, lng: number, signal?: AbortSignal) =>
-    request(`/api/neighborhoods/resolve?${new URLSearchParams({ lat: String(lat), lng: String(lng) })}`, resolveResponseSchema, signal),
-  citywideSummary: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
-    request(`/api/citywide/summary?${citywideParams(startYear, endYear, severities)}`, citywideSummarySchema, signal),
-  heatmap: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
-    request(`/api/citywide/heatmap?${citywideParams(startYear, endYear, severities)}`, heatmapResponseSchema, signal),
-  kde: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
-    request(`/api/citywide/kde?${citywideParams(startYear, endYear, severities)}`, kdeResponseSchema, signal),
-  spatialShift: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
-    request(`/api/citywide/spatial-shift?${citywideParams(startYear, endYear, severities)}`, spatialShiftResponseSchema, signal),
-  downtownComparison: (startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) =>
-    request(`/api/citywide/downtown-comparison?${citywideParams(startYear, endYear, severities)}`, downtownComparisonResponseSchema, signal),
+  release: (signal?: AbortSignal) => request('/data/current.json', releaseManifestSchema, signal),
+  neighborhoods: (release: ReleaseManifest, signal?: AbortSignal) =>
+    releaseRequest(release, 'neighborhoods.geojson', neighborhoodFeatureCollectionSchema, signal),
+  explorer: (release: ReleaseManifest, startYear: number, endYear: number, signal?: AbortSignal) =>
+    releaseRequest(release, `explorer/${startYear}-${endYear}.json`, explorerBundleSchema, signal),
+  neighborhoodContext: async (release: ReleaseManifest, id: string, startYear: number, endYear: number, signal?: AbortSignal) => {
+    const bundle = await releaseRequest(release, `neighborhoods/${encodeURIComponent(id)}.json`, neighborhoodBundleSchema, signal)
+    const context = bundle.contexts[`${startYear}-${endYear}`]
+    if (!context) throw new Error('The requested year range is not included in this release.')
+    return context
+  },
+  citywide: (release: ReleaseManifest, startYear: number, endYear: number, severities: CitywideSeverity[], signal?: AbortSignal) => {
+    const mask = CITYWIDE_SEVERITIES.reduce((mask, [severity], index) => mask | (severities.includes(severity) ? 1 << index : 0), 0)
+    return releaseRequest(release, `citywide/${startYear}-${endYear}/${mask}.json`, citywideBundleSchema, signal)
+  },
+  resolveNeighborhood: async (release: ReleaseManifest, lat: number, lng: number, signal?: AbortSignal) => {
+    const [{ resolveNeighborhood }, bundle] = await Promise.all([
+      import('./resolver'),
+      releaseRequest(release, 'resolver.json', resolverBundleSchema, signal),
+    ])
+    signal?.throwIfAborted()
+    return resolveNeighborhood(bundle, lat, lng)
+  },
 }

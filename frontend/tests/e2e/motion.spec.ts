@@ -1,5 +1,5 @@
+import { mockReleaseUpdates } from './static-helpers'
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { datasetMetaSchema } from '../../src/lib/contracts'
 
 type MotionRecord = { statistic: boolean; text: string; visible: boolean; property: string; frames: ComputedKeyframe[]; duration: ReturnType<KeyframeEffect['getTiming']>['duration']; easing: ReturnType<KeyframeEffect['getTiming']>['easing'] }
 declare global {
@@ -230,7 +230,7 @@ for (const keyboard of [false, true]) {
     let release = () => {}
     const blocked = new Promise<void>((resolve) => { release = resolve })
     let requested = false
-    await page.route('**/api/neighborhoods/ballard/context?**', async (route) => {
+    await page.route('**/data/releases/*/neighborhoods/ballard.json', async (route) => {
       requested = true
       await blocked
       await route.continue()
@@ -280,7 +280,7 @@ test('motion: a failed initial citywide summary fades all mounted statistics aft
   let allowSummary = false
   let release = () => {}
   const blocked = new Promise<void>((resolve) => { release = resolve })
-  await page.route('**/api/citywide/summary?**', async (route) => {
+  await page.route('**/data/releases/*/citywide/*/*.json', async (route) => {
     if (!allowSummary) await route.fulfill({ status: 503, json: { detail: 'Test summary unavailable' } })
     else { await blocked; await route.continue() }
   })
@@ -289,10 +289,7 @@ test('motion: a failed initial citywide summary fades all mounted statistics aft
   expect(await statistics(page)).toEqual([])
   allowSummary = true
   await clearMotion(page)
-  const shift = page.waitForResponse((response) => response.url().includes('/api/citywide/spatial-shift?') && response.ok())
-  const downtown = page.waitForResponse((response) => response.url().includes('/api/citywide/downtown-comparison?') && response.ok())
   await page.getByRole('button', { name: 'Retry request' }).click()
-  await Promise.all([shift, downtown])
   expect(await statistics(page)).toEqual([])
   release()
   await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
@@ -306,16 +303,12 @@ test('motion: automatic refresh and browser history do not replay statistics', a
     window.setInterval = (handler, timeout, ...args) => interval(handler, timeout === 300_000 ? 500 : timeout, ...args)
   })
   let refresh = false
-  await page.route('**/api/meta', async (route) => {
-    const response = await route.fetch()
-    const meta = datasetMetaSchema.parse(await response.json())
-    await route.fulfill({ response, json: refresh ? { ...meta, datasetVersion: `${meta.datasetVersion}-motion-test` } : meta })
-  })
+  await mockReleaseUpdates(page, (release) => refresh ? { ...release, releaseId: 'f'.repeat(64) } : release)
   await load(page)
   await selectNeighborhood(page, 'Ballard')
   await settled(page)
   await clearMotion(page)
-  const refreshed = page.waitForResponse((response) => response.url().includes('/ballard/context?') && response.ok())
+  const refreshed = page.waitForResponse((response) => response.url().includes('/neighborhoods/ballard.json') && response.ok())
   refresh = true
   await refreshed
   await expect(page.getByRole('complementary', { name: /context$/ })).toHaveAttribute('aria-busy', 'false')

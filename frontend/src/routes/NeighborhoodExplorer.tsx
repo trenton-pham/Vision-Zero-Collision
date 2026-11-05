@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { keepPreviousData, skipToken, useQuery } from '@tanstack/react-query'
+import { skipToken, useQuery } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { MAP_METRICS, parseMapMetric } from '../lib/mapMetrics'
 import { api } from '../lib/api'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
-import { useDatasetMeta } from '../lib/dataset'
+import { useDatasetMeta, useRelease } from '../lib/dataset'
 import { snapshotMotion, useContentEntrance, useGrainReveal, useRouteEntrance, useStatisticsFade, type MotionStamp, type StatisticsRetry } from '../lib/motion'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodMap } from '../components/NeighborhoodMap'
@@ -17,6 +17,7 @@ import styles from './NeighborhoodExplorer.module.css'
 export function NeighborhoodExplorer() {
   const state = useDashboardParams()
   const meta = useDatasetMeta()
+  const { release, recoverRelease } = useRelease()
   const location = useLocation()
   const entrance = useRouteEntrance()
   const [announcement, setAnnouncement] = useState('')
@@ -26,20 +27,24 @@ export function NeighborhoodExplorer() {
   const resolveGeneration = useRef(0)
   const resolveController = useRef<AbortController | null>(null)
   const neighborhood = state.neighborhood
-  const geo = useQuery({ queryKey: ['neighborhood-geojson'], queryFn: ({ signal }) => api.neighborhoods(signal), staleTime: Infinity })
-  const summary = useQuery({
-    queryKey: ['neighborhood-summary', state.startYear, state.endYear],
-    queryFn: ({ signal }) => api.neighborhoodSummary(state.startYear, state.endYear, signal),
-    placeholderData: keepPreviousData,
+  const geo = useQuery({ queryKey: ['neighborhood-geojson', release.releaseId], queryFn: ({ signal }) => api.neighborhoods(release, signal), staleTime: Infinity })
+  const explorer = useQuery({
+    queryKey: ['explorer', release.releaseId, state.startYear, state.endYear],
+    queryFn: ({ signal }) => api.explorer(release, state.startYear, state.endYear, signal),
+    placeholderData: (previous, query) => query?.queryKey[1] === release.releaseId ? previous : undefined,
+    staleTime: Infinity,
   })
+  const summary = { ...explorer, data: explorer.data?.summary }
+  const citywideTrend = {
+    ...explorer,
+    data: explorer.isPlaceholderData ? undefined : explorer.data?.citywideTrend,
+    isSuccess: explorer.isSuccess && !explorer.isPlaceholderData,
+    isLoading: explorer.isLoading || explorer.isPlaceholderData,
+  }
   const context = useQuery({
-    queryKey: ['neighborhood-context', state.neighborhood, state.startYear, state.endYear],
-    queryFn: neighborhood ? ({ signal }) => api.neighborhoodContext(neighborhood, state.startYear, state.endYear, signal) : skipToken,
-  })
-  const citywideTrend = useQuery({
-    queryKey: ['citywide-neighborhood-trend', state.startYear, state.endYear],
-    queryFn: ({ signal }) => api.citywideNeighborhoodTrend(state.startYear, state.endYear, signal),
-    enabled: !state.neighborhood,
+    queryKey: ['neighborhood-context', release.releaseId, neighborhood, state.startYear, state.endYear],
+    queryFn: neighborhood ? ({ signal }) => api.neighborhoodContext(release, neighborhood, state.startYear, state.endYear, signal) : skipToken,
+    staleTime: Infinity,
   })
 
   function select(id: string | null, name?: string | null, motion?: MotionStamp) {
@@ -63,7 +68,7 @@ export function NeighborhoodExplorer() {
     invalidateResolution()
     setResolving(false)
     return invalidateResolution
-  }, [location.key])
+  }, [location.key, release.releaseId])
 
   function selectManually(id: string | null, name?: string | null) {
     invalidateResolution()
@@ -87,12 +92,13 @@ export function NeighborhoodExplorer() {
     const isCurrent = () => generation === resolveGeneration.current && !controller.signal.aborted && matchesLocation()
     setResolving(true)
     try {
-      const result = await api.resolveNeighborhood(lat, lng, controller.signal)
+      const result = await api.resolveNeighborhood(release, lat, lng, controller.signal)
       if (!isCurrent()) return
       currentSelection.current.select(result.id, result.name, motion)
       if (!result.id) setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
     } catch (error) {
       if (isCurrent()) {
+        recoverRelease(error)
         setAnnouncement(error instanceof Error ? error.message : 'Unable to resolve that location.')
       }
     } finally {

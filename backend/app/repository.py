@@ -154,9 +154,16 @@ class MongoDatasetRepository:
     def load_active(self) -> DatasetBundle:
         state = self.active_state()
         version = str(state["activeVersion"])
+        return self.load_version(version, state=state)
+
+    def load_version(self, version: str, *, state: dict[str, Any] | None = None) -> DatasetBundle:
+        state = self.active_state() if state is None else state
         run = self.database.ingestion_runs.find_one({"_id": version})
         if not run or not run.get("manifest"):
             raise RuntimeError(f"Published dataset {version!r} has no ingestion manifest")
+        retained = {state.get("activeVersion"), state.get("previousVersion")}
+        if version not in retained and run.get("status") != "published":
+            raise RuntimeError(f"Dataset {version!r} has not been published")
 
         collisions = self._frame(
             self.database.collisions.find(
@@ -179,7 +186,10 @@ class MongoDatasetRepository:
 
         manifest = dict(run["manifest"])
         manifest["datasetVersion"] = version
-        manifest["lastPublishedAt"] = _isoformat(state.get("lastPublishedAt"))
+        manifest["lastPublishedAt"] = _isoformat(
+            state.get("lastPublishedAt") if version == state.get("activeVersion")
+            else run.get("publishedAt", manifest.get("lastPublishedAt", manifest.get("builtAt")))
+        )
         if len(collisions) != int(manifest["collisionCount"]):
             raise RuntimeError(
                 f"Published dataset {version!r} expected {manifest['collisionCount']} collisions; "

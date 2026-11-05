@@ -1,6 +1,8 @@
+import { assignedResolver } from '../fixtures'
+import { mockReleaseUpdates } from './static-helpers'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
-import { citywideSummarySchema, datasetMetaSchema, neighborhoodFeatureCollectionSchema } from '../../src/lib/contracts'
+import { citywideBundleSchema, neighborhoodFeatureCollectionSchema } from '../../src/lib/contracts'
 
 function deferred() {
   let release: (() => void) | undefined
@@ -60,13 +62,13 @@ test('citywide context follows the selected year range', async ({ page }) => {
 
 test('heatmap scale waits for density data instead of showing an invalid range', async ({ page }) => {
   const pending = deferred()
-  await page.route('**/api/citywide/heatmap?**', async (route) => {
+  await page.route('**/data/releases/*/citywide/*/*.json', async (route) => {
     await pending.promise
     await route.continue()
   })
   await page.goto('/citywide?start=2025&end=2025')
   try {
-    await expect(page.getByText('Collisions per grid cell', { exact: true })).toBeVisible()
+    await expect(page.getByText('Computing citywide analysis', { exact: true })).toBeVisible()
     await expect(page.getByText(/^≤.* collisions$/)).toHaveCount(0)
     await expect(page.getByText(/^1–0 collisions$/)).toHaveCount(0)
   } finally {
@@ -148,14 +150,14 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
 
   const fatalResponse = page.waitForResponse((response) => {
     const url = new URL(response.url())
-    return url.pathname === '/api/citywide/summary' && url.searchParams.get('severity') === 'fatal'
+    return /\/citywide\/[^/]+\/8\.json$/.test(url.pathname)
   })
   if (await page.locator('#severity-filters').getAttribute('open') === null) await page.locator('#severity-filters > summary').click()
   await page.getByText('Fatal', { exact: true }).click()
   await expect(page.getByRole('checkbox', { name: 'Fatal', exact: true })).toBeChecked()
   await expect(page).toHaveURL(/severity=fatal(?:&|$)/)
   const fatalPayload: unknown = await (await fatalResponse).json()
-  const fatal = citywideSummarySchema.parse(fatalPayload)
+  const fatal = citywideBundleSchema.parse(fatalPayload).summary
   const collisionCount = page.locator('dt').filter({ hasText: /^Collisions$/ }).locator('..').locator('dd')
   await expect(collisionCount).toHaveText(new Intl.NumberFormat('en-US').format(fatal.metrics.collisionCount))
   await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
@@ -167,12 +169,12 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
 
   const partialResponse = page.waitForResponse((response) => {
     const url = new URL(response.url())
-    return url.pathname === '/api/citywide/summary' && url.searchParams.get('end_year') === '2026' && url.searchParams.get('severity') === 'fatal'
+    return /\/citywide\/\d+-2026\/8\.json$/.test(url.pathname)
   })
   await page.getByRole('slider', { name: 'End year' }).press('ArrowRight')
   await expect(page).toHaveURL(/end=2026(?:&|$)/)
   const partialPayload: unknown = await (await partialResponse).json()
-  const partial = citywideSummarySchema.parse(partialPayload)
+  const partial = citywideBundleSchema.parse(partialPayload).summary
   await expect(collisionCount).toHaveText(new Intl.NumberFormat('en-US').format(partial.metrics.collisionCount))
   expect(partial.warnings.length).toBeGreaterThan(0)
   for (const warning of partial.warnings) await expect(page.getByText(warning, { exact: false })).toBeVisible()
@@ -215,23 +217,15 @@ test('downtown comparison uses complete years only', async ({ page }) => {
 test('a later map click wins when resolution replies arrive out of order', async ({ page }) => {
   const firstBlocked = deferred()
   const firstFinished = deferred()
-  let firstRequestUrl: string | undefined
   let firstRequests = 0
   let laterRequests = 0
-  await page.route('**/api/neighborhoods/resolve?**', async (route) => {
-    const url = route.request().url()
-    firstRequestUrl ??= url
-    const firstLocation = url === firstRequestUrl
+  await page.route('**/data/releases/*/resolver.json', async (route) => {
+    const firstLocation = firstRequests === 0
     if (firstLocation) {
       firstRequests += 1
       await firstBlocked.promise
     } else laterRequests += 1
-    await route.fulfill({ json: {
-      id: firstLocation ? 'ballard' : 'fremont',
-      name: firstLocation ? 'Ballard' : 'Fremont',
-      method: 'contains',
-      distanceMeters: 0,
-    } })
+    await route.fulfill({ json: assignedResolver(firstLocation ? 'ballard' : 'fremont', firstLocation ? 'Ballard' : 'Fremont') })
     if (firstLocation) firstFinished.release()
   })
   await page.goto('/neighborhoods?start=2025&end=2025')
@@ -251,10 +245,10 @@ test('manual selection wins over a pending map resolution', async ({ page }) => 
   const mapBlocked = deferred()
   const mapFinished = deferred()
   let requests = 0
-  await page.route('**/api/neighborhoods/resolve?**', async (route) => {
+  await page.route('**/data/releases/*/resolver.json', async (route) => {
     requests += 1
     await mapBlocked.promise
-    await route.fulfill({ json: { id: 'fremont', name: 'Fremont', method: 'contains', distanceMeters: 0 } })
+    await route.fulfill({ json: assignedResolver('fremont', 'Fremont') })
     mapFinished.release()
   })
   await page.goto('/neighborhoods?start=2025&end=2025')
@@ -334,10 +328,10 @@ for (const navigation of ['years', 'grain', 'back', 'citywide']) {
     const blocked = deferred()
     const finished = deferred()
     let requests = 0
-    await page.route('**/api/neighborhoods/resolve?**', async (route) => {
+    await page.route('**/data/releases/*/resolver.json', async (route) => {
       requests += 1
       await blocked.promise
-      await route.fulfill({ json: { id: 'ballard', name: 'Ballard', method: 'contains', distanceMeters: 0 } })
+      await route.fulfill({ json: assignedResolver('ballard', 'Ballard') })
       finished.release()
     })
     await page.goto('/neighborhoods?start=2021&end=2025')
@@ -378,9 +372,9 @@ for (const navigation of ['years', 'grain', 'back', 'citywide']) {
 for (const navigation of ['years', 'grain']) {
   test(`polygon selection works after ${navigation} changes and sends one request`, async ({ page }) => {
     let requests = 0
-    await page.route('**/api/neighborhoods/resolve?**', async (route) => {
+    await page.route('**/data/releases/*/resolver.json', async (route) => {
       requests += 1
-      await route.fulfill({ json: { id: 'ballard', name: 'Ballard', method: 'contains', distanceMeters: 0 } })
+      await route.fulfill({ json: assignedResolver('ballard', 'Ballard') })
     })
     await page.goto('/neighborhoods?start=2021&end=2025')
     await expect(page.locator('path.leaflet-interactive').first()).toBeVisible()
@@ -424,15 +418,12 @@ test('a dataset refresh replaces same-sized polygon paths', async ({ page }) => 
   let metadataRequests = 0
   let geometryRequests = 0
   let featureCount = 0
-  await page.route('**/api/meta', async (route) => {
-    const response = await route.fetch()
-    const payload: unknown = await response.json()
-    const metadata = datasetMetaSchema.parse(payload)
+  const originalUrl = await mockReleaseUpdates(page, (release) => {
     metadataRequests += 1
-    await route.fulfill({ json: { ...metadata, datasetVersion: `geometry-${metadataRequests}` } })
+    return { ...release, releaseId: String(metadataRequests).repeat(64) }
   })
-  await page.route('**/api/neighborhoods/geojson', async (route) => {
-    const response = await route.fetch()
+  await page.route('**/data/releases/*/neighborhoods.geojson', async (route) => {
+    const response = await route.fetch({ url: originalUrl(route.request().url()) })
     const payload: unknown = await response.json()
     const collection = neighborhoodFeatureCollectionSchema.parse(payload)
     geometryRequests += 1
