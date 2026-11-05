@@ -14,3 +14,4 @@ ts	phase	decision	why	evidence	result
 2026-11-05T17:48:00.591617+00:00	review	Fixed frontend findings and archive first-attempt recovery handling	Preserve analytical display and recovery archives	frontend/scripts/publication-archives.test.mjs	Independent reviews found no remaining code blockers
 2026-11-05T17:56:36.319956+00:00	Live Atlas export	Current dataset verified after IP access rule added	2672 files; dataset 20261008T172723Z-fbef0eb54182; no database writes
 2026-11-05T18:02:02.100309+00:00	Preview HTTP identity	Use explicit project verifier identity for preflight and smoke	Cloudflare preview returns 1010 for default Python user agent, 200 for named verifier; browser checks pass
+2026-11-05T18:04:56.355127+00:00	Runner resources	Pin numerical library threads to one in verification and publication	Match local export settings and avoid CPU oversubscription; replace obsolete PR checks while production runs remain serialized

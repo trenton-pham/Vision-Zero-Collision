@@ -28,7 +28,11 @@ on:
 
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('collision-check-{0}', github.event.number) || 'collision-production-publication' }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  OPENBLAS_NUM_THREADS: '1'
+  OMP_NUM_THREADS: '1'
 
 permissions:
   contents: read
