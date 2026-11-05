@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from urllib.error import HTTPError
 from urllib.parse import urlparse
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 from uuid import UUID
 
 MAX_FILES = 20_000
@@ -217,7 +217,8 @@ def preflight(base_url: str, previous_site: Path | None = None) -> None:
     if parsed.scheme != "https" or not parsed.hostname or not parsed.hostname.endswith(".workers.dev") or parsed.username or parsed.password or parsed.port or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
         raise ValueError("Set STATIC_WEBSITE_URL to the actual production workers.dev origin")
     try:
-        with urlopen(base_url.rstrip("/") + "/data/current.json", timeout=60) as response:
+        request = Request(base_url.rstrip("/") + "/data/current.json", headers={"User-Agent": "VisionZeroStaticVerifier/1.0"})
+        with urlopen(request, timeout=60) as response:
             live = json.load(response)
     except HTTPError as error:
         if error.code == 404 and previous_site is None:
@@ -234,7 +235,8 @@ def smoke(base_url: str, root: Path) -> None:
     current = check(root)
     base_url = base_url.rstrip("/")
     def get(name: str) -> tuple[bytes, object]:
-        with urlopen(base_url + "/" + name, timeout=60) as response:
+        request = Request(base_url + "/" + name, headers={"User-Agent": "VisionZeroStaticVerifier/1.0"})
+        with urlopen(request, timeout=60) as response:
             if response.status != 200:
                 raise ValueError("Unexpected HTTP status")
             return response.read(), response.headers
