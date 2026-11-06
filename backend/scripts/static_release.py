@@ -6,9 +6,11 @@ import hashlib
 import json
 import re
 import shutil
+import sys
 import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
+from time import sleep
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -236,10 +238,21 @@ def smoke(base_url: str, root: Path) -> None:
     base_url = base_url.rstrip("/")
     def get(name: str) -> tuple[bytes, object]:
         request = Request(base_url + "/" + name, headers={"User-Agent": "VisionZeroStaticVerifier/1.0"})
-        with urlopen(request, timeout=60) as response:
-            if response.status != 200:
-                raise ValueError("Unexpected HTTP status")
-            return response.read(), response.headers
+        for attempt in range(5):
+            try:
+                with urlopen(request, timeout=60) as response:
+                    if response.status != 200:
+                        raise ValueError("Unexpected HTTP status")
+                    return response.read(), response.headers
+            except HTTPError as error:
+                if error.code not in {500, 502, 503, 504}:
+                    raise
+                ray = error.headers.get("CF-Ray", "unavailable") if error.headers else "unavailable"
+                print(f"GET {request.full_url}: HTTP {error.code}, attempt {attempt + 1}/5, CF-Ray {ray}", file=sys.stderr, flush=True)
+                error.close()
+                if attempt == 4:
+                    raise
+                sleep(2 ** (attempt + 1))
     pointer, headers = get("data/current.json")
     if json.loads(pointer) != current or "no-store" not in headers.get("Cache-Control", ""):
         raise ValueError("Published pointer or its cache policy is wrong")
