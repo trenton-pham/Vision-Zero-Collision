@@ -70,7 +70,6 @@ jobs:
         working-directory: frontend
       - run: uv run --frozen python -m backend.scripts.resolver_fixtures --real --output build/resolver-fixtures.json
       - run: node --experimental-strip-types frontend/scripts/check-resolver.mjs build/resolver-fixtures.json
-      - run: node frontend/scripts/publication-archives.mjs --self-check
       - run: node --test frontend/scripts/publication-archives.test.mjs
       - run: uv run --frozen python -m backend.scripts.export_static --output build/export --backend artifacts --verify
       - run: uv run --frozen python -m backend.scripts.static_release assemble --export-dir build/export --frontend-dir frontend/dist --output build/site --archive-output build/current-release.tar.gz
@@ -173,7 +172,10 @@ jobs:
           flags=()
           if [[ "$DRY_RUN" == 'true' ]]; then flags+=(--dry-run); fi
           if [[ "$ALLOW_ROW_DECREASE" == 'true' ]]; then flags+=(--allow-row-decrease); fi
-          uv run --frozen python -m backend.scripts.sync_collisions "${flags[@]}" --manifest-output "$RUNNER_TEMP/ingestion-manifest.json" > "$RUNNER_TEMP/sync.log" 2>&1
+          command_status=0
+          uv run --frozen python -m backend.scripts.sync_collisions "${flags[@]}" --manifest-output "$RUNNER_TEMP/ingestion-manifest.json" > "$RUNNER_TEMP/sync.log" 2>&1 || command_status=$?
+          python -m backend.scripts.publication_diagnostics --log "$RUNNER_TEMP/sync.log" --stage "Atlas ingestion" --exit-code "$command_status"
+          if (( command_status != 0 )); then exit "$command_status"; fi
           python - <<'PY'
           import json, os
           from pathlib import Path
@@ -198,7 +200,10 @@ jobs:
         run: |
           flags=()
           if [[ -n "$SYNC_DATASET_VERSION" ]]; then flags+=(--dataset-version "$SYNC_DATASET_VERSION"); fi
-          uv run --frozen python -m backend.scripts.export_static --output build/export --backend mongodb --verify "${flags[@]}" > "$RUNNER_TEMP/export.log" 2>&1
+          command_status=0
+          uv run --frozen python -m backend.scripts.export_static --output build/export --backend mongodb --verify "${flags[@]}" > "$RUNNER_TEMP/export.log" 2>&1 || command_status=$?
+          python -m backend.scripts.publication_diagnostics --log "$RUNNER_TEMP/export.log" --stage "Static export" --exit-code "$command_status"
+          if (( command_status != 0 )); then exit "$command_status"; fi
       - name: Build and assemble current plus previous
         if: env.ACTION != 'website-rollback' && (env.DRY_RUN != 'true' || steps.sync.outputs.status == '')
         run: |

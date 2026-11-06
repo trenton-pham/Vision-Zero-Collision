@@ -6,7 +6,7 @@ Seattle's Department of Transportation (SDOT) launched [Vision Zero](https://www
 
 The checked-in spatial dataset contains 106,050 Seattle collisions from 2015 through August 31, 2026. The 2026 data covers a partial year. Across complete years, average annual collision counts fell after 2019, while the share of serious and fatal collisions rose.
 
-Notebooks cover exploratory analysis, spatial patterns, and historical severity modeling. A public, read-only React and FastAPI dashboard shows observed collision metrics for all 94 Seattle neighborhoods and citywide maps. These analyses do not establish the causal effect of Vision Zero.
+Notebooks cover exploratory analysis, spatial patterns, and historical severity modeling. A public, read-only React dashboard with precomputed Python results shows observed collision metrics for all 94 Seattle neighborhoods and citywide maps. These analyses do not establish the causal effect of Vision Zero.
 
 The research questions are:
 
@@ -23,7 +23,7 @@ The research questions are:
 | Cleaning & Feature Engineering | Python, Pandas, GeoPandas, NumPy, PyArrow |
 | EDA & Visualization | Matplotlib, Seaborn |
 | Spatial Analysis | GeoPandas, Shapely, SciPy (KDE), Folium in notebooks |
-| Modeling | Scikit-learn, XGBoost, LightGBM, CatBoost |
+| Modeling | Scikit-learn, XGBoost, LightGBM, CatBoost, PyTorch |
 | Dashboard | React, TypeScript, Vite, React-Leaflet, Recharts |
 | API & Data Storage | FastAPI, local Parquet artifacts, MongoDB Atlas |
 | Deployment & Refresh | Cloudflare Workers Static Assets, GitHub Actions; retained Render reference |
@@ -67,7 +67,7 @@ Use `--skip-geojson` if you only need Parquet and CSV. The spatial notebook stil
 | `notebooks/all_collisions_eda.ipynb` | Temporal and categorical EDA: monthly trends, day/hour/season, junction type, severity, collision type, weather, road/light conditions, and pedestrian/cyclist involvement |
 | `notebooks/vehicle_eda.ipynb` | Vehicle category distribution and yearly vehicle involvement trends |
 | `notebooks/geo.ipynb` | Spatial analysis: Folium heatmap, composite severity, all/severe collision KDE maps, polygon-based downtown density comparisons, and GeoJSON export |
-| `notebooks/model.ipynb` | Historical grid-cell severity regression, target stabilization, and comparison of five tuned regressors |
+| `notebooks/model.ipynb` | Historical grid-cell severity regression, target stabilization, and comparison of five tuned tree regressors and a PyTorch neural network |
 
 ### `all_collisions_eda.ipynb`
 
@@ -90,9 +90,9 @@ Use `--skip-geojson` if you only need Parquet and CSV. The spatial notebook stil
 ### `model.ipynb`
 
 - Groups complete-year collisions through 2025 into occupied cells in a 150×150 latitude and longitude grid. Cell summaries include counts, severity, vehicle involvement, pedestrian and cyclist involvement, and temporal and intersection shares.
-- Compares raw mean severity with a stabilized score. The latter shrinks sparse cells toward a training-partition severity prior with a smoothing weight of 10. Repeated 5-fold cross-validation selects the target.
-- Tunes Decision Tree, Random Forest, XGBoost, LightGBM, and CatBoost regressors with GridSearchCV or RandomizedSearchCV. Training cross-validation R² determines their rank.
-- Uses cell coordinates, peak hour, night, weekend and seasonal ratios, average vehicle and pedestrian/cyclist involvement, and intersection share derived from `JUNCTIONTYPE`. Predictors exclude severity components, severity aggregates, collision count, and former risk labels. Each cross-validation fold fits its own median imputation.
+- Compares raw mean severity with a stabilized score. The latter shrinks sparse cells toward each training fold's severity prior with a smoothing weight of 10. Repeated 5-fold cross-validation selects the target.
+- Tunes Decision Tree, Random Forest, XGBoost, LightGBM, CatBoost, and a PyTorch neural network with GridSearchCV or RandomizedSearchCV. Training cross-validation R² determines their rank. The neural network tests three compact hidden-layer layouts with two weight-decay settings on the same five folds.
+- Uses cell coordinates, peak hour, night, weekend and seasonal ratios, average vehicle and pedestrian/cyclist involvement, and intersection share derived from `JUNCTIONTYPE`. Predictors exclude severity components, severity aggregates, collision count, and former risk labels. Each cross-validation fold fits its own median imputation. The neural network also standardizes predictors, selects its epoch count on an inner 15% validation split, then restarts and refits on the entire fold training partition.
 - Uses an 80/20 cell split and reports held-out R², MAE, RMSE, predictions, residuals, and feature importance. The model estimates historical cell-level severity, not future collision probability.
 
 ### Run the notebooks
@@ -100,7 +100,7 @@ Use `--skip-geojson` if you only need Parquet and CSV. The spatial notebook stil
 Complete **Local development** first. In the container terminal at the repository root, install the notebook libraries separately:
 
 ```bash
-.venv/bin/pip install jupyterlab matplotlib seaborn folium scikit-learn xgboost lightgbm catboost
+.venv/bin/pip install jupyterlab matplotlib seaborn folium scikit-learn xgboost lightgbm catboost torch
 cd notebooks
 ../.venv/bin/jupyter lab --ip=0.0.0.0 --no-browser
 ```
@@ -121,19 +121,11 @@ These comparisons use the checked-in `Collision_Processed.parquet` and complete 
 
 ## Model findings
 
-Model development is ongoing. The saved outputs in `model.ipynb` report the following results for stabilized historical severity:
+Corrected model results are pending. The previous scores, selected configurations, and model rankings were removed because their stabilization prior included validation-fold labels.
 
-| Model | 5-fold CV R² | Test R² | Test MAE | Test RMSE |
-| --- | --- | --- | --- | --- |
-| LightGBM | 0.224 | 0.241 | 0.073 | 0.107 |
-| CatBoost | 0.222 | 0.238 | 0.073 | 0.108 |
-| Random Forest | 0.222 | 0.237 | 0.073 | 0.108 |
-| XGBoost | 0.215 | 0.230 | 0.074 | 0.108 |
-| Decision Tree | 0.143 | 0.158 | 0.079 | 0.113 |
+The notebook now learns the prior separately within each cross-validation fit. Validation targets use that fitted prior; final held-out targets use the full-training refit's prior. Raw and stabilized targets and all six regressors remain available. Small correctness checks verify the evaluation wiring; they do not replace the full target-selection and model searches.
 
-- Stabilized severity had repeated cross-validation R² of 0.215 versus 0.210 for raw mean severity, with less variation between folds.
-- LightGBM ranked first by training cross-validation R², while CatBoost and Random Forest performed similarly.
-- Much of the variation in historical severity remains unexplained. The dashboard displays observed collision metrics and does not serve model predictions.
+The dashboard displays observed collision metrics and does not serve model predictions.
 
 ## Limits
 
@@ -141,9 +133,11 @@ Model development is ongoing. The saved outputs in `model.ipynb` report the foll
 - The 2026 data is partial. Recent records may change or arrive late. Some notebook comparisons include 2026, so apply complete-year filters before comparing annual totals or period averages. The model excludes 2026. The dashboard excludes partial years from trend and spatial-shift comparisons.
 - Spatial findings exclude collisions without usable geometry. Missing-location records remain available in the cleaned data and are summarized in the cleaning manifest.
 - Collision counts, composite severity, and KDE describe observed burden. Exposure measures such as traffic volume, population, transit ridership, or pedestrian activity are needed to estimate collision risk per trip or per person.
+- The stabilized severity prior uses only the training rows supplied to each cross-validation fit. Validation outcomes are used for scoring, and held-out test outcomes are excluded from the final training prior.
+- Neural-network comparisons describe one historical split and seed. They do not establish superiority across seeds or future forecasting.
 - The model uses a random split of historical grid cells. Temporal validation and spatial holdouts are needed to assess future prediction and generalization to other areas. The latitude and longitude bins also have unequal physical dimensions.
 - `geo.ipynb` uses neighborhood polygons and projected areas for downtown density. The dashboard uses a rectangular downtown boundary for count and severity comparisons. Notebook heatmaps weight vehicles, while dashboard heatmaps count collisions. The dashboard calculates KDE in latitude and longitude and displays relative density.
-- The static publication path serves precomputed results from Cloudflare without a sleeping application server. Atlas ingestion remains in GitHub Actions. The existing Render deployment remains available until the static cutover is verified.
+- The static publication path serves precomputed results from Cloudflare without a sleeping application server. Atlas ingestion remains in GitHub Actions. Render is suspended, with its configuration retained for recovery.
 
 ## Next steps
 
@@ -230,7 +224,7 @@ cd frontend
 npm run dev -- --host 0.0.0.0
 ```
 
-Open forwarded port 5173. Vite proxies `/api` and `/healthz` to the existing API on port 8000. After changing processed inputs, rebuild the artifacts and restart the container as described below.
+Open forwarded port 5173. Vite proxies only `/data` to port 8000. Use port 8000 directly for `/api`, `/healthz`, `/readyz`, and `/docs`. After changing processed inputs, rebuild the artifacts and restart the container as described below.
 
 ### Optional native setup
 
@@ -239,8 +233,7 @@ If you work outside the container, install Python 3.11 and Node 22.12 or later w
 ```bash
 python3.11 --version
 node --version
-python3.11 -m venv .venv
-.venv/bin/pip install -e '.[test]'
+uv sync --python 3.11 --frozen --extra test
 export DASHBOARD_DATA_BACKEND=artifacts
 .venv/bin/python -m backend.scripts.build_artifacts
 .venv/bin/python -m backend.scripts.export_static --output build/export --verify
@@ -287,13 +280,13 @@ The local builder enforces this row-count and assignment baseline. If you replac
 
 ## Monthly MongoDB pipeline
 
-Production stores versioned collision and aggregate documents in MongoDB. A sync writes and validates a new version before switching `dataset_state.activeVersion`. Failures before that switch leave the active version unchanged. After a failed job, check the active version before retrying or rolling back. The API checks for a new version every 60 seconds and loads and validates it before replacing its in-memory snapshot.
+Production stores versioned collision and aggregate documents in MongoDB. A sync writes and validates a new version before switching `dataset_state.activeVersion`. Failures before that switch leave the active version unchanged. After a failed job, check the active version before retrying or rolling back. The publication workflow exports the pinned Atlas version and deploys its analytical files with React. Browsers check the current release manifest every five minutes. The local reference API can still refresh an in-memory snapshot.
 
-The ingestion job queries the ArcGIS object-ID list and downloads records in batches of 1,000. It checks for source edits during the download, validates collision fields and geometry, assigns neighborhoods, and reconciles annual and monthly totals. The uploaded manifest records source and spatial row counts, accepted exclusions, the normalized hash, and the difference from the 106,050-record baseline. Each monthly run downloads the full source, so it captures historical edits and deletions. It does not refresh vehicle data.
+The ingestion job queries the ArcGIS object-ID list and downloads records in batches of 1,000. It checks for source edits during the download, validates collision fields and geometry, assigns neighborhoods, and reconciles annual and monthly totals. The ingestion manifest records source and spatial row counts, accepted exclusions, the published-content fingerprint, and the difference from the 106,050-record baseline. Each monthly run downloads the full source, so it captures historical edits and deletions. It does not refresh vehicle data.
 
 The publication gate checks both source feature count and usable spatial collision count for decreases greater than 1%.
 
-Configure these secrets in the repository's GitHub `production` environment:
+Configure the [publication secrets](./docs/deployment/static-hosting.md#cloudflare-and-github-setup) in the GitHub `production` environment. The ingestion credentials are:
 
 - `MONGODB_INGEST_URI`: database user with `readWrite` on `seattle_collision`
 - `ATLAS_PUBLIC_KEY` and `ATLAS_PRIVATE_KEY`: Atlas API credentials allowed to create temporary project IP access-list entries
@@ -303,7 +296,7 @@ The [Monthly collision sync workflow](./.github/workflows/monthly-collision-sync
 
 [GitHub scheduled workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) run from the default branch and may be delayed. GitHub disables schedules in public repositories after 60 days without activity. Schedule notifications follow the settings of the user who last changed the cron schedule.
 
-To run the sync manually, use the ingestion user's write credentials and allow your machine's outbound IP in Atlas. Dry-run validates the candidate without publishing it:
+To run the sync manually, use the ingestion user's write credentials and allow your machine's outbound IP in Atlas. Dry-run validates the candidate without writing to Atlas, including when validation fails:
 
 ```bash
 export DASHBOARD_DATA_BACKEND=mongodb
@@ -313,13 +306,13 @@ export MONGODB_DATABASE=seattle_collision
 .venv/bin/python -m backend.scripts.sync_collisions
 ```
 
-To restore the retained previous dataset, use the same write credentials. Record `datasetVersion` and `dataAsOf` from `/readyz` before running:
+To restore the retained previous dataset, use the same write credentials. Record `datasetVersion` and `meta.dataAsOf` from the public `/data/current.json` before running:
 
 ```bash
 .venv/bin/python -m backend.scripts.rollback_dataset
 ```
 
-After the next refresh, normally within 60 seconds, check `/readyz` again and confirm `datasetVersion` matches the command's output. Rollback swaps the active and previous versions. Running it again reverses the rollback. The first publication has no previous version. Each publication keeps the active and previous datasets and attempts to prune older ones, so this command cannot step through the full publication history.
+Then start a new `publish-only` workflow run on main. After publication, check `/data/current.json` and confirm `datasetVersion` matches the rollback command's output. Rollback swaps the active and previous versions. Running it again reverses the rollback. The first publication has no previous version. Each publication keeps the active and previous datasets and attempts to prune older ones, so this command cannot step through the full publication history.
 
 After investigating a source decrease greater than 1%, a manual operator can pass `--allow-row-decrease` to the sync command.
 
@@ -345,7 +338,7 @@ MongoDB integration tests run when `MONGODB_TEST_URI` is set. Use a separate tes
 
 ## Docker (retained Render reference)
 
-The Docker configuration below documents the previous Render API deployment. Keep its last deployed image available during cutover. Use the development container or the static hosting guide for the new dashboard; a newly built legacy image does not include the static export.
+The Docker configuration below documents the previous Render API deployment. Its last deployed image is retained for recovery. Use the development container or the static hosting guide for the new dashboard; a newly built legacy image does not include the static export.
 
 Build from the repository root. Running the image requires an already published MongoDB dataset and a read-only runtime URI:
 
@@ -362,7 +355,7 @@ The multi-stage image builds React with Node 22 and serves the compiled applicat
 
 ## Render and Atlas setup
 
-These are the retained deployment's setup instructions. Use the [static hosting guide](./docs/deployment/static-hosting.md) for new publications. Disable live Render autodeploy before merging the migration, then suspend the service only after Cloudflare is verified with the current published Atlas dataset.
+These are the retained deployment's setup instructions. Use the [static hosting guide](./docs/deployment/static-hosting.md) for new publications. Render is suspended and automatic deployment is off. Its last deployed commit is `7c03b224fbf18ae021e57c04aee641898fd88c10`.
 
 1. Create an Atlas Free cluster in AWS `us-west-2` and create separate read-only runtime and read/write ingestion database users.
 2. Create the Render service from `render.yaml`, set its `MONGODB_URI` secret to the read-only user, and add all [outbound IP ranges shown for the Render service](https://render.com/docs/outbound-ip-addresses) to the Atlas project IP access list.

@@ -169,7 +169,7 @@ class MongoDatasetRepository:
             self.database.collisions.find(
                 {"datasetVersion": version},
                 {"_id": 0, **dict.fromkeys(COLLISION_COLUMNS, 1)},
-            ).batch_size(1_000),
+            ).sort("COLDETKEY", 1).batch_size(1_000),
             categories=COLLISION_CATEGORIES,
         )
         annual = self._frame(

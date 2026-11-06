@@ -8,6 +8,9 @@ from backend.app.repository import MongoDatasetRepository
 
 
 class Cursor(list):
+    def sort(self, key: str, direction: int):
+        return Cursor(sorted(self, key=lambda document: document[key], reverse=direction < 0))
+
     def batch_size(self, _: int):
         return self
 
@@ -49,15 +52,16 @@ def repository():
     return repo
 
 
-def test_pinned_read_does_not_switch_to_active_or_reorder_records(repository) -> None:
+def test_pinned_read_keeps_requested_version_and_sorts_collision_keys(repository) -> None:
     bundle = repository.load_version("old")
     assert bundle.manifest["datasetVersion"] == "old"
     assert bundle.manifest["lastPublishedAt"] == "2026-01-01T00:00:00+00:00"
-    assert bundle.collisions["COLDETKEY"].tolist() == [9, 2, 7]
+    assert bundle.collisions["COLDETKEY"].tolist() == [2, 7, 9]
 
 
 def test_active_read_preserves_current_publication_time(repository) -> None:
     bundle = repository.load_active()
+    assert bundle.collisions["COLDETKEY"].tolist() == [2, 7, 9]
     assert bundle.manifest["datasetVersion"] == "new"
     assert bundle.manifest["lastPublishedAt"] == "2026-02-01T00:00:00+00:00"
 

@@ -15,7 +15,7 @@ import httpx
 import pandas as pd
 
 from backend.app.config import Settings
-from backend.app.mongo_writer import MongoDatasetWriter
+from backend.app.mongo_writer import MongoDatasetWriter, PublicationLockedError
 from backend.app.repository import DatasetBundle
 from backend.app.dataset import (
     EXPECTED_TOTAL,
@@ -290,21 +290,42 @@ def clean_features(collection: dict[str, Any]) -> tuple[gpd.GeoDataFrame, dict[s
     }
 
 
-def _content_hash(frame: pd.DataFrame) -> str:
-    columns = [
-        "OBJECTID", "INCKEY", "COLDETKEY", "MAXSEVERITYDESC", "INJURIES",
-        "SERIOUSINJURIES", "FATALITIES", "PEDCOUNT", "INCDATE", "MODDTTM",
-        "JUNCTIONTYPE", "YEAR", "MONTH", "HOUR", "Day_of_Week", "X", "Y",
-        "neighborhood_id", "assignment_method", "assignment_distance_m",
-    ]
-    normalized = frame[[column for column in columns if column in frame.columns]].copy()
-    for column in ("INCDATE", "MODDTTM"):
-        if column in normalized:
-            normalized[column] = normalized[column].astype("string")
-    payload = normalized.sort_values("COLDETKEY").to_json(
-        orient="records", date_format="iso", double_precision=10
+def _content_hash(bundle: DatasetBundle) -> str:
+    collections = {
+        "collisions": MongoDatasetWriter._collision_documents(
+            bundle.collisions.sort_values("COLDETKEY"), "",
+        ),
+        "annual": MongoDatasetWriter._metric_documents(
+            bundle.annual.sort_values(["neighborhood_id", "YEAR"]), "", monthly=False,
+        ),
+        "monthly": MongoDatasetWriter._metric_documents(
+            bundle.monthly.sort_values(["neighborhood_id", "period"]), "", monthly=True,
+        ),
+    }
+    for documents in collections.values():
+        for document in documents:
+            del document["_id"], document["datasetVersion"]
+    geojson = {
+        **bundle.geojson,
+        "features": sorted(bundle.geojson["features"], key=lambda feature: feature["properties"]["id"]),
+    }
+    metadata = {
+        key: value for key, value in bundle.manifest.items()
+        if key not in {"datasetVersion", "contentHash", "builtAt", "lastPublishedAt", "source"}
+    }
+    source = bundle.manifest.get("source", {})
+    quality = {
+        key: source[key] for key in (
+            "sourceRows", "sourceFeatureCount", "geometryExcludedRows",
+            "missingSeverityRows", "unknownTimeRows",
+        ) if key in source
+    }
+    payload = {"hashVersion": 2, **collections, "geojson": geojson, "metadata": metadata, "quality": quality}
+    serialized = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        default=lambda value: value.isoformat(),
     )
-    return hashlib.sha256(payload.encode()).hexdigest()
+    return hashlib.sha256(serialized.encode()).hexdigest()
 
 
 def build_bundle(
@@ -325,9 +346,7 @@ def build_bundle(
     monthly = aggregate_monthly(frame, polygons)
     data_as_of = pd.to_datetime(frame["INCDATE"], utc=True).max().date()
     available_years = sorted(int(value) for value in frame["YEAR"].unique())
-    content_hash = _content_hash(frame)
     built_at = datetime.now(timezone.utc)
-    version = f"{built_at.strftime('%Y%m%dT%H%M%SZ')}-{content_hash[:12]}"
     warnings = []
     if quality["geometryExcludedRows"]:
         warnings.append(
@@ -339,7 +358,6 @@ def build_bundle(
         )
     manifest = {
         "artifactVersion": VERSION,
-        "datasetVersion": version,
         "builtAt": built_at.isoformat(),
         "lastPublishedAt": None,
         "dataAsOf": data_as_of.isoformat(),
@@ -349,7 +367,6 @@ def build_bundle(
         "collisionCount": len(frame),
         "neighborhoodCount": len(polygons),
         "assignmentCounts": assignment_counts,
-        "contentHash": content_hash,
         "warnings": warnings,
         "baselineComparison": {
             "checkedInCollisionCount": EXPECTED_TOTAL,
@@ -365,7 +382,13 @@ def build_bundle(
     )
     if citywide_annual != len(frame) or citywide_monthly != len(frame):
         raise RuntimeError("Generated annual and monthly totals do not reconcile")
-    return DatasetBundle(manifest, frame, annual, monthly, dashboard_geojson(polygons)), content_hash, quality
+    bundle = DatasetBundle(manifest, frame, annual, monthly, dashboard_geojson(polygons))
+    content_hash = _content_hash(bundle)
+    manifest.update({
+        "datasetVersion": f"{built_at.strftime('%Y%m%dT%H%M%SZ')}-{content_hash[:12]}",
+        "contentHash": content_hash,
+    })
+    return bundle, content_hash, quality
 
 
 def run_sync(
@@ -392,21 +415,24 @@ def run_sync(
             allow_row_decrease=allow_row_decrease,
         )
         return {**result, "manifest": bundle.manifest}
+    except PublicationLockedError:
+        raise
     except Exception as error:
-        run_id = (
-            str(bundle.manifest["datasetVersion"])
-            if bundle is not None
-            else f"failed-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
-        )
-        try:
-            writer.record_failure(
-                run_id,
-                error,
-                source_metadata=source_metadata,
-                manifest=bundle.manifest if bundle is not None else None,
+        if not dry_run:
+            run_id = (
+                f"{bundle.manifest['datasetVersion']}:failed:{uuid4().hex}"
+                if bundle is not None
+                else f"failed-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
             )
-        except Exception:
-            pass
+            try:
+                writer.record_failure(
+                    run_id,
+                    error,
+                    source_metadata=source_metadata,
+                    manifest=bundle.manifest if bundle is not None else None,
+                )
+            except Exception:
+                pass
         raise
     finally:
         source.close()

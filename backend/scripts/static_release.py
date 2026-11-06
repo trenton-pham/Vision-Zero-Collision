@@ -307,7 +307,7 @@ def main() -> None:
         print(json.dumps({"releaseId": result["releaseId"], "datasetVersion": result["datasetVersion"]}))
     elif args.command == "preflight":
         preflight(args.url, args.previous_site)
-        print("Production pointer agrees with the recovery archive")
+        print("Production preflight passed")
     elif args.command == "smoke":
         smoke(args.url, args.site)
         print("Published assets and cache headers verified")

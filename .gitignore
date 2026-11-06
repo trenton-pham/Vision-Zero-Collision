@@ -24,6 +24,9 @@ frontend/vite.config.d.ts
 frontend/playwright.config.js
 frontend/playwright.config.d.ts
 
+deployment/
+wrangler.bootstrap.jsonc
+
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -33,6 +36,7 @@ __pycache__/
 .impeccable/
 .audit/
 .playwright-mcp/
+.serena/
 DESIGN.md
 FIGMA.md
 PRODUCT.md

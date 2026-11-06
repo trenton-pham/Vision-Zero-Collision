@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from scripts.collision_clean import CollisionCleaner
-from backend.scripts.sync_collisions import clean_features
+from backend.scripts.sync_collisions import _content_hash, build_bundle, clean_features
 
 
 def features(times: list[str] | None = None) -> dict:
@@ -79,3 +79,12 @@ def test_both_cleaners_handle_wholly_unknown_incident_times(tmp_path: Path) -> N
     assert cleaned["HOUR"].isna().all()
     assert stats["unknown_time_rows"] == 2
     assert stats["midnight_time_rows"] == 0
+
+
+def test_built_bundle_fingerprint_is_stable_after_manifest_completion():
+    first, fingerprint, quality = build_bundle(features(), {"sourceFeatureCount": 3, "downloadAttempt": 1})
+    second, repeated, _ = build_bundle(features(), {"sourceFeatureCount": 3, "downloadAttempt": 2})
+    assert _content_hash(first) == fingerprint == repeated == _content_hash(second)
+    assert first.manifest["contentHash"] == fingerprint
+    assert first.manifest["datasetVersion"].endswith(fingerprint[:12])
+    assert first.manifest["source"]["unknownTimeRows"] == quality["unknownTimeRows"] == 1

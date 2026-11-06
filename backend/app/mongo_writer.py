@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import math
+import warnings
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 from uuid import uuid4
 
 import numpy as np
@@ -60,6 +62,10 @@ def _batched(items: list[dict[str, Any]], size: int = 1_000) -> Iterable[list[di
         yield items[offset : offset + size]
 
 
+class PublicationLockedError(RuntimeError):
+    pass
+
+
 class MongoDatasetWriter:
     def __init__(self, uri: str, database: str):
         self.client = MongoClient(
@@ -73,6 +79,35 @@ class MongoDatasetWriter:
 
     def close(self) -> None:
         self.client.close()
+
+    @contextmanager
+    def _publication_lock(self, operation: str) -> Iterator[None]:
+        owner = uuid4().hex
+        lock = {"_id": "publication-lock", "owner": owner}
+        try:
+            self.database.dataset_state.insert_one({
+                **lock,
+                "operation": operation,
+                "acquiredAt": datetime.now(timezone.utc),
+            })
+        except DuplicateKeyError as error:
+            raise PublicationLockedError(
+                "Publication already running; inspect dataset_state publication-lock before retrying"
+            ) from error
+        try:
+            yield
+        finally:
+            try:
+                released = self.database.dataset_state.delete_one(lock).deleted_count == 1
+            except Exception:
+                released = False
+            if not released:
+                warnings.warn(
+                    f"Could not release publication lock owned by {owner}; "
+                    "confirm the writer has stopped before manually unlocking",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
 
     def record_failure(
         self,
@@ -218,193 +253,195 @@ class MongoDatasetWriter:
         allow_row_decrease: bool = False,
     ) -> dict[str, Any]:
         self.client.admin.command("ping")
-        state = self.database.dataset_state.find_one({"_id": "active"})
-        current_version = state.get("activeVersion") if state else None
-        current_count = int(state.get("collisionCount", 0)) if state else 0
-        current_source_count = int(state.get("sourceFeatureCount", current_count)) if state else 0
-        current_data_as_of = state.get("dataAsOf") if state else None
+        with nullcontext() if dry_run else self._publication_lock("publish"):
+            state = self.database.dataset_state.find_one({"_id": "active"})
+            current_version = state.get("activeVersion") if state else None
+            current_count = int(state.get("collisionCount", 0)) if state else 0
+            current_source_count = int(state.get("sourceFeatureCount", current_count)) if state else 0
+            current_data_as_of = state.get("dataAsOf") if state else None
 
-        new_count = int(bundle.manifest["collisionCount"])
-        new_source_count = int(source_metadata.get("sourceFeatureCount", new_count))
-        new_data_as_of = str(bundle.manifest["dataAsOf"])
-        if current_data_as_of and new_data_as_of < str(current_data_as_of):
-            raise RuntimeError(
-                f"Newest incident date moved backward from {current_data_as_of} to {new_data_as_of}"
-            )
-        if (
-            current_source_count
-            and new_source_count < current_source_count * 0.99
-            and not allow_row_decrease
-        ):
-            decrease = current_source_count - new_source_count
-            raise RuntimeError(
-                f"Source row count decreased by {decrease:,} "
-                f"({decrease / current_source_count:.2%}); "
-                "manual override required"
-            )
-        if current_count and new_count < current_count * 0.99 and not allow_row_decrease:
-            decrease = current_count - new_count
-            raise RuntimeError(
-                f"Usable collision count decreased by {decrease:,} "
-                f"({decrease / current_count:.2%}); manual override required"
-            )
-        if state and state.get("contentHash") == content_hash:
+            new_count = int(bundle.manifest["collisionCount"])
+            new_source_count = int(source_metadata.get("sourceFeatureCount", new_count))
+            new_data_as_of = str(bundle.manifest["dataAsOf"])
+            if current_data_as_of and new_data_as_of < str(current_data_as_of):
+                raise RuntimeError(
+                    f"Newest incident date moved backward from {current_data_as_of} to {new_data_as_of}"
+                )
+            if (
+                current_source_count
+                and new_source_count < current_source_count * 0.99
+                and not allow_row_decrease
+            ):
+                decrease = current_source_count - new_source_count
+                raise RuntimeError(
+                    f"Source row count decreased by {decrease:,} "
+                    f"({decrease / current_source_count:.2%}); "
+                    "manual override required"
+                )
+            if current_count and new_count < current_count * 0.99 and not allow_row_decrease:
+                decrease = current_count - new_count
+                raise RuntimeError(
+                    f"Usable collision count decreased by {decrease:,} "
+                    f"({decrease / current_count:.2%}); manual override required"
+                )
+            if state and state.get("contentHash") == content_hash:
+                result = {
+                    "status": "no_change",
+                    "datasetVersion": str(current_version),
+                    "collisionCount": new_count,
+                    "sourceFeatureCount": new_source_count,
+                    "dataAsOf": new_data_as_of,
+                    "contentHash": content_hash,
+                }
+                if not dry_run:
+                    run_id = f"{version}:no-change:{uuid4().hex}"
+                    self.database.ingestion_runs.replace_one(
+                        {"_id": run_id},
+                        {
+                            "_id": run_id,
+                            "status": "no_change",
+                            "startedAt": datetime.now(timezone.utc),
+                            "completedAt": datetime.now(timezone.utc),
+                            "source": source_metadata,
+                            "contentHash": content_hash,
+                            "manifest": bundle.manifest,
+                            "warnings": list(bundle.manifest.get("warnings", [])),
+                            "activeVersion": current_version,
+                        },
+                        upsert=True,
+                    )
+                return result
+
             result = {
-                "status": "no_change",
-                "datasetVersion": str(current_version),
-                "collisionCount": new_count,
-                "sourceFeatureCount": new_source_count,
-                "dataAsOf": new_data_as_of,
-                "contentHash": content_hash,
-            }
-            if not dry_run:
-                run_id = f"{version}:no-change:{uuid4().hex}"
-                self.database.ingestion_runs.replace_one(
-                    {"_id": run_id},
-                    {
-                        "_id": run_id,
-                        "status": "no_change",
-                        "startedAt": datetime.now(timezone.utc),
-                        "completedAt": datetime.now(timezone.utc),
-                        "source": source_metadata,
-                        "contentHash": content_hash,
-                        "manifest": bundle.manifest,
-                        "warnings": list(bundle.manifest.get("warnings", [])),
-                        "activeVersion": current_version,
-                    },
-                    upsert=True,
-                )
-            return result
-
-        result = {
-            "status": "dry_run" if dry_run else "published",
-            "datasetVersion": version,
-            "previousVersion": current_version,
-            "collisionCount": new_count,
-            "sourceFeatureCount": new_source_count,
-            "dataAsOf": new_data_as_of,
-            "contentHash": content_hash,
-        }
-        if dry_run:
-            return result
-
-        self.ensure_indexes()
-        started_at = datetime.now(timezone.utc)
-        run_document = {
-            "_id": version,
-            "status": "staging",
-            "startedAt": started_at,
-            "source": source_metadata,
-            "contentHash": content_hash,
-            "manifest": bundle.manifest,
-            "warnings": list(bundle.manifest.get("warnings", [])),
-        }
-        self.database.ingestion_runs.replace_one({"_id": version}, run_document, upsert=True)
-
-        try:
-            self._delete_version(version)
-            for batch in _batched(self._collision_documents(bundle.collisions, version)):
-                self.database.collisions.insert_many(batch, ordered=False)
-            for batch in _batched(self._metric_documents(bundle.annual, version, monthly=False)):
-                self.database.neighborhood_annual.insert_many(batch, ordered=False)
-            for batch in _batched(self._metric_documents(bundle.monthly, version, monthly=True)):
-                self.database.context_monthly.insert_many(batch, ordered=False)
-            self.database.neighborhoods.insert_one({
-                "_id": version,
+                "status": "dry_run" if dry_run else "published",
                 "datasetVersion": version,
-                "geojson": bundle.geojson,
-            })
-            self._validate_written_version(bundle, version)
-            self.database.ingestion_runs.update_one(
-                {"_id": version},
-                {"$set": {"status": "validated", "validatedAt": datetime.now(timezone.utc)}},
-            )
-
-            published_at = datetime.now(timezone.utc)
-            new_state = {
-                "activeVersion": version,
                 "previousVersion": current_version,
-                "dataAsOf": new_data_as_of,
                 "collisionCount": new_count,
                 "sourceFeatureCount": new_source_count,
+                "dataAsOf": new_data_as_of,
                 "contentHash": content_hash,
-                "lastPublishedAt": published_at,
             }
-            if state:
-                updated = self.database.dataset_state.find_one_and_update(
-                    {"_id": "active", "activeVersion": current_version},
-                    {"$set": new_state},
-                    return_document=ReturnDocument.AFTER,
-                )
-                if updated is None:
-                    raise RuntimeError("Active dataset changed during publication; retry the sync")
-            else:
-                try:
-                    self.database.dataset_state.insert_one({"_id": "active", **new_state})
-                except DuplicateKeyError as error:
-                    raise RuntimeError("Another process published the first dataset concurrently") from error
+            if dry_run:
+                return result
 
-        except Exception as error:
-            active = self.database.dataset_state.find_one({"_id": "active"})
-            if not active or active.get("activeVersion") != version:
-                self._delete_version(version)
-            self.record_failure(
-                version,
-                error,
-                source_metadata=source_metadata,
-                manifest=bundle.manifest,
-            )
-            raise
+            self.ensure_indexes()
+            started_at = datetime.now(timezone.utc)
+            run_document = {
+                "_id": version,
+                "status": "staging",
+                "startedAt": started_at,
+                "source": source_metadata,
+                "contentHash": content_hash,
+                "manifest": bundle.manifest,
+                "warnings": list(bundle.manifest.get("warnings", [])),
+            }
+            self.database.ingestion_runs.replace_one({"_id": version}, run_document, upsert=True)
 
-        try:
-            self.database.ingestion_runs.update_one(
-                {"_id": version},
-                {"$set": {"status": "published", "publishedAt": published_at}},
-            )
-        except Exception:
-            pass
-
-        keep = [item for item in (version, current_version) if item]
-        cleanup_filter = {"datasetVersion": {"$nin": keep}}
-        for name in ("collisions", "neighborhood_annual", "context_monthly", "neighborhoods"):
             try:
-                self.database[name].delete_many(cleanup_filter)
-            except Exception:
+                self._delete_version(version)
+                for batch in _batched(self._collision_documents(bundle.collisions, version)):
+                    self.database.collisions.insert_many(batch, ordered=False)
+                for batch in _batched(self._metric_documents(bundle.annual, version, monthly=False)):
+                    self.database.neighborhood_annual.insert_many(batch, ordered=False)
+                for batch in _batched(self._metric_documents(bundle.monthly, version, monthly=True)):
+                    self.database.context_monthly.insert_many(batch, ordered=False)
+                self.database.neighborhoods.insert_one({
+                    "_id": version,
+                    "datasetVersion": version,
+                    "geojson": bundle.geojson,
+                })
+                self._validate_written_version(bundle, version)
                 self.database.ingestion_runs.update_one(
                     {"_id": version},
-                    {"$addToSet": {"warnings": f"Could not prune old {name} documents"}},
+                    {"$set": {"status": "validated", "validatedAt": datetime.now(timezone.utc)}},
                 )
-        return result
+
+                published_at = datetime.now(timezone.utc)
+                new_state = {
+                    "activeVersion": version,
+                    "previousVersion": current_version,
+                    "dataAsOf": new_data_as_of,
+                    "collisionCount": new_count,
+                    "sourceFeatureCount": new_source_count,
+                    "contentHash": content_hash,
+                    "lastPublishedAt": published_at,
+                }
+                if state:
+                    updated = self.database.dataset_state.find_one_and_update(
+                        {"_id": "active", "activeVersion": current_version},
+                        {"$set": new_state},
+                        return_document=ReturnDocument.AFTER,
+                    )
+                    if updated is None:
+                        raise RuntimeError("Active dataset changed during publication; retry the sync")
+                else:
+                    try:
+                        self.database.dataset_state.insert_one({"_id": "active", **new_state})
+                    except DuplicateKeyError as error:
+                        raise RuntimeError("Another process published the first dataset concurrently") from error
+
+            except Exception as error:
+                active = self.database.dataset_state.find_one({"_id": "active"})
+                if not active or active.get("activeVersion") != version:
+                    self._delete_version(version)
+                self.record_failure(
+                    version,
+                    error,
+                    source_metadata=source_metadata,
+                    manifest=bundle.manifest,
+                )
+                raise
+
+            try:
+                self.database.ingestion_runs.update_one(
+                    {"_id": version},
+                    {"$set": {"status": "published", "publishedAt": published_at}},
+                )
+            except Exception:
+                pass
+
+            keep = [item for item in (version, current_version) if item]
+            cleanup_filter = {"datasetVersion": {"$nin": keep}}
+            for name in ("collisions", "neighborhood_annual", "context_monthly", "neighborhoods"):
+                try:
+                    self.database[name].delete_many(cleanup_filter)
+                except Exception:
+                    self.database.ingestion_runs.update_one(
+                        {"_id": version},
+                        {"$addToSet": {"warnings": f"Could not prune old {name} documents"}},
+                    )
+            return result
 
     def rollback(self) -> dict[str, Any]:
-        state = self.database.dataset_state.find_one({"_id": "active"})
-        if not state or not state.get("previousVersion"):
-            raise RuntimeError("No previous published dataset is available")
-        active = str(state["activeVersion"])
-        previous = str(state["previousVersion"])
-        run = self.database.ingestion_runs.find_one({"_id": previous})
-        if not run or "manifest" not in run:
-            raise RuntimeError(f"Previous dataset {previous!r} is not available for rollback")
+        with self._publication_lock("rollback"):
+            state = self.database.dataset_state.find_one({"_id": "active"})
+            if not state or not state.get("previousVersion"):
+                raise RuntimeError("No previous published dataset is available")
+            active = str(state["activeVersion"])
+            previous = str(state["previousVersion"])
+            run = self.database.ingestion_runs.find_one({"_id": previous})
+            if not run or "manifest" not in run:
+                raise RuntimeError(f"Previous dataset {previous!r} is not available for rollback")
 
-        manifest = run["manifest"]
-        stored_count = self.database.collisions.count_documents({"datasetVersion": previous})
-        if stored_count != int(manifest["collisionCount"]):
-            raise RuntimeError(f"Previous dataset {previous!r} failed collision-count validation")
-        updated = self.database.dataset_state.find_one_and_update(
-            {"_id": "active", "activeVersion": active, "previousVersion": previous},
-            {"$set": {
-                "activeVersion": previous,
-                "previousVersion": active,
-                "dataAsOf": manifest["dataAsOf"],
-                "collisionCount": manifest["collisionCount"],
-                "sourceFeatureCount": int(
-                    (run.get("source") or {}).get("sourceFeatureCount", manifest["collisionCount"])
-                ),
-                "contentHash": run["contentHash"],
-                "lastPublishedAt": datetime.now(timezone.utc),
-            }},
-            return_document=ReturnDocument.AFTER,
-        )
-        if updated is None:
-            raise RuntimeError("Active dataset changed during rollback; retry")
-        return {"status": "rolled_back", "datasetVersion": previous, "previousVersion": active}
+            manifest = run["manifest"]
+            stored_count = self.database.collisions.count_documents({"datasetVersion": previous})
+            if stored_count != int(manifest["collisionCount"]):
+                raise RuntimeError(f"Previous dataset {previous!r} failed collision-count validation")
+            updated = self.database.dataset_state.find_one_and_update(
+                {"_id": "active", "activeVersion": active, "previousVersion": previous},
+                {"$set": {
+                    "activeVersion": previous,
+                    "previousVersion": active,
+                    "dataAsOf": manifest["dataAsOf"],
+                    "collisionCount": manifest["collisionCount"],
+                    "sourceFeatureCount": int(
+                        (run.get("source") or {}).get("sourceFeatureCount", manifest["collisionCount"])
+                    ),
+                    "contentHash": run["contentHash"],
+                    "lastPublishedAt": datetime.now(timezone.utc),
+                }},
+                return_document=ReturnDocument.AFTER,
+            )
+            if updated is None:
+                raise RuntimeError("Active dataset changed during rollback; retry")
+            return {"status": "rolled_back", "datasetVersion": previous, "previousVersion": active}

@@ -1,6 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import assert from 'node:assert/strict'
 
 const archiveName = /^collision-static-\d+-([0-9a-f-]{36})$/
 const budget = 200 * 1024 * 1024
@@ -62,12 +61,4 @@ export async function prune({ github, context, promoted = false, attempt = Numbe
   for (const archive of archives) {
     if (!keep.has(archive.id)) await github.rest.actions.deleteArtifact({ ...context.repo, artifact_id: archive.id })
   }
-}
-
-if (process.argv.includes('--self-check')) {
-  assert.deepEqual([...retainedArchives([{ id: 1, size_in_bytes: 1 }, { id: 3, size_in_bytes: 2 }, { id: 2, size_in_bytes: 3 }])], [3, 2])
-  assert.throws(() => retainedArchives([{ id: 1, size_in_bytes: budget + 1 }]), /budget/)
-  assert.equal(archiveName.test('collision-static-123-095f00a7-23a7-43b7-a227-e4c97cab5f22'), true)
-  assert.equal(archiveName.test('collision-ingestion-manifest-123'), false)
-  console.log('Release archive policy verified')
 }

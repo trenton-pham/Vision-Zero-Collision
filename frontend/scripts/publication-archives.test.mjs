@@ -55,7 +55,8 @@ test('successful promotion retains the new and preceding production archives onl
   assert.deepEqual(deleted, [2])
 })
 
-test('archive retention enforces the combined budget', () => {
+test('archive retention keeps the newest two and enforces the combined budget', () => {
+  assert.deepEqual([...retainedArchives([{ id: 1, size_in_bytes: 1 }, { id: 3, size_in_bytes: 2 }, { id: 2, size_in_bytes: 3 }])], [3, 2])
   assert.throws(() => retainedArchives([{ id: 1, size_in_bytes: 201 * 1024 ** 2 }]), /budget/)
 })
 
