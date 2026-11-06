@@ -61,7 +61,9 @@ async function selectNeighborhood(page: Page, name: string, keyboard = false) {
   await picker.fill(name)
   if (keyboard) await picker.press('Enter')
   else await page.getByRole('listbox').getByText(name, { exact: true }).click()
-  await expect(page.getByRole('heading', { name, exact: true })).toBeVisible()
+  const selected = new URL(page.url()).searchParams.getAll('neighborhood')
+  const title = selected.length > 1 ? `${selected.length} neighborhoods combined` : selected.length === 0 ? 'Seattle citywide' : selected[0] === 'ballard' ? 'Ballard' : 'Fremont'
+  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible()
   await expect(page.getByRole('complementary', { name: /context$/ })).toHaveAttribute('aria-busy', 'false')
 }
 async function pointerDown(page: Page, target: Locator) {
@@ -185,6 +187,7 @@ test('motion: neighborhood statistics fade in place and keep disclosures and foc
   await expect(details).toHaveAttribute('open', '')
   await expect(page.getByRole('combobox', { name: 'Neighborhood', exact: true })).toBeFocused()
   await settled(page)
+  await page.getByRole('combobox', { name: 'Neighborhood', exact: true }).press('Escape')
   await details.locator(':scope > summary').click()
   await clearMotion(page)
   await selectNeighborhood(page, 'Fremont')
@@ -195,7 +198,9 @@ test('motion: neighborhood statistics fade in place and keep disclosures and foc
   await selectNeighborhood(page, 'Ballard', true)
   expect(await statistics(page)).toEqual([])
   await selectNeighborhood(page, 'Ballard')
-  expect(await statistics(page)).toEqual([])
+  checkFade(await statistics(page))
+  await settled(page)
+  await clearMotion(page)
   await selectNeighborhood(page, 'Fremont')
   checkFade(await statistics(page))
 })

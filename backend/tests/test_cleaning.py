@@ -1,10 +1,11 @@
 import hashlib
+import json
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-from scripts.clean import write_dataframe, write_json
+from scripts.clean import write_dataframe, write_json, write_outputs
 from scripts.vehicle_clean import VehicleCleaner
 
 
@@ -103,3 +104,37 @@ def test_failed_serialization_preserves_existing_file_and_removes_temporary_file
         write()
     assert target.read_bytes() == b"previous output"
     assert list(tmp_path.iterdir()) == [target]
+
+
+@pytest.mark.parametrize('failure', ['data', 'manifest'])
+def test_late_cleaning_failure_preserves_entire_previous_output_set(tmp_path, monkeypatch, failure):
+    import scripts.clean as cleaning
+
+    collisions = pd.DataFrame({'HAS_VALID_GEOMETRY': [True, False], 'rows': [1, 2]})
+    vehicles = pd.DataFrame({'rows': [1]})
+    output = tmp_path / 'data'
+    manifest = {'version': 'old'}
+    path = write_outputs(collisions, vehicles, vehicles, collisions, manifest, output, False)
+    before = {p.relative_to(output): p.read_bytes() for p in output.rglob('*') if p.is_file()}
+    recorded = json.loads(path.read_text())
+    assert all(Path(item['path']).is_file() for item in recorded['outputs'].values())
+    original = cleaning.write_dataframe
+    calls = 0
+
+    def fail_data(*args):
+        nonlocal calls
+        calls += 1
+        if calls == 4:
+            raise OSError('Late serialization failure')
+        return original(*args)
+
+    def fail_manifest(*args):
+        raise OSError('Late serialization failure')
+
+    monkeypatch.setattr(cleaning, 'write_dataframe' if failure == 'data' else 'write_json', fail_data if failure == 'data' else fail_manifest)
+    candidate = {'version': 'new'}
+    with pytest.raises(OSError, match='Late serialization failure'):
+        write_outputs(collisions, vehicles, vehicles, collisions, candidate, output, False)
+    assert {p.relative_to(output): p.read_bytes() for p in output.rglob('*') if p.is_file()} == before
+    assert candidate == {'version': 'new'}
+    assert list(tmp_path.iterdir()) == [output]

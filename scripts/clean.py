@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from backend.output_files import staged_outputs
+
 from .cleaning_base import (
     DATA_DIR,
     DEFAULT_END_YEAR,
@@ -104,79 +106,81 @@ def write_outputs(
     write_geojson=True
 ):
     output_root = Path(output_root)
-    cleaned_dir = output_root / 'cleaned'
-    processed_dir = output_root / 'processed'
-    spatial_excluded = collision_gdf[~collision_gdf['HAS_VALID_GEOMETRY']]
+    with staged_outputs(output_root) as staged_root:
+        cleaned_dir = staged_root / 'cleaned'
+        processed_dir = staged_root / 'processed'
+        spatial_excluded = collision_gdf[~collision_gdf['HAS_VALID_GEOMETRY']]
 
-    output_paths = {
-        'collision_cleaned_parquet': cleaned_dir / 'Collision_All_Filtered.parquet',
-        'collision_spatial_excluded': (
-            cleaned_dir / 'Collision_Spatial_Excluded.parquet'
-        ),
-        'vehicle_cleaned_parquet': cleaned_dir / 'Vehicle_Filtered.parquet',
-        'vehicle_cleaned_csv': cleaned_dir / 'Vehicle_Filtered.csv',
-        'vehicle_orphaned': cleaned_dir / 'Vehicle_Orphaned.parquet',
-        'collision_processed_parquet': (
-            processed_dir / 'Collision_Processed.parquet'
-        )
-    }
+        output_paths = {
+            'collision_cleaned_parquet': cleaned_dir / 'Collision_All_Filtered.parquet',
+            'collision_spatial_excluded': (
+                cleaned_dir / 'Collision_Spatial_Excluded.parquet'
+            ),
+            'vehicle_cleaned_parquet': cleaned_dir / 'Vehicle_Filtered.parquet',
+            'vehicle_cleaned_csv': cleaned_dir / 'Vehicle_Filtered.csv',
+            'vehicle_orphaned': cleaned_dir / 'Vehicle_Orphaned.parquet',
+            'collision_processed_parquet': (
+                processed_dir / 'Collision_Processed.parquet'
+            )
+        }
 
-    write_dataframe(
-        collision_gdf,
-        output_paths['collision_cleaned_parquet'],
-        'parquet'
-    )
-    write_dataframe(
-        spatial_excluded,
-        output_paths['collision_spatial_excluded'],
-        'parquet'
-    )
-    write_dataframe(
-        vehicle_df,
-        output_paths['vehicle_cleaned_parquet'],
-        'parquet'
-    )
-    write_dataframe(vehicle_df, output_paths['vehicle_cleaned_csv'], 'csv')
-    write_dataframe(
-        orphan_vehicle_df,
-        output_paths['vehicle_orphaned'],
-        'parquet'
-    )
-    write_dataframe(
-        processed_gdf,
-        output_paths['collision_processed_parquet'],
-        'parquet'
-    )
-
-    if write_geojson:
-        output_paths['collision_cleaned_geojson'] = (
-            cleaned_dir / 'Collision_All_Filtered.geojson'
-        )
-        output_paths['collision_processed_geojson'] = (
-            processed_dir / 'Collision_Processed.geojson'
-        )
         write_dataframe(
             collision_gdf,
-            output_paths['collision_cleaned_geojson'],
-            'geojson'
+            output_paths['collision_cleaned_parquet'],
+            'parquet'
+        )
+        write_dataframe(
+            spatial_excluded,
+            output_paths['collision_spatial_excluded'],
+            'parquet'
+        )
+        write_dataframe(
+            vehicle_df,
+            output_paths['vehicle_cleaned_parquet'],
+            'parquet'
+        )
+        write_dataframe(vehicle_df, output_paths['vehicle_cleaned_csv'], 'csv')
+        write_dataframe(
+            orphan_vehicle_df,
+            output_paths['vehicle_orphaned'],
+            'parquet'
         )
         write_dataframe(
             processed_gdf,
-            output_paths['collision_processed_geojson'],
-            'geojson'
+            output_paths['collision_processed_parquet'],
+            'parquet'
         )
 
-    manifest['outputs'] = {
-        name: {
-            'path': str(path),
-            'bytes': path.stat().st_size
-        }
-        for name, path in output_paths.items()
-    }
-    manifest_path = processed_dir / 'cleaning_manifest.json'
-    write_json(manifest, manifest_path)
+        if write_geojson:
+            output_paths['collision_cleaned_geojson'] = (
+                cleaned_dir / 'Collision_All_Filtered.geojson'
+            )
+            output_paths['collision_processed_geojson'] = (
+                processed_dir / 'Collision_Processed.geojson'
+            )
+            write_dataframe(
+                collision_gdf,
+                output_paths['collision_cleaned_geojson'],
+                'geojson'
+            )
+            write_dataframe(
+                processed_gdf,
+                output_paths['collision_processed_geojson'],
+                'geojson'
+            )
 
-    return manifest_path
+        published_manifest = {**manifest, 'outputs': {
+            name: {
+                'path': str(output_root / path.relative_to(staged_root)),
+                'bytes': path.stat().st_size
+            }
+            for name, path in output_paths.items()
+        }}
+        manifest_path = processed_dir / 'cleaning_manifest.json'
+        write_json(published_manifest, manifest_path)
+
+    manifest.update(published_manifest)
+    return output_root / 'processed/cleaning_manifest.json'
 
 
 def main(

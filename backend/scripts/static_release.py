@@ -18,7 +18,7 @@ MAX_FILES = 20_000
 MAX_FILE_SIZE = 25 * 1024 * 1024
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024
 MAX_EXPANDED_SIZE = 2 * 1024 * 1024 * 1024
-RELEASE_PATH = re.compile(r"(?:meta|resolver|provenance)\.json|neighborhoods\.geojson|citywide/\d{4}-\d{4}/(?:[0-9]|[12][0-9]|3[01])\.json|explorer/\d{4}-\d{4}\.json|neighborhoods/[^/.]+\.json")
+RELEASE_PATH = re.compile(r"(?:meta|resolver|provenance|neighborhood-series)\.json|neighborhoods\.geojson|citywide/\d{4}-\d{4}/(?:[0-9]|[12][0-9]|3[01])\.json|explorer/\d{4}-\d{4}\.json|neighborhoods/[^/.]+\.json")
 SECRET = re.compile(rb"mongodb(?:\+srv)?://|(?:ATLAS_PRIVATE_KEY|MONGODB_(?:URI|INGEST_URI|EXPORT_URI)|CLOUDFLARE_API_TOKEN)\s*[=:]|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\"(?:COLDETKEY|INCKEY|OBJECTID)\"", re.I)
 HEADERS = """/data/current.json
   Cache-Control: no-store
@@ -252,7 +252,7 @@ def smoke(base_url: str, root: Path) -> None:
         if content != (root / "index.html").read_bytes():
             raise ValueError("Dashboard deep link does not serve the app")
     files = inventory(root)
-    samples = {"index.html", *[name for name in files if name.startswith("assets/")], *[f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name in {"meta.json", "resolver.json", "neighborhoods.geojson"}]}
+    samples = {"index.html", *[name for name in files if name.startswith("assets/")], *[f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name in {"meta.json", "resolver.json", "neighborhoods.geojson", "neighborhood-series.json"}]}
     samples.update(next((f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name.startswith(prefix)), "") for prefix in ("citywide/", "explorer/", "neighborhoods/"))
     for name in samples - {""}:
         content, _ = get(name)

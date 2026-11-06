@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useDatasetMeta } from './dataset'
 import { isCitywideSeverity, type CitywideSeverity } from './severity'
 import { parseMapMetric, type MapMetric } from './mapMetrics'
-import { snapshotMotion, type MotionStamp } from './motion'
+import { snapshotMotion } from './motion'
 
 function toYear(value: string | null, fallback: number, minimum: number, maximum: number) {
   if (value === null || value.trim() === '') return fallback
@@ -20,7 +20,9 @@ export function useDashboardParams() {
   const rawEnd = toYear(searchParams.get('end'), maximumYear, minimumYear, maximumYear)
   const startYear = Math.min(rawStart, rawEnd)
   const endYear = Math.max(rawStart, rawEnd)
-  const neighborhood = searchParams.get('neighborhood')
+  const rawNeighborhoods = JSON.stringify(searchParams.getAll('neighborhood'))
+  const neighborhoods = useMemo(() => [...new Set(searchParams.getAll('neighborhood'))].filter(Boolean).sort(), [rawNeighborhoods])
+  const canonicalNeighborhoods = JSON.stringify(neighborhoods)
   const rawMetric = searchParams.get('metric')
   const mapMetric = parseMapMetric(rawMetric)
   const trendGrain: 'annual' | 'monthly' = searchParams.get('grain') === 'monthly' ? 'monthly' : 'annual'
@@ -35,9 +37,14 @@ export function useDashboardParams() {
   useEffect(() => {
     const invalidMetric = rawMetric !== null && rawMetric !== mapMetric
     const invalidSeverity = rawSeverity !== null && rawSeverity !== canonicalSeverity
-    if (!invalidMetric && !invalidSeverity) return
+    const invalidNeighborhoods = rawNeighborhoods !== canonicalNeighborhoods
+    if (!invalidMetric && !invalidSeverity && !invalidNeighborhoods) return
     setSearchParams((current) => {
       const next = new URLSearchParams(current)
+      if (invalidNeighborhoods) {
+        next.delete('neighborhood')
+        neighborhoods.forEach((id) => next.append('neighborhood', id))
+      }
       if (invalidMetric) next.delete('metric')
       if (invalidSeverity) {
         if (canonicalSeverity) next.set('severity', canonicalSeverity)
@@ -45,7 +52,7 @@ export function useDashboardParams() {
       }
       return next
     }, { replace: true })
-  }, [rawMetric, mapMetric, rawSeverity, canonicalSeverity, setSearchParams])
+  }, [rawMetric, mapMetric, rawSeverity, canonicalSeverity, rawNeighborhoods, canonicalNeighborhoods, neighborhoods, setSearchParams])
 
   const update = useCallback(
     (changes: Record<string, string | number | null>, motion = snapshotMotion()) => {
@@ -64,7 +71,7 @@ export function useDashboardParams() {
   return {
     startYear,
     endYear,
-    neighborhood,
+    neighborhoods,
     mapMetric,
     trendGrain,
     cityLayer,
@@ -72,7 +79,15 @@ export function useDashboardParams() {
     minimumYear,
     maximumYear,
     setYears: (start: number, end: number) => update({ start, end }),
-    setNeighborhood: (id: string | null, motion?: MotionStamp) => update({ neighborhood: id }, motion),
+    setNeighborhoods: (ids: string[], motion = snapshotMotion(), replace = false) => {
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current)
+        next.delete('neighborhood')
+        const selected = [...new Set(ids)].filter(Boolean).sort()
+        selected.forEach((id) => next.append('neighborhood', id))
+        return next
+      }, { replace, state: { dashboardMotion: motion } })
+    },
     setMapMetric: (metric: MapMetric) => update({ metric }),
     setTrendGrain: (grain: 'annual' | 'monthly') => update({ grain: grain === 'annual' ? null : grain }),
     setCityLayer: (layer: 'heatmap' | 'kde') => update({ layer }),

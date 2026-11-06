@@ -65,10 +65,37 @@ def resolver_geometry(store: DataStore) -> dict:
     }
 
 
+def neighborhood_series(store: DataStore) -> dict:
+    known = store.collisions.loc[store.collisions["HOUR"].notna()]
+    known_counts = known.groupby(["neighborhood_id", "YEAR", "MONTH"], observed=True).size()
+    columns = {
+        "collisionCount": "collision_count", "injuries": "injuries",
+        "seriousInjuries": "serious_injuries", "fatalities": "fatalities",
+        "totalSeverity": "total_severity", "pedestrianCollisions": "pedestrian_collisions",
+        "intersectionCollisions": "intersection_collisions", "nightCollisions": "night_collisions",
+        "weekendCollisions": "weekend_collisions",
+    }
+    neighborhoods = {}
+    for neighborhood, rows in store.monthly.groupby("neighborhood_id", observed=True):
+        if neighborhood not in store.name_by_id:
+            continue
+        neighborhoods[str(neighborhood)] = {"monthly": [
+            {
+                "period": str(row.period),
+                **{key: int(getattr(row, column)) for key, column in columns.items()},
+                "knownTimeCollisions": int(known_counts.get((neighborhood, row.YEAR, row.MONTH), 0))
+                if store.has_known_time_night_share else None,
+            }
+            for row in rows.sort_values(["YEAR", "MONTH"]).itertuples(index=False)
+        ]}
+    return {"neighborhoods": neighborhoods}
+
+
 def analytical_files(store: DataStore) -> Iterator[tuple[str, dict]]:
     yield "meta.json", store.meta().model_dump(mode="json")
     yield "neighborhoods.geojson", store.geojson
     yield "resolver.json", resolver_geometry(store)
+    yield "neighborhood-series.json", neighborhood_series(store)
     ranges = year_ranges(store)
     for start, end in ranges:
         yield f"explorer/{start}-{end}.json", {
@@ -178,6 +205,7 @@ def verify_analytical_outputs(store: DataStore, directory: Path) -> int:
         compare("meta.json", store.meta().model_dump(mode="json"))
         compare("neighborhoods.geojson", response("/api/neighborhoods/geojson", []))
         compare("resolver.json", resolver_geometry(store))
+        compare("neighborhood-series.json", neighborhood_series(store))
         minimum, maximum = min(store.available_years), max(store.available_years)
         ranges = list(combinations_with_replacement(range(minimum, maximum + 1), 2))
         labels = ["property-damage", "injury", "serious-injury", "fatal", "unknown"]

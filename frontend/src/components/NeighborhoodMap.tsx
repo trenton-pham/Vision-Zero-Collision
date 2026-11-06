@@ -14,7 +14,7 @@ function metricNumber(metric: NeighborhoodMetricSet | undefined, key: MapMetric)
   return typeof value === 'number' ? value : 0
 }
 
-function FitSelected({ collection, selectedId, pulseKey }: { collection: NeighborhoodFeatureCollection; selectedId: string | null; pulseKey: number }) {
+function FitSelected({ collection, selectedIds, pulseKey }: { collection: NeighborhoodFeatureCollection; selectedIds: string[]; pulseKey: number }) {
   const map = useMap()
   useLayoutEffect(() => {
     const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
@@ -22,11 +22,12 @@ function FitSelected({ collection, selectedId, pulseKey }: { collection: Neighbo
     return () => observer.disconnect()
   }, [map])
   useLayoutEffect(() => {
-    const feature = collection.features.find((item) => item.properties.id === selectedId)
+    const features = collection.features.filter((item) => selectedIds.includes(item.properties.id))
+    const selected = features.length > 0
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const bounds = geoJSON(feature ?? collection).getBounds()
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: feature ? 14 : 11, animate: Boolean(feature) && !reduceMotion })
-  }, [collection, map, pulseKey, selectedId])
+    const bounds = geoJSON(selected ? { type: 'FeatureCollection', features } : collection).getBounds()
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: selected ? 14 : 11, animate: selected && !reduceMotion })
+  }, [collection, map, pulseKey, selectedIds])
   return null
 }
 
@@ -51,7 +52,7 @@ export function NeighborhoodMap({
   collection,
   metrics,
   metricKey,
-  selectedId,
+  selectedIds,
   pulseKey,
   geometryRevision,
   onResolve,
@@ -60,7 +61,7 @@ export function NeighborhoodMap({
   collection: NeighborhoodFeatureCollection
   metrics: NeighborhoodMetricSet[]
   metricKey: MapMetric
-  selectedId: string | null
+  selectedIds: string[]
   pulseKey: number
   geometryRevision: number
   onResolve: (lat: number, lng: number) => void
@@ -72,7 +73,7 @@ export function NeighborhoodMap({
   const maximum = Math.max(0, ...metrics.map((metric) => metricNumber(metric, metricKey)))
   const style = (feature?: Feature<GeoJSON.Geometry, NeighborhoodProperties>): PathOptions => {
     const id = feature?.properties.id ?? ''
-    const selected = id === selectedId
+    const selected = selectedIds.includes(id)
     const ratio = Math.sqrt(metricNumber(byId.get(id), metricKey) / Math.max(1, maximum))
     return {
       color: selected ? (light ? '#1463c9' : '#2f84ff') : (light ? '#526779' : '#66839e'),
@@ -94,10 +95,10 @@ export function NeighborhoodMap({
         />
         <ResetMap collection={collection}/>
         <ClickResolver onClick={onResolve}/>
-        <FitSelected collection={collection} selectedId={selectedId} pulseKey={pulseKey}/>
+        <FitSelected collection={collection} selectedIds={selectedIds} pulseKey={pulseKey}/>
       </MapContainer>
       <div className={styles.legend} aria-label="Neighborhood map scale"><span>0</span><i/><span>{maximum.toLocaleString()} (highest)</span></div>
-      <div className={styles.hint}>{busy ? 'Finding neighborhood…' : 'Choose a neighborhood on the map or search by name'}</div>
+      <div className={styles.hint}>{busy ? 'Finding neighborhood…' : 'Click neighborhoods to add or remove them, or search by name'}</div>
     </div>
   )
 }

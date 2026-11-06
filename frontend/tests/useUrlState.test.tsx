@@ -10,7 +10,7 @@ import { datasetMeta } from './fixtures'
 function Harness() {
   const state = useDashboardParams()
   const location = useLocation()
-  return <><output>{state.startYear}/{state.endYear}/{state.neighborhood}/{state.mapMetric}/{state.trendGrain}</output><output data-testid="severities">{state.severities.join(',')}</output><output data-testid="url">{location.search}</output><button onClick={() => state.setNeighborhood('ballard')}>Select</button><button onClick={() => state.setTrendGrain('monthly')}>Monthly</button></>
+  return <><output>{state.startYear}/{state.endYear}/{state.neighborhoods.join(',')}/{state.mapMetric}/{state.trendGrain}</output><output data-testid="severities">{state.severities.join(',')}</output><output data-testid="url">{location.search}</output><button onClick={() => state.setNeighborhoods(['ballard'])}>Select</button><button onClick={() => state.setTrendGrain('monthly')}>Monthly</button></>
 }
 
 describe('URL-backed dashboard state', () => {
@@ -76,6 +76,19 @@ describe('URL-backed dashboard state', () => {
       expect(query.get('grain')).toBe('monthly')
       expect(query.get('neighborhood')).toBe('ballard')
       expect(query.get('severity')).toBe('unknown')
+    })
+  })
+})
+
+describe('multiple URL neighborhoods', () => {
+  it('deduplicates and sorts repeated parameters while retaining filters', async () => {
+    render(<MemoryRouter initialEntries={['/neighborhoods?neighborhood=fremont&neighborhood=ballard&neighborhood=fremont&start=2021&grain=monthly']}><Harness/></MemoryRouter>)
+    expect(screen.getByText('2021/2026/ballard,fremont/collisionCount/monthly')).toBeInTheDocument()
+    await waitFor(() => {
+      const query = new URLSearchParams(screen.getByTestId('url').textContent ?? '')
+      expect(query.getAll('neighborhood')).toEqual(['ballard', 'fremont'])
+      expect(query.get('start')).toBe('2021')
+      expect(query.get('grain')).toBe('monthly')
     })
   })
 })

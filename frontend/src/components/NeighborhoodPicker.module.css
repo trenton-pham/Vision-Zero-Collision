@@ -28,3 +28,7 @@
     .pointerEntrance { opacity: .65; transform: none; }
   }
 }
+
+.search { position: relative; }
+.selections { display: flex; flex-wrap: wrap; gap: 6px; max-height: 180px; overflow: auto; list-style: none; padding: 0; margin: 8px 0 0; }
+.selections button { min-height: 44px; padding: 6px 10px; border: 1px solid var(--border-strong); background: var(--panel); color: var(--text-primary); font: inherit; font-size: .8125rem; cursor: pointer; }

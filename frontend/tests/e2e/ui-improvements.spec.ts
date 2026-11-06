@@ -106,18 +106,19 @@ test('mobile results stay near the controls and all layouts stay within the view
   }
 })
 
-test('a repeated cached selection announces unchanged statistics without refetching', async ({ page }) => {
+test('choosing a selected neighborhood removes it without refetching its context', async ({ page }) => {
   let requests = 0
   page.on('request', (request) => {
-    if (request.url().includes('/ballard/context?')) requests += 1
+    if (request.url().endsWith('/neighborhoods/ballard.json')) requests += 1
   })
   await page.goto('/neighborhoods?neighborhood=ballard')
-  const announcement = page.locator('[aria-live="polite"]').filter({ hasText: /Ballard/ })
+  const announcement = page.locator('[aria-live="polite"]')
   await expect(announcement).toContainText('Ballard statistics updated')
   const loaded = requests
   const picker = page.getByRole('combobox', { name: 'Neighborhood', exact: true })
-  await picker.click()
+  await picker.fill('Ballard')
   await picker.press('Enter')
-  await expect(announcement).toContainText('Statistics are unchanged.')
+  await expect(page).not.toHaveURL(/neighborhood=/)
+  await expect(announcement).toContainText('Seattle citywide statistics updated')
   expect(requests).toBe(loaded)
 })

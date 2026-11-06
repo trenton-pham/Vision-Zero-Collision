@@ -30,6 +30,7 @@ wrangler.bootstrap.jsonc
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.output-stage-*/
 .ruff_cache/
 *.egg-info/
 

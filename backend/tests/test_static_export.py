@@ -42,7 +42,7 @@ def test_every_exported_selection_matches_python(single_year_store: DataStore, r
     directory, manifest = release
     assert len([key for key in manifest["files"] if key.startswith("citywide/")]) == 32
     assert len([key for key in manifest["files"] if key.startswith("neighborhoods/")]) == 94
-    assert verify_analytical_outputs(single_year_store, directory) == 130
+    assert verify_analytical_outputs(single_year_store, directory) == 131
     for mask in range(32):
         value = json.loads((directory / f"citywide/2025-2025/{mask}.json").read_bytes())
         assert value["summary"]["severities"] == severity_selection(mask)
@@ -120,3 +120,41 @@ def test_reference_api_catches_a_consistently_wrong_export_mapping(single_year_s
     write_export(single_year_store, tmp_path, code_revision="wrong", provenance={})
     with pytest.raises(ValueError, match="differs from the API"):
         verify_analytical_outputs(single_year_store, tmp_path)
+
+
+def test_neighborhood_series_reconciles_with_raw_collision_unions(store: DataStore) -> None:
+    from backend.app.static_export import neighborhood_series, MAX_ASSET_BYTES
+    series = neighborhood_series(store)
+    assert len(canonical_json(series)) < MAX_ASSET_BYTES
+    assert set(series["neighborhoods"]) == set(store.name_by_id)
+    for ids in [["ballard"], ["ballard", "fremont"], list(store.name_by_id)]:
+        raw = store.collisions.loc[store.collisions["neighborhood_id"].isin(ids)]
+        rows = [row for id in ids for row in series["neighborhoods"][id]["monthly"]]
+        assert sum(row["collisionCount"] for row in rows) == len(raw)
+        assert sum(row["totalSeverity"] for row in rows) == int(raw["severity_score"].sum())
+        assert sum(row["intersectionCollisions"] for row in rows) == int(raw["intersection"].sum())
+        assert sum(row["weekendCollisions"] for row in rows) == int(raw["weekend"].sum())
+        if store.has_known_time_night_share:
+            assert sum(row["knownTimeCollisions"] for row in rows) == int(raw["HOUR"].notna().sum())
+        else:
+            assert all(row["knownTimeCollisions"] is None for row in rows)
+    for id in store.name_by_id:
+        context = store.neighborhood_context(id, min(store.available_years), max(store.available_years))
+        rows = series["neighborhoods"][id]["monthly"]
+        assert [row["period"] for row in rows] == [row.period for row in context.monthly]
+        for exported, expected in zip(rows, context.monthly, strict=True):
+            assert exported["collisionCount"] == expected.collisionCount
+            assert exported["totalSeverity"] == expected.totalSeverity
+
+
+def test_neighborhood_series_uses_known_time_denominator(store: DataStore, monkeypatch) -> None:
+    from backend.app.static_export import neighborhood_series
+    monkeypatch.setattr(store, "has_known_time_night_share", True)
+    rows = neighborhood_series(store)["neighborhoods"]["ballard"]["monthly"]
+    for row in rows:
+        year, month = map(int, row["period"].split("-"))
+        raw = store.collisions.loc[
+            store.collisions["neighborhood_id"].eq("ballard")
+            & store.collisions["YEAR"].eq(year) & store.collisions["MONTH"].eq(month)
+        ]
+        assert row["knownTimeCollisions"] == int(raw["HOUR"].notna().sum())

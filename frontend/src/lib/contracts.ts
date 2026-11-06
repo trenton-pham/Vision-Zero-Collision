@@ -251,3 +251,23 @@ export const resolverBundleSchema = z.object({
   })).min(1),
 })
 export type ResolverBundle = z.infer<typeof resolverBundleSchema>
+
+const additiveCount = z.number().int().nonnegative()
+export const neighborhoodMonthSchema = z.object({
+  period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+  collisionCount: additiveCount,
+  injuries: additiveCount,
+  seriousInjuries: additiveCount,
+  fatalities: additiveCount,
+  totalSeverity: additiveCount,
+  pedestrianCollisions: additiveCount,
+  intersectionCollisions: additiveCount,
+  nightCollisions: additiveCount,
+  weekendCollisions: additiveCount,
+  knownTimeCollisions: additiveCount.nullable(),
+})
+export const neighborhoodSeriesSchema = z.object({
+  neighborhoods: z.record(z.string(), z.object({ monthly: z.array(neighborhoodMonthSchema) })),
+})
+export type NeighborhoodMonth = z.infer<typeof neighborhoodMonthSchema>
+export type NeighborhoodSeries = z.infer<typeof neighborhoodSeriesSchema>

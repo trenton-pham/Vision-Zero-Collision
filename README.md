@@ -159,7 +159,7 @@ The dashboard has two views:
 | Neighborhood Explorer | Map and searchable neighborhood selection, all-severity collision/injury context, and annual or monthly trends |
 | Citywide Analysis | Independent year/severity filters, collision heatmap, KDE density, pre/post-2020 centroid shift, and downtown vs. outer-area comparisons |
 
-[Open the dashboard](https://vision-zero-collision.rice-farmer-bot.workers.dev). The [static hosting guide](./docs/deployment/static-hosting.md) covers local setup, monthly publication, verification, and recovery.
+[Open the dashboard](https://vision-zero-collision.trentonpham.workers.dev). The [static hosting guide](./docs/deployment/static-hosting.md) covers local setup, monthly publication, verification, and recovery.
 
 ### Product rules
 

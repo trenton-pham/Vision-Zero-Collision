@@ -3,6 +3,7 @@ import { skipToken, useQuery } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { MAP_METRICS, parseMapMetric } from '../lib/mapMetrics'
 import { api } from '../lib/api'
+import { combineNeighborhoods } from '../lib/combineNeighborhoods'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { useDatasetMeta, useRelease } from '../lib/dataset'
@@ -24,9 +25,11 @@ export function NeighborhoodExplorer() {
   const [resolving, setResolving] = useState(false)
   const [selectionPulse, setSelectionPulse] = useState(0)
   const [detailsOpen, setDetailsOpen] = useState(() => !window.matchMedia('(max-width: 960px)').matches)
+  const normalizationNotice = useRef('')
   const resolveGeneration = useRef(0)
   const resolveController = useRef<AbortController | null>(null)
-  const neighborhood = state.neighborhood
+  const neighborhoods = state.neighborhoods
+  const neighborhood = neighborhoods.length === 1 ? neighborhoods[0] : undefined
   const geo = useQuery({ queryKey: ['neighborhood-geojson', release.releaseId], queryFn: ({ signal }) => api.neighborhoods(release, signal), staleTime: Infinity })
   const explorer = useQuery({
     queryKey: ['explorer', release.releaseId, state.startYear, state.endYear],
@@ -47,12 +50,34 @@ export function NeighborhoodExplorer() {
     staleTime: Infinity,
   })
 
+  const combined = useQuery({
+    queryKey: ['neighborhood-series', release.releaseId],
+    queryFn: neighborhoods.length > 1 ? ({ signal }) => {
+      if (!Object.hasOwn(release.files, 'neighborhood-series.json')) throw new Error('Combined neighborhood statistics require a newer dataset release. Single-neighborhood results are still available.')
+      return api.neighborhoodSeries(release, signal)
+    } : skipToken,
+    select: (series) => combineNeighborhoods(series, neighborhoods, state.startYear, state.endYear, meta),
+    staleTime: Infinity,
+  })
+
+  useEffect(() => {
+    if (!geo.data) return
+    const known = new Set(geo.data.features.map((feature) => feature.properties.id))
+    const valid = neighborhoods.filter((id) => known.has(id))
+    if (valid.length === neighborhoods.length) return
+    state.setNeighborhoods(valid, snapshotMotion(), true)
+    normalizationNotice.current = 'Unknown neighborhoods were removed from the selection. '
+    setAnnouncement(normalizationNotice.current)
+  }, [geo.data, neighborhoods, state.setNeighborhoods])
+
   function select(id: string | null, name?: string | null, motion?: MotionStamp) {
-    state.setNeighborhood(id, motion)
+    const removed = id !== null && neighborhoods.includes(id)
+    const next = id === null ? [] : removed ? neighborhoods.filter((selected) => selected !== id) : [...neighborhoods, id]
+    state.setNeighborhoods(next, motion)
     setSelectionPulse((value) => value + 1)
-    setAnnouncement(id === state.neighborhood
-      ? `${name ?? id ?? 'Seattle citywide'} selected. Statistics are unchanged.`
-      : id ? `${name ?? id} selected. Loading statistics.` : 'Neighborhood selection cleared. Loading Seattle citywide statistics.')
+    setAnnouncement(next.length === 0
+      ? 'Neighborhood selection cleared. Loading Seattle citywide statistics.'
+      : `${name ?? id} ${removed ? 'removed' : 'selected'}. Loading statistics.`)
   }
 
   const currentSelection = useRef({ select, location })
@@ -94,8 +119,8 @@ export function NeighborhoodExplorer() {
     try {
       const result = await api.resolveNeighborhood(release, lat, lng, controller.signal)
       if (!isCurrent()) return
-      currentSelection.current.select(result.id, result.name, motion)
-      if (!result.id) setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
+      if (result.id) currentSelection.current.select(result.id, result.name, motion)
+      else setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
     } catch (error) {
       if (isCurrent()) {
         recoverRelease(error)
@@ -111,23 +136,24 @@ export function NeighborhoodExplorer() {
 
   const initialLoading = geo.isLoading || summary.isLoading
   const initialError = geo.error ?? summary.error
-  const activeQuery = state.neighborhood ? context : citywideTrend
-  const statisticsIdentity = JSON.stringify([state.neighborhood, state.startYear, state.endYear])
+  const activeQuery = neighborhoods.length > 1 ? combined : neighborhood ? context : citywideTrend
+  const statisticsIdentity = JSON.stringify([neighborhoods, state.startYear, state.endYear])
   const statisticsRetry = useRef<StatisticsRetry | null>(null)
   const statistics = useStatisticsFade({ identity: statisticsIdentity, revision: activeQuery.dataUpdatedAt, ready: activeQuery.isSuccess, failed: activeQuery.isError && !activeQuery.isFetching, retry: statisticsRetry.current })
   const mapEntrance = useContentEntrance<HTMLElement>(!!geo.data && summary.isSuccess && !summary.isPlaceholderData, entrance)
   const inspectorEntrance = useContentEntrance<HTMLDivElement>(activeQuery.isSuccess, entrance)
   const trendEntrance = useContentEntrance<HTMLDivElement>(activeQuery.isSuccess, entrance)
   const grainReveal = useGrainReveal(state.trendGrain)
-  const inspectorName = state.neighborhood
-    ? context.data?.neighborhood.name ?? geo.data?.features.find((feature) => feature.properties.id === state.neighborhood)?.properties.name ?? 'Selected neighborhood'
+  const inspectorName = neighborhoods.length > 1 ? `${neighborhoods.length} neighborhoods combined`
+    : neighborhood ? context.data?.neighborhood.name ?? geo.data?.features.find((feature) => feature.properties.id === neighborhood)?.properties.name ?? 'Selected neighborhood'
     : 'Seattle citywide'
   const trendScope = inspectorName
   useEffect(() => {
     if (activeQuery.data && !activeQuery.isFetching && !activeQuery.error) {
-      setAnnouncement(`${inspectorName} statistics updated for ${state.startYear} to ${state.endYear}.`)
+      setAnnouncement(`${normalizationNotice.current}${inspectorName} statistics updated for ${state.startYear} to ${state.endYear}.`)
+      normalizationNotice.current = ''
     }
-  }, [activeQuery.dataUpdatedAt, activeQuery.isFetching, activeQuery.error, inspectorName, state.startYear, state.endYear])
+  }, [activeQuery.dataUpdatedAt, activeQuery.isFetching, activeQuery.error, inspectorName, statisticsIdentity, state.startYear, state.endYear])
 
   function setTrendGrain(grain: 'annual' | 'monthly') {
     state.setTrendGrain(grain)
@@ -142,7 +168,7 @@ export function NeighborhoodExplorer() {
           <h1>Neighborhood Explorer</h1>
           <p>Explore recorded collisions across Seattle's 94 neighborhoods.</p>
         </div>
-        <NeighborhoodPicker neighborhoods={geo.data} selectedId={state.neighborhood} onSelect={(id) => {
+        <NeighborhoodPicker neighborhoods={geo.data} selectedIds={neighborhoods} onSelect={(id) => {
           const feature = geo.data?.features.find((item) => item.properties.id === id)
           selectManually(id, feature?.properties.name)
         }}/>
@@ -159,12 +185,12 @@ export function NeighborhoodExplorer() {
         <div className={styles.workspace}>
           <section ref={mapEntrance} className={styles.mapPanel} aria-label="Neighborhood map">
             <div className={styles.panelLabel}><span>{summary.isPlaceholderData ? 'Updating map for selected years…' : '94 Seattle neighborhoods'}</span><strong>{MAP_METRICS.find(([value]) => value === state.mapMetric)?.[1]}</strong></div>
-            <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedId={state.neighborhood} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/>
+            <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedIds={neighborhoods} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/>
           </section>
           <aside
             className={styles.inspector}
             aria-busy={activeQuery.isFetching}
-            aria-label={state.neighborhood ? 'Selected neighborhood context' : 'Seattle citywide context'}
+            aria-label={neighborhoods.length > 0 ? 'Selected neighborhood context' : 'Seattle citywide context'}
           >
             <div className={styles.inspectorHead}>
               <h2>{inspectorName}</h2>
@@ -190,8 +216,8 @@ export function NeighborhoodExplorer() {
                 <details className={styles.methodNote}>
                   <summary>About these measures</summary>
                   <p>Severity burden = injuries + 3 × serious injuries + 5 × fatalities. It is a weighted total, not a measure of future risk.</p>
-                  <p>{state.neighborhood
-                    ? 'Neighborhood results include all severity levels, independent of Citywide Analysis filters.'
+                  <p>{neighborhoods.length > 0
+                    ? 'Neighborhood results include all severity levels, independent of Citywide Analysis filters. Combined totals include only collisions assigned to the selected neighborhoods.'
                     : 'Seattle totals include every collision record, including records not assigned to a neighborhood. Select a neighborhood to compare local conditions.'}</p>
                 </details>
               </details>

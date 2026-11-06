@@ -16,23 +16,24 @@ describe('NeighborhoodPicker', () => {
   it('supports keyboard-only search and selection', async () => {
     const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={[]} onSelect={onSelect}/>)
     const input = screen.getByRole('combobox', { name: 'Neighborhood' })
     await user.type(input, 'Ball')
     await user.keyboard('{Enter}')
     expect(onSelect).toHaveBeenCalledWith('ballard')
   })
 
-  it('reselects a later result after reopening with one match', async () => {
+  it('clears the query and keeps the picker open after choosing a result', async () => {
     const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={[]} onSelect={onSelect}/>)
     const input = screen.getByRole('combobox')
     await user.click(input)
     await user.keyboard('{ArrowDown}{Enter}')
     expect(onSelect).toHaveBeenLastCalledWith('fremont')
-    await user.tab()
-    await user.click(input)
+    expect(input).toHaveValue('')
+    expect(input).toHaveAttribute('aria-expanded', 'true')
+    await user.type(input, 'Frem')
     await user.keyboard('{Enter}')
     expect(onSelect).toHaveBeenCalledTimes(2)
     expect(onSelect).toHaveBeenLastCalledWith('fremont')
@@ -41,7 +42,7 @@ describe('NeighborhoodPicker', () => {
   it('keeps empty-result navigation safe and selects after a new search', async () => {
     const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={[]} onSelect={onSelect}/>)
     const input = screen.getByRole('combobox')
     await user.type(input, 'missing')
     await user.keyboard('{ArrowDown}{ArrowUp}{Enter}')
@@ -56,14 +57,14 @@ describe('NeighborhoodPicker', () => {
   it('exposes a clear control for the current selection', async () => {
     const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId="ballard" onSelect={onSelect}/>)
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={['ballard']} onSelect={onSelect}/>)
     await user.click(screen.getByRole('button', { name: 'Clear neighborhood selection' }))
     expect(onSelect).toHaveBeenCalledWith(null)
   })
 
   it('dismisses after outside clicks and keyboard focus leaves the picker', async () => {
     const user = userEvent.setup()
-    render(<><NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={vi.fn()}/><button>Outside</button></>)
+    render(<><NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={[]} onSelect={vi.fn()}/><button>Outside</button></>)
     const input = screen.getByRole('combobox')
     await user.click(input)
     await user.click(screen.getByRole('button', { name: 'Outside' }))
@@ -76,7 +77,7 @@ describe('NeighborhoodPicker', () => {
   it('does not select a hidden option after Escape', async () => {
     const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={[]} onSelect={onSelect}/>)
     await user.click(screen.getByRole('combobox'))
     await user.keyboard('{Escape}{Enter}')
     expect(onSelect).not.toHaveBeenCalled()
@@ -97,7 +98,7 @@ describe('NeighborhoodPicker', () => {
     const originalScrollIntoView = HTMLElement.prototype.scrollIntoView
     HTMLElement.prototype.scrollIntoView = scrollIntoView
     try {
-      render(<NeighborhoodPicker neighborhoods={manyNeighborhoods} selectedId={null} onSelect={onSelect}/>)
+      render(<NeighborhoodPicker neighborhoods={manyNeighborhoods} selectedIds={[]} onSelect={onSelect}/>)
       await user.tab()
       expect(screen.getAllByRole('option')).toHaveLength(20)
       expect(screen.getByRole('status')).toHaveTextContent('20 neighborhoods. Type to narrow results.')
@@ -116,7 +117,7 @@ describe('NeighborhoodPicker', () => {
   it('allows a touch click on a result without dismissing it on internal focus', async () => {
     const onSelect = vi.fn()
     const user = userEvent.setup()
-    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedId={null} onSelect={onSelect}/>)
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={[]} onSelect={onSelect}/>)
     const input = screen.getByRole('combobox')
     await user.click(input)
     const option = screen.getByRole('option', { name: 'Ballard' })
@@ -126,3 +127,18 @@ describe('NeighborhoodPicker', () => {
   })
 })
 
+
+describe('multiple neighborhood controls', () => {
+  it('marks selected options and offers individual removal', async () => {
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    render(<NeighborhoodPicker neighborhoods={neighborhoods} selectedIds={['ballard', 'fremont']} onSelect={onSelect}/>)
+    await user.click(screen.getByRole('combobox'))
+    expect(screen.getByRole('listbox')).toHaveAttribute('aria-multiselectable', 'true')
+    expect(screen.getByRole('option', { name: 'Ballard' })).toHaveAttribute('aria-selected', 'true')
+    await user.click(screen.getByRole('button', { name: 'Remove Fremont' }))
+    expect(onSelect).toHaveBeenLastCalledWith('fremont')
+    await user.click(screen.getByRole('button', { name: 'Clear neighborhood selection' }))
+    expect(onSelect).toHaveBeenLastCalledWith(null)
+  })
+})

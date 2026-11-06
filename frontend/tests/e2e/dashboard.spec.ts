@@ -18,6 +18,7 @@ test('map and keyboard selector share URL-backed neighborhood state', async ({ p
   await expect(page.getByRole('option', { name: 'Ballard' })).toBeVisible()
   await picker.press('Enter')
   await expect(page).toHaveURL(/neighborhood=ballard/)
+  await picker.press('Escape')
   const details = page.locator('#neighborhood-details')
   if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click()
   await expect(page.getByRole('heading', { name: 'Ballard', exact: true })).toBeVisible()

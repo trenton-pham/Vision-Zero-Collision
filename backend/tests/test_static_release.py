@@ -12,7 +12,7 @@ from backend.scripts.static_release import (
 )
 
 
-def export(tmp_path: Path, version: str) -> Path:
+def export(tmp_path: Path, version: str, *, include_series: bool = False) -> Path:
     root = tmp_path / f"export-{version}"
     payloads = {
         "meta.json": canonical({"datasetVersion": version}),
@@ -23,6 +23,8 @@ def export(tmp_path: Path, version: str) -> Path:
         "explorer/2015-2016.json": b'{"summary":{}}',
         "neighborhoods/test.json": b'{"contexts":{}}',
     }
+    if include_series:
+        payloads["neighborhood-series.json"] = b'{"neighborhoods":{}}'
     manifest = {"schemaVersion": 1, "datasetVersion": version, "codeRevision": "abc", "dependencyFingerprint": "def", "meta": {"datasetVersion": version}, "files": {name: digest(content) for name, content in payloads.items()}}
     manifest["releaseId"] = digest(canonical(manifest))["sha256"]
     release = root / "data/releases" / manifest["releaseId"]
@@ -61,6 +63,17 @@ def test_assembly_keeps_only_current_and_previous_and_archives_only_current(tmp_
     assert check(extracted)["datasetVersion"] == "three"
     assert len(list((extracted / "data/releases").iterdir())) == 1
     assert {path.name for path in (extracted / "assets").iterdir()} == {"app-three.js"}
+
+
+def test_assembly_and_recovery_accept_combined_neighborhood_data(tmp_path):
+    site, archive = tmp_path / "site", tmp_path / "current.tar.gz"
+    manifest = assemble(export(tmp_path, "combined", include_series=True), frontend(tmp_path, "combined"), site, archive)
+    series = f"data/releases/{manifest['releaseId']}/neighborhood-series.json"
+    assert json.loads((site / series).read_bytes()) == {"neighborhoods": {}}
+    restored = tmp_path / "restored"
+    extract_archive(archive, restored)
+    assert check(restored) == manifest
+    assert (restored / series).read_bytes() == (site / series).read_bytes()
 
 
 def test_manifest_tamper_fails_without_replacing_existing_site(tmp_path):

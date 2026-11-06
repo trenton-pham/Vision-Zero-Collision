@@ -9,6 +9,9 @@ import geopandas as gpd
 import pandas as pd
 from shapely import from_wkb
 
+from backend.output_files import staged_outputs
+from backend.app.data import DataStore
+
 from backend.app.dataset import (
     EXPECTED_NEIGHBORHOODS,
     EXPECTED_TOTAL,
@@ -52,36 +55,37 @@ def build(output: Path, enforce_baseline: bool = True) -> dict[str, object]:
     if enforce_baseline and counts != EXPECTED_ASSIGNMENTS:
         raise RuntimeError(f"Assignment regression: expected {EXPECTED_ASSIGNMENTS}, found {counts}.")
 
-    output.mkdir(parents=True, exist_ok=True)
-    frame.to_parquet(output / "collisions_assigned.parquet", index=False)
-    aggregate_annual(frame, polygons).to_parquet(output / "neighborhood_annual.parquet", index=False)
-    aggregate_monthly(frame, polygons).to_parquet(output / "context_monthly.parquet", index=False)
+    with staged_outputs(output) as staged:
+        frame.to_parquet(staged / "collisions_assigned.parquet", index=False)
+        aggregate_annual(frame, polygons).to_parquet(staged / "neighborhood_annual.parquet", index=False)
+        aggregate_monthly(frame, polygons).to_parquet(staged / "context_monthly.parquet", index=False)
 
-    clean_geojson = dashboard_geojson(polygons)
-    (output / "neighborhoods.geojson").write_text(json.dumps(clean_geojson, separators=(",", ":")))
+        clean_geojson = dashboard_geojson(polygons)
+        (staged / "neighborhoods.geojson").write_text(json.dumps(clean_geojson, separators=(",", ":")))
 
-    data_as_of_date = pd.to_datetime(points["INCDATE"], utc=True).max().date()
-    data_as_of = data_as_of_date.isoformat()
-    built_at = datetime.now(timezone.utc).isoformat()
-    collision_hash = sha256(COLLISIONS)
-    manifest = {
-        "artifactVersion": VERSION,
-        "datasetVersion": f"artifact-{collision_hash[:16]}",
-        "builtAt": built_at,
-        "lastPublishedAt": built_at,
-        "dataAsOf": data_as_of,
-        "sourceHashes": {
-            str(COLLISIONS.relative_to(ROOT)): collision_hash,
-            str(NEIGHBORHOODS.relative_to(ROOT)): sha256(NEIGHBORHOODS),
-        },
-        "availableYears": sorted(int(v) for v in frame["YEAR"].dropna().unique()),
-        "partialYears": partial_years(data_as_of_date),
-        "knownTimeNightShare": True,
-        "collisionCount": len(frame),
-        "neighborhoodCount": len(polygons),
-        "assignmentCounts": counts,
-    }
-    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        data_as_of_date = pd.to_datetime(points["INCDATE"], utc=True).max().date()
+        data_as_of = data_as_of_date.isoformat()
+        built_at = datetime.now(timezone.utc).isoformat()
+        collision_hash = sha256(COLLISIONS)
+        manifest = {
+            "artifactVersion": VERSION,
+            "datasetVersion": f"artifact-{collision_hash[:16]}",
+            "builtAt": built_at,
+            "lastPublishedAt": built_at,
+            "dataAsOf": data_as_of,
+            "sourceHashes": {
+                str(COLLISIONS.relative_to(ROOT)): collision_hash,
+                str(NEIGHBORHOODS.relative_to(ROOT)): sha256(NEIGHBORHOODS),
+            },
+            "availableYears": sorted(int(v) for v in frame["YEAR"].dropna().unique()),
+            "partialYears": partial_years(data_as_of_date),
+            "knownTimeNightShare": True,
+            "collisionCount": len(frame),
+            "neighborhoodCount": len(polygons),
+            "assignmentCounts": counts,
+        }
+        (staged / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+        DataStore(staged)
     return manifest
 
 

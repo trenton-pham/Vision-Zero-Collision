@@ -3,6 +3,7 @@ import {
   citywideBundleSchema,
   explorerBundleSchema,
   neighborhoodBundleSchema,
+  neighborhoodSeriesSchema,
   neighborhoodFeatureCollectionSchema,
   releaseManifestSchema,
   resolverBundleSchema,
@@ -60,6 +61,8 @@ export const api = {
     releaseRequest(release, 'neighborhoods.geojson', neighborhoodFeatureCollectionSchema, signal),
   explorer: (release: ReleaseManifest, startYear: number, endYear: number, signal?: AbortSignal) =>
     releaseRequest(release, `explorer/${startYear}-${endYear}.json`, explorerBundleSchema, signal),
+  neighborhoodSeries: (release: ReleaseManifest, signal?: AbortSignal) =>
+    releaseRequest(release, 'neighborhood-series.json', neighborhoodSeriesSchema, signal),
   neighborhoodContext: async (release: ReleaseManifest, id: string, startYear: number, endYear: number, signal?: AbortSignal) => {
     const bundle = await releaseRequest(release, `neighborhoods/${encodeURIComponent(id)}.json`, neighborhoodBundleSchema, signal)
     const context = bundle.contexts[`${startYear}-${endYear}`]
