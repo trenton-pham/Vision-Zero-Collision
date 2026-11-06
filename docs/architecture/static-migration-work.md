@@ -30,7 +30,7 @@ Frontend API entrypoints accept the release manifest explicitly. Query keys incl
 
 ## Verification status
 
-Implementation, independent code review, hosted checks, and live cutover are complete. The public dashboard is [vision-zero-collision.rice-farmer-bot.workers.dev](https://vision-zero-collision.rice-farmer-bot.workers.dev). Cloudflare version `16b59408-4e03-40f8-a855-f93a9794ac93` serves release `678bbee3b43575afef7ff81e1f5f9542d1aca36d5c6366e2e6d0aa8d9ccc224e` from migration commit `4f8a5252397bbb0d76a79af6fd8da615d6bf772e`.
+Implementation, independent code review, hosted checks, and live cutover are complete. The public dashboard is [vision-zero-collision.trentonpham.workers.dev](https://vision-zero-collision.trentonpham.workers.dev). Cloudflare version `16b59408-4e03-40f8-a855-f93a9794ac93` serves release `678bbee3b43575afef7ff81e1f5f9542d1aca36d5c6366e2e6d0aa8d9ccc224e` from migration commit `4f8a5252397bbb0d76a79af6fd8da615d6bf772e`.
 
 The active dataset contains 106,799 collisions through October 5, 2026, version `20261008T172723Z-fbef0eb54182`. Atlas was unchanged during publication. Both views, real map clicks, and the post-Render-suspension desktop/mobile smoke passed with runtime data connections blocked. A fresh production visit after nineteen minutes without test traffic rendered map data in 2.66 seconds in one unthrottled observation.
 

@@ -1,8 +1,10 @@
 # Seattle Collision Dashboard Architecture Guide
 
-Developer reference. Updated October 18, 2026 against repository snapshot `2a7fa31` and the setup corrections in this change.
+Historical reference for repository snapshot `2a7fa31`, documented October 18, 2026. The frontend API calls and Docker production flow below describe the application before the November 5 static migration. They are not the current deployment instructions.
 
-The new production delivery path is described in the [static hosting guide](../deployment/static-hosting.md). It publishes the existing Python calculations as versioned JSON alongside React on Cloudflare. This guide's FastAPI request flow remains the local reference and legacy Render architecture; production visitors no longer require that API.
+For the current architecture, read the [static hosting guide](../deployment/static-hosting.md). Cloudflare serves React and precomputed analytical JSON. GitHub Actions exports pinned Atlas datasets with the existing Python calculations. FastAPI remains a local analytical reference. The [verification record](static-migration-verification.md) documents the live cutover and recovery checks.
+
+## Historical application architecture
 
 The project is a public, read-only analytics application backed by a validated, in-memory collision dataset. React renders two workspaces, FastAPI calculates and serves their analytics, and an independent ingestion command publishes replacement datasets to MongoDB. The same API can instead load reproducible local Parquet artifacts. Historical notebooks and vehicle cleaning support research; they do not participate in a browser request.
 
@@ -105,7 +107,7 @@ After cleaning accepted Seattle point records, ingestion uses `assign`, `aggrega
 
 The writer rejects a backwards data date and, unless explicitly overridden, source or usable collision count decreases greater than one percent. Identical content produces a no-change result. Publication keeps the active and previous datasets and attempts to prune older ones. `rollback_dataset.py` checks the previous collision count, then swaps the active and previous versions. A second rollback reverses the first. No fallback exists after the first publication. The API validates a replacement before adopting it.
 
-GitHub Actions runs the tests before syncing. The workflow is configured for the eighth of each month at 03:17 America/Los_Angeles and also supports manual invocation. It temporarily admits the runner IP to Atlas and uploads an ingestion manifest. This describes repository configuration; it does not establish that a deployed schedule or live database is currently healthy.
+GitHub Actions runs the tests before syncing. The workflow is configured for the eighth of each month at 03:17 America/Los_Angeles and also supports manual invocation. It temporarily admits the runner IP to Atlas. The current workflow exports static data and retains website recovery archives; the ingestion result stays in the run logs. This describes repository configuration; it does not establish that a deployed schedule or live database is currently healthy.
 
 ### Research path
 

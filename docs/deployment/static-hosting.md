@@ -1,6 +1,6 @@
 # Static dashboard publication
 
-The live dashboard is [vision-zero-collision.rice-farmer-bot.workers.dev](https://vision-zero-collision.rice-farmer-bot.workers.dev). Production publication and desktop/mobile browser checks passed on November 5, 2026. The legacy Render service is suspended; its configuration and last deployment (`7c03b224fbf18ae021e57c04aee641898fd88c10`) are retained temporarily as a recovery reference.
+The live dashboard is [vision-zero-collision.trentonpham.workers.dev](https://vision-zero-collision.trentonpham.workers.dev). Production publication and desktop/mobile browser checks passed on November 5, 2026. The legacy Render service is suspended; its configuration and last deployment (`7c03b224fbf18ae021e57c04aee641898fd88c10`) are retained temporarily as a recovery reference.
 
 React and versioned JSON responses are served directly by Cloudflare Workers Static Assets. There is no Worker request handler, production Python process, or browser database connection. Python/FastAPI remains the reference implementation and local development server. Atlas retains immutable datasets and the authoritative monthly synchronization process.
 
@@ -9,7 +9,7 @@ React and versioned JSON responses are served directly by Cloudflare Workers Sta
 Use Python 3.11, uv, and Node 22.12 or later. From the repository root:
 
 ```sh
-uv sync --frozen --extra test
+uv sync --python 3.11 --frozen --extra test
 uv run --frozen python -m backend.scripts.build_artifacts
 uv run --frozen python -m backend.scripts.export_static --output build/export --backend artifacts --verify
 npm --prefix frontend ci --legacy-peer-deps
@@ -55,6 +55,8 @@ The checked-in fixtures cover shared boundaries, overlapping interiors, nearest 
 | `MONGODB_INGEST_URI` | Existing separate ingestion/rollback connection with database write access |
 | `ATLAS_PUBLIC_KEY`, `ATLAS_PRIVATE_KEY`, `ATLAS_PROJECT_ID` | Existing temporary runner IP access management |
 
+Set the production environment variable `STATIC_WEBSITE_URL` to `https://vision-zero-collision.trentonpham.workers.dev`, without a dashboard path such as `/neighborhoods`. Update it whenever the workers.dev hostname changes; preflight and production smoke checks use this origin.
+
 Keep secrets in the GitHub environment or an explicitly selected, Git-ignored local file. The exporter accepts `--env-file .env.static-export`; it does not automatically load arbitrary `.env` files. Credentials never become Worker bindings or frontend variables.
 
 Run the initial production publication through GitHub Actions so its recovery archive is recorded with its promoted Cloudflare version. Pull-request checks never receive production secrets or deploy. The workflow runs on main pushes, scheduled monthly updates, and manual dispatches.
@@ -82,6 +84,10 @@ The initial complete hosted verification and publication took 45.4 minutes. Thes
 
 The workflow uploads a version without production traffic, checks its preview's files, cache policies, deep links and missing-data responses, saves its recovery archive, then promotes that exact version and enables its workers.dev address. Post-promotion smoke tests check the public origin. Archive restoration also checks the live pointer against the retained archive; a missing or inconsistent recovery archive stops publication for operator recovery.
 
+Refreshes fingerprint the published collision fields, neighborhood geometry and labels, annual and monthly aggregates, dataset schema, and stable analytical metadata. Publication timestamps and download bookkeeping do not affect the fingerprint. The first refresh after this change publishes once under the new fingerprint; subsequent identical refreshes return `no_change`. Publish-only runs continue to export the existing active version.
+
+Refresh dry runs leave Atlas unchanged even when download or validation fails. A local failure manifest can still be written. Ingestion and export failures report a sanitized diagnostic tail in Actions logs and the run summary; raw temporary logs are not uploaded. Successful runs also surface publication-lock release warnings. Treat a lock-release warning as a reason to inspect Atlas state before retrying.
+
 Atlas and website publication are separate boundaries. Atlas can advance while website export fails. The website keeps its last coherent release; a new `publish-only` run can complete publication without downloading ArcGIS again. The workflow summary reports these outcomes separately.
 
 ## Recovery and cutover
@@ -89,11 +95,25 @@ Atlas and website publication are separate boundaries. Atlas can advance while w
 For a website regression:
 
 1. In this workflow's GitHub Actions artifacts, locate the earlier `collision-static-RUN_ID-VERSION_UUID` archive. Copy the version UUID from its name. Use a version with a retained production archive, not the initial bootstrap or an unpromoted preview.
-2. Open **Actions → Collision data and static website → Run workflow**, select **main**, choose **website-rollback**, and enter that UUID in **worker_version**. Leave **dry_run** off to perform the restore.
+2. Open **Actions  to  Collision data and static website  to  Run workflow**, select **main**, choose **website-rollback**, and enter that UUID in **worker_version**. Leave **dry_run** off to perform the restore.
 3. Start a new run. The workflow validates the retained archive and that version's preview, then restores the same Cloudflare version.
 4. Check the successful promotion and the public `/data/current.json` against the restored archive's dataset version. Atlas remains unchanged.
 
 The first successful publication creates one recovery archive. The policy retains up to two as later publications succeed.
+
+Atlas publication, pruning, and rollback share a database lock in `dataset_state` with `_id: "publication-lock"`. A competing writer fails immediately; retry after the current writer finishes. Dry runs do not acquire the lock. Before introducing this protocol, stop or finish every ingestion or rollback process running older code: those processes do not honor the lock.
+
+The lock has no expiry. If a writer crashes or reports that it could not release the lock, inspect the document's `owner`, `operation`, and `acquiredAt`. Confirm the owning workflow or local process has stopped before removing it. Using the ingestion identity in a MongoDB shell connected to the dashboard database:
+
+```javascript
+db.dataset_state.findOne({ _id: "publication-lock" })
+// After confirming the owning process has stopped, copy its exact owner token:
+db.dataset_state.deleteOne({ _id: "publication-lock", owner: "OWNER_FROM_INSPECTION" })
+```
+
+Require `deletedCount: 1`. If it is zero, inspect again; do not delete a replacement lock by ID alone. Check `dataset_state`'s active pointer and the corresponding ingestion record before retrying. A lock-release warning does not mean publication was undone: Atlas may already have advanced. This lock protects writers; it does not pin an export's dataset against later pruning.
+
+Mongo-backed reads now use ascending `COLDETKEY` order, matching ingestion. KDE formulas and sampling are unchanged, but a new export can differ from one previously generated with arbitrary Mongo record order. Artifact-file ordering is unchanged.
 
 Let any active production publication finish before a manual Atlas rollback. For a bad source dataset, the existing rollback command restores Atlas's retained **previousVersion**. It requires the separate ingestion identity with database write access.
 
