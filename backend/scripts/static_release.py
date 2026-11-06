@@ -9,6 +9,7 @@ import shutil
 import sys
 import tarfile
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 from time import sleep
 from urllib.error import HTTPError
@@ -93,7 +94,10 @@ def validate_manifest(manifest: dict) -> str:
 
 
 def check(root: Path) -> dict:
-    files = inventory(root)
+    return _check_inventory(root, inventory(root))
+
+
+def _check_inventory(root: Path, files: dict[str, dict]) -> dict:
     current = json.loads((root / "data/current.json").read_bytes())
     release_id = validate_manifest(current)
     releases = root / "data/releases"
@@ -234,7 +238,8 @@ def preflight(base_url: str, previous_site: Path | None = None) -> None:
 
 
 def smoke(base_url: str, root: Path) -> None:
-    current = check(root)
+    files = inventory(root)
+    current = _check_inventory(root, files)
     base_url = base_url.rstrip("/")
     def get(name: str) -> tuple[bytes, object]:
         request = Request(base_url + "/" + name, headers={"User-Agent": "VisionZeroStaticVerifier/1.0"})
@@ -264,13 +269,14 @@ def smoke(base_url: str, root: Path) -> None:
         content, _ = get(route)
         if content != (root / "index.html").read_bytes():
             raise ValueError("Dashboard deep link does not serve the app")
-    files = inventory(root)
     samples = {"index.html", *[name for name in files if name.startswith("assets/")], *[f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name in {"meta.json", "resolver.json", "neighborhoods.geojson", "neighborhood-series.json"}]}
     samples.update(next((f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name.startswith(prefix)), "") for prefix in ("citywide/", "explorer/", "neighborhoods/"))
-    for name in samples - {""}:
+    def verify_asset(name: str) -> None:
         content, _ = get(name)
         if digest(content) != files[name]:
             raise ValueError("Published asset checksum mismatch")
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(verify_asset, sorted(samples - {""})))
     try:
         get("data/releases/missing/not-found.json")
     except HTTPError as error:

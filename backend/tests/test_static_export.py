@@ -158,3 +158,211 @@ def test_neighborhood_series_uses_known_time_denominator(store: DataStore, monke
             & store.collisions["YEAR"].eq(year) & store.collisions["MONTH"].eq(month)
         ]
         assert row["knownTimeCollisions"] == int(raw["HOUR"].notna().sum())
+
+
+@pytest.fixture(scope="module")
+def sharded_release(store, tmp_path_factory):
+    from backend.app.dataset import aggregate_annual, aggregate_monthly
+    from backend.scripts.export_static import merge_static_exports
+
+    collisions = store.collisions.loc[
+        store.collisions["YEAR"].isin([2024, 2025])
+        & store.collisions["neighborhood_id"].isin(["ballard", "fremont"])
+    ].groupby(["YEAR", "MONTH", "neighborhood_id"], observed=True).head(1).copy()
+    polygons = store.neighborhoods.loc[store.neighborhoods["id"].isin(["ballard", "fremont"])].copy()
+    manifest = {
+        **store.manifest, "availableYears": [2024, 2025], "partialYears": [],
+        "collisionCount": len(collisions), "neighborhoodCount": len(polygons),
+        "dataAsOf": str(collisions["INCDATE"].max())[:10],
+    }
+    geojson = {**store.geojson, "features": [
+        feature for feature in store.geojson["features"] if feature["properties"]["id"] in {"ballard", "fremont"}
+    ]}
+    small = DataStore(bundle=DatasetBundle(
+        manifest, collisions, aggregate_annual(collisions, polygons),
+        aggregate_monthly(collisions, polygons), geojson,
+    ))
+    root = tmp_path_factory.mktemp("export-shards")
+    full = export_static(root / "full", small, code_revision="same-code")
+    shards = root / "shards"
+    for index in range(3):
+        export_static(shards / str(index), small, code_revision="same-code", verify=True, shard_index=index, shard_count=3)
+    merged = merge_static_exports(root / "merged", shards, code_revision="same-code", shard_count=3)
+    return root, full, merged, small
+
+
+def test_sharded_export_matches_unsharded_bytes_and_identity(sharded_release):
+    root, full, merged, _ = sharded_release
+    assert full == merged
+    relative = Path("data/releases") / full["releaseId"]
+    expected = root / "full" / relative
+    actual = root / "merged" / relative
+    assert {p.relative_to(actual): p.read_bytes() for p in actual.rglob("*") if p.is_file()} == {
+        p.relative_to(expected): p.read_bytes() for p in expected.rglob("*") if p.is_file()
+    }
+    assert not list((root / "shards").rglob("current.json"))
+
+
+@pytest.mark.parametrize("failure", ["missing", "duplicate", "dataset", "revision", "provenance", "unverified", "corrupt", "omission", "overlap", "symlink"])
+def test_invalid_shards_preserve_current_release(sharded_release, tmp_path, failure):
+    import shutil
+    from backend.scripts.export_static import merge_static_exports
+
+    root, full, _, _ = sharded_release
+    shards = tmp_path / "shards"
+    shutil.copytree(root / "shards", shards)
+    output = tmp_path / "published"
+    shutil.copytree(root / "full", output)
+    current = (output / "data/current.json").read_bytes()
+    folder = shards / "1"
+    manifest_path = folder / "manifest.json"
+    manifest = json.loads(manifest_path.read_bytes())
+    if failure == "missing":
+        shutil.rmtree(folder)
+    elif failure == "corrupt":
+        asset = next(name for name in manifest["files"] if name != "provenance.json")
+        (folder / asset).write_bytes(b"{}")
+    elif failure == "symlink":
+        asset = next(name for name in manifest["files"] if name != "provenance.json")
+        original = folder / asset
+        external = tmp_path / "external.json"
+        original.rename(external)
+        original.symlink_to(external)
+    else:
+        if failure == "duplicate":
+            manifest["shard"]["index"] = 0
+        elif failure == "dataset":
+            manifest["datasetVersion"] = "other"
+        elif failure == "revision":
+            manifest["codeRevision"] = "other"
+        elif failure == "provenance":
+            manifest["dependencyFingerprint"] = "other"
+        elif failure == "unverified":
+            manifest["shard"]["verified"] = False
+        elif failure == "omission":
+            asset = next(name for name in manifest["files"] if name != "provenance.json")
+            del manifest["files"][asset]
+            (folder / asset).unlink()
+        elif failure == "overlap":
+            asset = "meta.json"
+            shutil.copyfile(shards / "0" / asset, folder / asset)
+            manifest["files"][asset] = json.loads((shards / "0/manifest.json").read_bytes())["files"][asset]
+        del manifest["releaseId"]
+        manifest["releaseId"] = digest(canonical_json(manifest))
+        manifest_path.write_bytes(canonical_json(manifest))
+    with pytest.raises(ValueError):
+        merge_static_exports(output, shards, code_revision="same-code", shard_count=3)
+    assert (output / "data/current.json").read_bytes() == current
+    verify_inventory(output / "data/releases" / full["releaseId"], full)
+    assert not list(output.glob(".static-candidate-*"))
+
+
+def test_failed_shard_leaves_no_output(sharded_release, tmp_path, monkeypatch):
+    import backend.app.static_export as module
+    _, _, _, small = sharded_release
+
+    def fail_after_first_file(*_):
+        yield "meta.json", {}
+        raise RuntimeError("calculation failed")
+
+    monkeypatch.setattr(module, "analytical_files", fail_after_first_file)
+    output = tmp_path / "shard"
+    with pytest.raises(RuntimeError, match="calculation failed"):
+        export_static(output, small, code_revision="same-code", verify=True, shard_index=0, shard_count=3)
+    assert not output.exists()
+    assert not list(tmp_path.glob(".static-candidate-*"))
+
+
+@pytest.mark.parametrize("index,count", [(-1, 3), (3, 3), (0, 0)])
+def test_invalid_partition_is_rejected(index, count):
+    from backend.app.static_export import partition
+    with pytest.raises(ValueError, match="Shard index"):
+        partition([], index, count)
+
+
+def test_merge_rejects_an_unexpected_pinned_dataset(sharded_release, tmp_path):
+    from backend.scripts.export_static import merge_static_exports
+    root, _, _, _ = sharded_release
+    with pytest.raises(ValueError, match="pinned dataset"):
+        merge_static_exports(
+            tmp_path, root / "shards", code_revision="same-code", shard_count=3,
+            dataset_version="unexpected-dataset",
+        )
+    assert not (tmp_path / "data/current.json").exists()
+
+
+def test_empty_shard_is_verified_without_a_current_pointer(sharded_release, tmp_path):
+    _, _, _, small = sharded_release
+    output = tmp_path / "empty-shard"
+    manifest = export_static(output, small, code_revision="same-code", verify=True, shard_index=11, shard_count=12)
+    assert set(manifest["files"]) == {"provenance.json"}
+    assert manifest["shard"]["verified"] is True
+    assert not (output / "data/current.json").exists()
+
+
+def test_merge_cli_needs_no_source_store(sharded_release, tmp_path, monkeypatch, capsys):
+    import backend.scripts.export_static as module
+    root, full, _, _ = sharded_release
+    monkeypatch.setattr("sys.argv", [
+        "export_static", "--merge-shards", str(root / "shards"), "--output", str(tmp_path),
+        "--code-revision", "same-code", "--shard-count", "3", "--dataset-version", full["datasetVersion"],
+    ])
+    monkeypatch.setattr(module, "DataStore", lambda *_args, **_kwargs: pytest.fail("Merge loaded source data"))
+    module.main()
+    assert json.loads(capsys.readouterr().out)["releaseId"] == full["releaseId"]
+    assert json.loads((tmp_path / "data/current.json").read_bytes()) == full
+
+
+@pytest.mark.parametrize("expected", [None, "active", "other"])
+def test_pin_cli_reads_only_the_active_version(monkeypatch, capsys, expected):
+    import backend.scripts.export_static as module
+
+    closed = []
+    class Repository:
+        def __init__(self, *_):
+            pass
+        def active_state(self):
+            return {"activeVersion": "active"}
+        def close(self):
+            closed.append(True)
+
+    arguments = ["export_static", "--backend", "mongodb", "--pin-dataset", "--code-revision", "same-code"]
+    if expected:
+        arguments += ["--dataset-version", expected]
+    monkeypatch.setattr("sys.argv", arguments)
+    monkeypatch.setenv("MONGODB_URI", "mongodb://unused")
+    monkeypatch.setattr(module, "MongoDatasetRepository", Repository)
+    if expected == "other":
+        with pytest.raises(SystemExit) as error:
+            module.main()
+        assert error.value.code == 2
+        assert "not the active published version" in capsys.readouterr().err
+    else:
+        module.main()
+        assert json.loads(capsys.readouterr().out) == {"datasetVersion": "active"}
+    assert closed == [True]
+
+
+def test_merged_export_enforces_aggregate_file_limit(sharded_release, tmp_path, monkeypatch):
+    import backend.app.static_export as module
+    from backend.scripts.export_static import merge_static_exports
+    root, full, _, _ = sharded_release
+    monkeypatch.setattr(module, "MAX_ASSET_FILES", len(full["files"]))
+    with pytest.raises(ValueError, match="free file limit"):
+        merge_static_exports(tmp_path, root / "shards", code_revision="same-code", shard_count=3)
+    assert not (tmp_path / "data/current.json").exists()
+    assert not list(tmp_path.glob(".static-candidate-*"))
+
+
+def test_inventory_allows_ancestor_alias_but_rejects_extra_symlinks(release, tmp_path):
+    directory, manifest = release
+    alias = tmp_path / "ancestor"
+    alias.symlink_to(directory.parent, target_is_directory=True)
+    verify_inventory(alias / directory.name, manifest)
+    extra = directory / "unexpected-link"
+    extra.symlink_to("missing.json")
+    try:
+        with pytest.raises(ValueError, match="symbolic link"):
+            verify_inventory(directory, manifest)
+    finally:
+        extra.unlink()

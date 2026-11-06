@@ -4,6 +4,7 @@ import io
 import json
 import tarfile
 from pathlib import Path
+from threading import Barrier, Lock
 from types import SimpleNamespace
 from urllib.error import HTTPError
 from urllib.parse import urlparse
@@ -282,3 +283,35 @@ def test_smoke_still_rejects_invalid_published_content(smoke_remote, failure):
     with pytest.raises(ValueError, match='pointer|checksum'):
         smoke('https://preview.example.workers.dev', smoke_remote.site)
     assert smoke_remote.delays == []
+
+
+def test_smoke_checks_assets_concurrently_without_skipping_any(smoke_remote, monkeypatch):
+    import backend.scripts.static_release as module
+
+    original = module.urlopen
+    ready = Barrier(2, timeout=5)
+    lock = Lock()
+    active = 0
+    maximum = 0
+    names = {'assets/app-one.js', 'index.html'}
+
+    def get(request, timeout):
+        nonlocal active, maximum
+        name = urlparse(request.full_url).path.lstrip('/')
+        if name not in names:
+            return original(request, timeout)
+        with lock:
+            active += 1
+            maximum = max(maximum, active)
+        try:
+            ready.wait()
+            return original(request, timeout)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(module, 'urlopen', get)
+    module.smoke('https://preview.example.workers.dev', smoke_remote.site)
+    assert maximum == 2
+    assert all(smoke_remote.requests.count(name) == 1 for name in names)
+    assert smoke_remote.requests.count('data/releases/missing/not-found.json') == 1

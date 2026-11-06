@@ -38,8 +38,27 @@ permissions:
   contents: read
 
 jobs:
-  verify:
+  artifacts:
     if: github.repository == 'trenton-pham/Vision-Zero-Collision'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra test
+      - run: uv run --frozen python -m backend.scripts.build_artifacts
+      - name: Save ci-dashboard
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-dashboard
+          path: data/dashboard
+          if-no-files-found: error
+          retention-days: 1
+
+  backend:
+    needs: artifacts
     runs-on: ubuntu-latest
     services:
       mongodb:
@@ -55,7 +74,10 @@ jobs:
           python-version: '3.11'
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen --extra test
-      - run: uv run --frozen python -m backend.scripts.build_artifacts
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-dashboard
+          path: data/dashboard
       - run: uv run --frozen pytest backend/tests -q
         env:
           MONGODB_TEST_URI: mongodb://127.0.0.1:27017
@@ -66,31 +88,148 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci --legacy-peer-deps
         working-directory: frontend
-      - run: npm test && npm run build
-        working-directory: frontend
       - run: uv run --frozen python -m backend.scripts.resolver_fixtures --real --output build/resolver-fixtures.json
       - run: node --experimental-strip-types frontend/scripts/check-resolver.mjs build/resolver-fixtures.json
+
+  frontend:
+    if: github.repository == 'trenton-pham/Vision-Zero-Collision'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - run: npm test && npm run build
+        working-directory: frontend
       - run: node --test frontend/scripts/publication-archives.test.mjs
-      - run: uv run --frozen python -m backend.scripts.export_static --output build/export --backend artifacts --verify
+      - name: Save ci-frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-frontend
+          path: frontend/dist
+          if-no-files-found: error
+          retention-days: 1
+
+  export:
+    needs: artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra test
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-dashboard
+          path: data/dashboard
+      - name: Export and verify artifact shard
+        env:
+          SHARD_INDEX: ${{ matrix.shard }}
+        run: uv run --frozen python -m backend.scripts.export_static --output build/shard --backend artifacts --verify --shard-index "$SHARD_INDEX" --shard-count 12 --code-revision "$GITHUB_SHA"
+      - name: Save ci-export-${{ matrix.shard }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-export-${{ matrix.shard }}
+          path: build/shard
+          compression-level: 1
+          if-no-files-found: error
+          retention-days: 1
+
+  assemble:
+    needs: [export, frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra test
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ci-export-*
+          path: build/shards
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-frontend
+          path: frontend/dist
+      - run: uv run --frozen python -m backend.scripts.export_static --merge-shards build/shards --output build/export --code-revision "$GITHUB_SHA" --shard-count 12
       - run: uv run --frozen python -m backend.scripts.static_release assemble --export-dir build/export --frontend-dir frontend/dist --output build/site --archive-output build/current-release.tar.gz
+      - name: Save ci-site
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-site
+          path: build/site
+          compression-level: 1
+          if-no-files-found: error
+          retention-days: 1
+
+  browser:
+    needs: assemble
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop, mobile]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-site
+          path: build/site
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --project="$PLAYWRIGHT_PROJECT"
         working-directory: frontend
+        env:
+          PLAYWRIGHT_PROJECT: ${{ matrix.project }}
 
-  publish:
+  verify:
+    if: always() && github.repository == 'trenton-pham/Vision-Zero-Collision'
+    needs: [artifacts, backend, frontend, export, assemble, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: python -c 'import json,os; results=json.loads(os.environ["RESULTS"]); assert all(job["result"] == "success" for job in results.values()), results'
+
+  prepare_publication:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
-      actions: write
+      actions: read
     env:
       DRY_RUN: ${{ inputs.dry_run || 'false' }}
       ACTION: ${{ inputs.action || 'publish-only' }}
       MONGODB_DATABASE: seattle_collision
       WRANGLER_SEND_METRICS: 'false'
+    outputs:
+      export_needed: ${{ steps.dataset.outputs.export_needed }}
+      dataset_version: ${{ steps.dataset.outputs.dataset_version }}
+      atlas_status: ${{ steps.sync.outputs.status }}
+      sync_dataset_version: ${{ steps.sync.outputs.dataset_version }}
+      previous_found: ${{ steps.previous.outputs.found }}
     steps:
       - uses: actions/checkout@v4
       - name: Require a new production run
@@ -104,13 +243,6 @@ jobs:
           python-version: '3.11'
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen --extra test
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci --legacy-peer-deps
-        working-directory: frontend
       - name: Restore last successful production archive
         id: previous
         uses: actions/github-script@v7
@@ -153,13 +285,37 @@ jobs:
         run: |
           runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
           python -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "$runner_ip"
+          ownership="collision-publication-$GITHUB_RUN_ID"
+          status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+            --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
+            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
+          if [[ "$status" == '200' ]]; then
+            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
+            if [[ "$comment" == "$ownership" ]]; then
+              echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
+              echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
+              sleep 20
+            fi
+            exit 0
+          fi
+          test "$status" = '404' || { echo "Atlas access lookup failed with HTTP $status"; exit 1; }
           echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
+          echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
           delete_after="$(date --utc --date='+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
-          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" '[{ipAddress:$ip,comment:"GitHub collision publication",deleteAfterDate:$expires}]')"
+          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" --arg comment "$ownership" '[{ipAddress:$ip,comment:$comment,deleteAfterDate:$expires}]')"
+          command_status=0
           curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
             --header 'Accept: application/vnd.atlas.2023-01-01+json' --header 'Content-Type: application/json' \
             --request POST --data "$payload" --output /dev/null \
-            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList"
+            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList" || command_status=$?
+          if (( command_status != 0 )); then
+            status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+              --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
+              "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
+            test "$status" = '200' || exit "$command_status"
+            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
+            test "$comment" = "$ownership" || exit "$command_status"
+          fi
           sleep 20
       - name: Refresh Atlas from ArcGIS
         id: sync
@@ -191,23 +347,282 @@ jobs:
                       raise ValueError('Invalid published Atlas dataset version')
                   output.write('dataset_version=' + version + '\n')
           PY
-      - name: Export the published Atlas dataset
-        if: env.ACTION != 'website-rollback' && (env.DRY_RUN != 'true' || steps.sync.outputs.status == '')
+      - name: Pin the published dataset for every shard
+        id: dataset
         env:
-          DASHBOARD_DATA_BACKEND: mongodb
           MONGODB_URI: ${{ secrets.MONGODB_EXPORT_URI }}
+          SYNC_STATUS: ${{ steps.sync.outputs.status }}
           SYNC_DATASET_VERSION: ${{ steps.sync.outputs.dataset_version }}
         run: |
+          if [[ "$ACTION" == 'website-rollback' || "$SYNC_STATUS" == 'dry_run' ]]; then
+            echo 'export_needed=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           flags=()
           if [[ -n "$SYNC_DATASET_VERSION" ]]; then flags+=(--dataset-version "$SYNC_DATASET_VERSION"); fi
           command_status=0
-          uv run --frozen python -m backend.scripts.export_static --output build/export --backend mongodb --verify "${flags[@]}" > "$RUNNER_TEMP/export.log" 2>&1 || command_status=$?
+          uv run --frozen python -m backend.scripts.export_static --backend mongodb --pin-dataset "${flags[@]}" > "$RUNNER_TEMP/pinned-dataset.json" 2> "$RUNNER_TEMP/pin.log" || command_status=$?
+          python -m backend.scripts.publication_diagnostics --log "$RUNNER_TEMP/pin.log" --stage "Static export" --exit-code "$command_status"
+          if (( command_status != 0 )); then exit "$command_status"; fi
+          python - <<'PYDATA'
+          import json, os
+          from pathlib import Path
+          version = json.loads((Path(os.environ['RUNNER_TEMP']) / 'pinned-dataset.json').read_text())['datasetVersion']
+          if not isinstance(version, str) or not version or any(c in version for c in '\r\n'):
+              raise ValueError('Invalid pinned Atlas dataset version')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('export_needed=true\n')
+              output.write('dataset_version=' + version + '\n')
+          PYDATA
+      - name: Transfer the validated recovery archive
+        if: steps.previous.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-previous
+          path: ${{ runner.temp }}/previous-release/current-release.tar.gz
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 1
+      - name: Remove temporary Atlas access even after failure
+        if: always() && steps.atlas.outputs.runner_ip != ''
+        env:
+          ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
+          ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
+          ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
+          RUNNER_IP: ${{ steps.atlas.outputs.runner_ip }}
+        run: |
+          python -c 'import ipaddress,os; ipaddress.IPv4Address(os.environ["RUNNER_IP"])'
+          status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+            --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
+            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$RUNNER_IP")"
+          if [[ "$status" == '404' ]]; then exit 0; fi
+          test "$status" = '200' || { echo "Atlas cleanup lookup failed with HTTP $status"; exit 1; }
+          comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
+          if [[ "$comment" == "collision-publication-$GITHUB_RUN_ID" ]]; then
+            curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+              --header 'Accept: application/vnd.atlas.2023-01-01+json' --request DELETE --output /dev/null \
+              "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$RUNNER_IP"
+          fi
+      - name: Report Atlas refresh result
+        if: always()
+        env:
+          ATLAS_STATUS: ${{ steps.sync.outputs.status }}
+          DATASET_VERSION: ${{ steps.sync.outputs.dataset_version }}
+        run: |
+          python - <<'PYDATA'
+          import os
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as output:
+              output.write('Atlas refresh: ' + (os.environ['ATLAS_STATUS'] or 'not run or failed; inspect refresh step') + '\n\n')
+              output.write('Atlas result datasetVersion: ' + (os.environ['DATASET_VERSION'] or 'not reported') + '\n')
+          PYDATA
+
+  production_export:
+    needs: prepare_publication
+    if: needs.prepare_publication.outputs.export_needed == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    env:
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
+      ACTION: ${{ inputs.action || 'publish-only' }}
+      MONGODB_DATABASE: seattle_collision
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require a new production run
+        id: attempt
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          test "$RUN_ATTEMPT" = '1' || { echo 'Start a new workflow_dispatch publish-only run instead of rerunning this attempt.'; exit 1; }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra test
+      - name: Temporarily allow this runner in Atlas
+        id: atlas
+        if: env.ACTION != 'website-rollback'
+        env:
+          ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
+          ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
+          ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
+        run: |
+          runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
+          python -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "$runner_ip"
+          ownership="collision-publication-$GITHUB_RUN_ID"
+          status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+            --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
+            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
+          if [[ "$status" == '200' ]]; then
+            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
+            if [[ "$comment" == "$ownership" ]]; then
+              echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
+              echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
+              sleep 20
+            fi
+            exit 0
+          fi
+          test "$status" = '404' || { echo "Atlas access lookup failed with HTTP $status"; exit 1; }
+          echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
+          echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
+          delete_after="$(date --utc --date='+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" --arg comment "$ownership" '[{ipAddress:$ip,comment:$comment,deleteAfterDate:$expires}]')"
+          command_status=0
+          curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+            --header 'Accept: application/vnd.atlas.2023-01-01+json' --header 'Content-Type: application/json' \
+            --request POST --data "$payload" --output /dev/null \
+            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList" || command_status=$?
+          if (( command_status != 0 )); then
+            status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+              --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
+              "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
+            test "$status" = '200' || exit "$command_status"
+            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
+            test "$comment" = "$ownership" || exit "$command_status"
+          fi
+          sleep 20
+      - name: Export the published Atlas dataset
+        env:
+          DASHBOARD_DATA_BACKEND: mongodb
+          MONGODB_URI: ${{ secrets.MONGODB_EXPORT_URI }}
+          SYNC_DATASET_VERSION: ${{ needs.prepare_publication.outputs.dataset_version }}
+          SHARD_INDEX: ${{ matrix.shard }}
+        run: |
+          command_status=0
+          uv run --frozen python -m backend.scripts.export_static --output build/shard --backend mongodb --verify --dataset-version "$SYNC_DATASET_VERSION" --shard-index "$SHARD_INDEX" --shard-count 12 --code-revision "$GITHUB_SHA" > "$RUNNER_TEMP/export.log" 2>&1 || command_status=$?
           python -m backend.scripts.publication_diagnostics --log "$RUNNER_TEMP/export.log" --stage "Static export" --exit-code "$command_status"
           if (( command_status != 0 )); then exit "$command_status"; fi
-      - name: Build and assemble current plus previous
-        if: env.ACTION != 'website-rollback' && (env.DRY_RUN != 'true' || steps.sync.outputs.status == '')
+      - name: Save publication-export-${{ matrix.shard }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-export-${{ matrix.shard }}
+          path: build/shard
+          compression-level: 1
+          if-no-files-found: error
+          retention-days: 1
+      - name: Save this reader's Atlas access for cleanup
+        if: always() && steps.atlas.outputs.runner_ip != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: publication-atlas-${{ matrix.shard }}
+          path: ${{ runner.temp }}/atlas-runner-ip.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  cleanup_atlas:
+    if: always() && needs.production_export.result != 'skipped'
+    needs: production_export
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: publication-atlas-*
+          path: atlas-readers
+      - name: Remove matrix readers only after all exports finish
+        env:
+          ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
+          ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
+          ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
         run: |
-          npm --prefix frontend run build
+          python - <<'PYDATA' > "$RUNNER_TEMP/atlas-reader-ips.txt"
+          import ipaddress
+          from pathlib import Path
+          addresses = {str(ipaddress.IPv4Address(path.read_text().strip())) for path in Path('atlas-readers').rglob('atlas-runner-ip.txt')}
+          print('\n'.join(sorted(addresses)))
+          PYDATA
+          failure=0
+          while IFS= read -r runner_ip; do
+            if [[ -z "$runner_ip" ]]; then continue; fi
+            status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+              --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
+              "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")" || { failure=1; continue; }
+            if [[ "$status" == '404' ]]; then continue; fi
+            if [[ "$status" != '200' ]]; then failure=1; continue; fi
+            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
+          if [[ "$comment" == "collision-publication-$GITHUB_RUN_ID" ]]; then
+              curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+                --header 'Accept: application/vnd.atlas.2023-01-01+json' --request DELETE --output /dev/null \
+                "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip" || failure=1
+            fi
+          done < "$RUNNER_TEMP/atlas-reader-ips.txt"
+          exit "$failure"
+
+  publish:
+    if: >-
+      always() && !cancelled() && needs.verify.result == 'success' &&
+      needs.prepare_publication.result == 'success' &&
+      (needs.production_export.result == 'success' ||
+       (needs.production_export.result == 'skipped' && needs.prepare_publication.outputs.export_needed == 'false'))
+    needs: [verify, prepare_publication, production_export, frontend]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      actions: write
+    env:
+      DRY_RUN: ${{ inputs.dry_run || 'false' }}
+      ACTION: ${{ inputs.action || 'publish-only' }}
+      MONGODB_DATABASE: seattle_collision
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require a new production run
+        id: attempt
+        env:
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          test "$RUN_ATTEMPT" = '1' || { echo 'Start a new workflow_dispatch publish-only run instead of rerunning this attempt.'; exit 1; }
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --extra test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --legacy-peer-deps
+        working-directory: frontend
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-frontend
+          path: frontend/dist
+      - name: Recover the validated previous archive
+        if: needs.prepare_publication.outputs.previous_found == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: publication-previous
+          path: ${{ runner.temp }}/previous-release
+      - name: Validate the transferred recovery archive
+        if: needs.prepare_publication.outputs.previous_found == 'true'
+        run: |
+          python - <<'PYDATA'
+          import os
+          from pathlib import Path
+          from backend.scripts.static_release import extract_archive
+          folder = Path(os.environ['RUNNER_TEMP']) / 'previous-release'
+          extract_archive(folder / 'current-release.tar.gz', folder / 'site')
+          PYDATA
+      - name: Recover all verified production shards
+        if: needs.prepare_publication.outputs.export_needed == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: publication-export-*
+          path: build/shards
+      - name: Merge the pinned production dataset
+        if: needs.prepare_publication.outputs.export_needed == 'true'
+        env:
+          PINNED_DATASET_VERSION: ${{ needs.prepare_publication.outputs.dataset_version }}
+        run: uv run --frozen python -m backend.scripts.export_static --merge-shards build/shards --output build/export --code-revision "$GITHUB_SHA" --shard-count 12 --dataset-version "$PINNED_DATASET_VERSION"
+      - name: Build and assemble current plus previous
+        if: needs.prepare_publication.outputs.export_needed == 'true'
+        run: |
           flags=()
           if [[ -f "$RUNNER_TEMP/previous-release/current-release.tar.gz" ]]; then flags+=(--previous-archive "$RUNNER_TEMP/previous-release/current-release.tar.gz"); fi
           uv run --frozen python -m backend.scripts.static_release assemble --export-dir build/export --frontend-dir frontend/dist --output build/site --archive-output build/current-release.tar.gz "${flags[@]}"
@@ -298,22 +713,11 @@ jobs:
           script: |
             const { prune } = await import(`${process.env.GITHUB_WORKSPACE}/frontend/scripts/publication-archives.mjs`)
             await prune({github, context, promoted: process.env.PROMOTED === 'success'})
-      - name: Remove temporary Atlas access even after failure
-        if: always() && steps.atlas.outputs.runner_ip != ''
-        env:
-          ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
-          ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
-          ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
-          RUNNER_IP: ${{ steps.atlas.outputs.runner_ip }}
-        run: |
-          curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-            --header 'Accept: application/vnd.atlas.2023-01-01+json' --request DELETE --output /dev/null \
-            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$RUNNER_IP"
       - name: Report Atlas and website publication separately
         if: always()
         env:
-          ATLAS_STATUS: ${{ steps.sync.outputs.status }}
-          DATASET_VERSION: ${{ steps.sync.outputs.dataset_version }}
+          ATLAS_STATUS: ${{ needs.prepare_publication.outputs.atlas_status }}
+          DATASET_VERSION: ${{ needs.prepare_publication.outputs.sync_dataset_version }}
           WEBSITE_STATUS: ${{ steps.promote.outcome }}
         run: |
           python - <<'PY'
@@ -324,3 +728,21 @@ jobs:
               output.write('Website promotion: ' + (os.environ['WEBSITE_STATUS'] or 'not attempted') + '\n\n')
               output.write('Cloudflare version: ' + os.environ.get('VERSION_ID', 'not uploaded') + '\n')
           PY
+
+  timings:
+    if: always() && github.repository == 'trenton-pham/Vision-Zero-Collision'
+    needs: [verify, prepare_publication, production_export, cleanup_atlas, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: Report workflow and job durations
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = await github.rest.actions.getWorkflowRun({...context.repo, run_id: context.runId})
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {...context.repo, run_id: context.runId, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100})
+            const seconds = (start, end) => Math.round((new Date(end) - new Date(start)) / 1000)
+            const elapsed = seconds(run.data.created_at, new Date().toISOString())
+            const rows = jobs.filter(job => job.started_at && job.completed_at).map(job => [job.name, job.conclusion, String(seconds(job.started_at, job.completed_at))])
+            await core.summary.addHeading('Workflow timings').addRaw(`Elapsed including queue and artifact transfers: ${elapsed} seconds. Target: 600 seconds.\n`).addTable([[{data:'Job', header:true}, {data:'Result', header:true}, {data:'Seconds', header:true}], ...rows]).write()
