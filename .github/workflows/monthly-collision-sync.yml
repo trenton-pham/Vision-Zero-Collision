@@ -223,7 +223,6 @@ jobs:
       DRY_RUN: ${{ inputs.dry_run || 'false' }}
       ACTION: ${{ inputs.action || 'publish-only' }}
       MONGODB_DATABASE: seattle_collision
-      WRANGLER_SEND_METRICS: 'false'
     outputs:
       export_needed: ${{ steps.dataset.outputs.export_needed }}
       dataset_version: ${{ steps.dataset.outputs.dataset_version }}
@@ -282,41 +281,50 @@ jobs:
           ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
           ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
           ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
-        run: |
+        run: &atlas_admission |
           runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
           python -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "$runner_ip"
           ownership="collision-publication-$GITHUB_RUN_ID"
-          status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-            --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
-            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
-          if [[ "$status" == '200' ]]; then
-            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
-            if [[ "$comment" == "$ownership" ]]; then
-              echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
-              echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
-              sleep 20
+          entry="https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip"
+          atlas() {
+            curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
+              --connect-timeout 5 --max-time 10 --header 'Accept: application/vnd.atlas.2023-01-01+json' "$@"
+          }
+          status="$(atlas --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' "$entry")"
+          case "$status" in
+            200) comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")" ;;
+            404) comment="$ownership" ;;
+            *) echo "Atlas access lookup failed with HTTP $status"; exit 1 ;;
+          esac
+          if [[ "$comment" == "$ownership" ]]; then
+            echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
+            echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
+          fi
+          if [[ "$status" == '404' ]]; then
+            delete_after="$(date --utc --date='+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+            payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" --arg comment "$ownership" '[{ipAddress:$ip,comment:$comment,deleteAfterDate:$expires}]')"
+            command_status=0
+            atlas --fail --header 'Content-Type: application/json' --request POST --data "$payload" --output /dev/null "${entry%/*}" || command_status=$?
+            if (( command_status != 0 )); then
+              status="$(atlas --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' "$entry")"
+              test "$status" = '200' || exit "$command_status"
+              comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
+              test "$comment" = "$ownership" || exit "$command_status"
             fi
-            exit 0
           fi
-          test "$status" = '404' || { echo "Atlas access lookup failed with HTTP $status"; exit 1; }
-          echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
-          echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
-          delete_after="$(date --utc --date='+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
-          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" --arg comment "$ownership" '[{ipAddress:$ip,comment:$comment,deleteAfterDate:$expires}]')"
-          command_status=0
-          curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-            --header 'Accept: application/vnd.atlas.2023-01-01+json' --header 'Content-Type: application/json' \
-            --request POST --data "$payload" --output /dev/null \
-            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList" || command_status=$?
-          if (( command_status != 0 )); then
-            status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-              --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
-              "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
-            test "$status" = '200' || exit "$command_status"
-            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
-            test "$comment" = "$ownership" || exit "$command_status"
-          fi
-          sleep 20
+          deadline=$((SECONDS + 120))
+          while (( SECONDS < deadline )); do
+            payload="$(atlas --fail "$entry/status")"
+            state="$(jq -er '.STATUS' <<< "$payload")"
+            echo "Atlas access for $runner_ip: $state"
+            case "$state" in
+              ACTIVE) exit 0 ;;
+              PENDING) sleep 5 ;;
+              *) echo 'Atlas access did not become active'; exit 1 ;;
+            esac
+          done
+          echo 'Timed out waiting for Atlas access to become active'
+          exit 1
       - name: Refresh Atlas from ArcGIS
         id: sync
         if: github.event_name == 'schedule' || env.ACTION == 'refresh-and-publish'
@@ -426,10 +434,7 @@ jobs:
       matrix:
         shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
     env:
-      DRY_RUN: ${{ inputs.dry_run || 'false' }}
-      ACTION: ${{ inputs.action || 'publish-only' }}
       MONGODB_DATABASE: seattle_collision
-      WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@v4
       - name: Require a new production run
@@ -445,46 +450,11 @@ jobs:
       - run: uv sync --frozen --extra test
       - name: Temporarily allow this runner in Atlas
         id: atlas
-        if: env.ACTION != 'website-rollback'
         env:
           ATLAS_PUBLIC_KEY: ${{ secrets.ATLAS_PUBLIC_KEY }}
           ATLAS_PRIVATE_KEY: ${{ secrets.ATLAS_PRIVATE_KEY }}
           ATLAS_PROJECT_ID: ${{ secrets.ATLAS_PROJECT_ID }}
-        run: |
-          runner_ip="$(curl --fail --silent --show-error https://api.ipify.org)"
-          python -c 'import ipaddress,sys; ipaddress.IPv4Address(sys.argv[1])' "$runner_ip"
-          ownership="collision-publication-$GITHUB_RUN_ID"
-          status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-            --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
-            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
-          if [[ "$status" == '200' ]]; then
-            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
-            if [[ "$comment" == "$ownership" ]]; then
-              echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
-              echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
-              sleep 20
-            fi
-            exit 0
-          fi
-          test "$status" = '404' || { echo "Atlas access lookup failed with HTTP $status"; exit 1; }
-          echo "runner_ip=$runner_ip" >> "$GITHUB_OUTPUT"
-          echo "$runner_ip" > "$RUNNER_TEMP/atlas-runner-ip.txt"
-          delete_after="$(date --utc --date='+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
-          payload="$(jq --null-input --arg ip "$runner_ip" --arg expires "$delete_after" --arg comment "$ownership" '[{ipAddress:$ip,comment:$comment,deleteAfterDate:$expires}]')"
-          command_status=0
-          curl --fail --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-            --header 'Accept: application/vnd.atlas.2023-01-01+json' --header 'Content-Type: application/json' \
-            --request POST --data "$payload" --output /dev/null \
-            "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList" || command_status=$?
-          if (( command_status != 0 )); then
-            status="$(curl --silent --show-error --digest --user "$ATLAS_PUBLIC_KEY:$ATLAS_PRIVATE_KEY" \
-              --header 'Accept: application/vnd.atlas.2023-01-01+json' --output "$RUNNER_TEMP/atlas-entry.json" --write-out '%{http_code}' \
-              "https://cloud.mongodb.com/api/atlas/v2/groups/$ATLAS_PROJECT_ID/accessList/$runner_ip")"
-            test "$status" = '200' || exit "$command_status"
-            comment="$(jq -r '.comment // ""' "$RUNNER_TEMP/atlas-entry.json")"
-            test "$comment" = "$ownership" || exit "$command_status"
-          fi
-          sleep 20
+        run: *atlas_admission
       - name: Export the published Atlas dataset
         env:
           DASHBOARD_DATA_BACKEND: mongodb
@@ -567,7 +537,6 @@ jobs:
     env:
       DRY_RUN: ${{ inputs.dry_run || 'false' }}
       ACTION: ${{ inputs.action || 'publish-only' }}
-      MONGODB_DATABASE: seattle_collision
       WRANGLER_SEND_METRICS: 'false'
     steps:
       - uses: actions/checkout@v4
