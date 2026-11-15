@@ -13,6 +13,26 @@ from backend.app.dataset import partial_years
 from backend.app.repository import ArtifactDatasetRepository
 
 
+@pytest.mark.parametrize('failure', ['serialization', 'validation'])
+def test_failed_artifact_build_preserves_previous_generation(tmp_path, monkeypatch, failure):
+    import backend.scripts.build_artifacts as builder
+
+    points, polygons = builder.load_sources()
+    monkeypatch.setattr(builder, 'load_sources', lambda: (points.loc[points['YEAR'].eq(2025)], polygons))
+    output = tmp_path / 'dashboard'
+    builder.build(output, enforce_baseline=False)
+    before = {path.name: path.read_bytes() for path in output.iterdir()}
+
+    def fail(*args, **kwargs):
+        raise OSError('Late build failure')
+
+    monkeypatch.setattr(builder, 'aggregate_monthly' if failure == 'serialization' else 'DataStore', fail)
+    with pytest.raises(OSError, match='Late build failure'):
+        builder.build(output, enforce_baseline=False)
+    assert {path.name: path.read_bytes() for path in output.iterdir()} == before
+    assert list(tmp_path.iterdir()) == [output]
+
+
 def test_partial_year_survives_year_rollover_when_source_ends_early() -> None:
     assert partial_years(date(2026, 8, 31), date(2027, 1, 8)) == [2026]
     assert partial_years(date(2026, 12, 31), date(2027, 1, 8)) == []

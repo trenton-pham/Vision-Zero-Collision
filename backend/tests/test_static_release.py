@@ -4,6 +4,11 @@ import io
 import json
 import tarfile
 from pathlib import Path
+from threading import Barrier, Lock
+from types import SimpleNamespace
+from urllib.error import HTTPError
+from urllib.parse import urlparse
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -12,7 +17,7 @@ from backend.scripts.static_release import (
 )
 
 
-def export(tmp_path: Path, version: str) -> Path:
+def export(tmp_path: Path, version: str, *, include_series: bool = False) -> Path:
     root = tmp_path / f"export-{version}"
     payloads = {
         "meta.json": canonical({"datasetVersion": version}),
@@ -23,6 +28,8 @@ def export(tmp_path: Path, version: str) -> Path:
         "explorer/2015-2016.json": b'{"summary":{}}',
         "neighborhoods/test.json": b'{"contexts":{}}',
     }
+    if include_series:
+        payloads["neighborhood-series.json"] = b'{"neighborhoods":{}}'
     manifest = {"schemaVersion": 1, "datasetVersion": version, "codeRevision": "abc", "dependencyFingerprint": "def", "meta": {"datasetVersion": version}, "files": {name: digest(content) for name, content in payloads.items()}}
     manifest["releaseId"] = digest(canonical(manifest))["sha256"]
     release = root / "data/releases" / manifest["releaseId"]
@@ -61,6 +68,17 @@ def test_assembly_keeps_only_current_and_previous_and_archives_only_current(tmp_
     assert check(extracted)["datasetVersion"] == "three"
     assert len(list((extracted / "data/releases").iterdir())) == 1
     assert {path.name for path in (extracted / "assets").iterdir()} == {"app-three.js"}
+
+
+def test_assembly_and_recovery_accept_combined_neighborhood_data(tmp_path):
+    site, archive = tmp_path / "site", tmp_path / "current.tar.gz"
+    manifest = assemble(export(tmp_path, "combined", include_series=True), frontend(tmp_path, "combined"), site, archive)
+    series = f"data/releases/{manifest['releaseId']}/neighborhood-series.json"
+    assert json.loads((site / series).read_bytes()) == {"neighborhoods": {}}
+    restored = tmp_path / "restored"
+    extract_archive(archive, restored)
+    assert check(restored) == manifest
+    assert (restored / series).read_bytes() == (site / series).read_bytes()
 
 
 def test_manifest_tamper_fails_without_replacing_existing_site(tmp_path):
@@ -169,8 +187,6 @@ def test_assembler_ignores_orphaned_export_releases(tmp_path):
 
 
 def test_preflight_distinguishes_first_deployment_and_missing_archive(tmp_path, monkeypatch):
-    from urllib.error import HTTPError
-    from unittest.mock import MagicMock
     import backend.scripts.static_release as module
     def missing(*args, **kwargs):
         raise HTTPError('https://example.workers.dev/data/current.json', 404, 'Missing', {}, None)
@@ -187,3 +203,115 @@ def test_preflight_distinguishes_first_deployment_and_missing_archive(tmp_path, 
     preflight('https://example.workers.dev', site)
     with pytest.raises(ValueError, match='actual production'):
         preflight('https://evil.example')
+
+
+@pytest.fixture
+def smoke_remote(tmp_path, monkeypatch):
+    import backend.scripts.static_release as module
+
+    site, _ = release(tmp_path, 'one')
+    remote = SimpleNamespace(site=site, failures={}, bodies={}, headers={}, requests=[], delays=[])
+
+    def get(request, timeout):
+        assert timeout == 60
+        name = urlparse(request.full_url).path.lstrip('/')
+        remote.requests.append(name)
+        failures = remote.failures.get(name, [])
+        if failures:
+            raise HTTPError(request.full_url, failures.pop(0), 'Unavailable', {'CF-Ray': 'test-ray'}, io.BytesIO())
+        path = site / ('index.html' if name in {'neighborhoods', 'citywide'} else name)
+        if not path.is_file():
+            raise HTTPError(request.full_url, 404, 'Not found', {}, None)
+        response = MagicMock()
+        response.__enter__.return_value.status = 200
+        response.__enter__.return_value.read.return_value = remote.bodies.get(name, path.read_bytes())
+        cache = 'no-store' if name == 'data/current.json' else 'public, max-age=31536000, immutable'
+        response.__enter__.return_value.headers = remote.headers.get(name, {'Cache-Control': cache})
+        return response
+
+    monkeypatch.setattr(module, 'urlopen', get)
+    monkeypatch.setattr(module, 'sleep', remote.delays.append)
+    return remote
+
+
+@pytest.mark.parametrize('status', [500, 502, 503, 504])
+@pytest.mark.parametrize('name', ['data/current.json', 'assets/app-one.js'])
+def test_smoke_recovers_from_temporary_server_errors(smoke_remote, status, name, capsys):
+    from backend.scripts.static_release import smoke
+
+    smoke_remote.failures[name] = [status]
+    smoke('https://preview.example.workers.dev', smoke_remote.site)
+    assert smoke_remote.requests.count(name) == 2
+    assert smoke_remote.delays == [2]
+    assert smoke_remote.requests.count('data/releases/missing/not-found.json') == 1
+    assert f'HTTP {status}, attempt 1/5, CF-Ray test-ray' in capsys.readouterr().err
+
+
+def test_smoke_stops_after_five_server_errors(smoke_remote):
+    from backend.scripts.static_release import smoke
+
+    smoke_remote.failures['data/current.json'] = [500] * 5
+    with pytest.raises(HTTPError) as error:
+        smoke('https://preview.example.workers.dev', smoke_remote.site)
+    assert error.value.code == 500
+    assert smoke_remote.requests == ['data/current.json'] * 5
+    assert smoke_remote.delays == [2, 4, 8, 16]
+
+
+@pytest.mark.parametrize('status', [403, 404])
+def test_smoke_does_not_retry_client_errors(smoke_remote, status):
+    from backend.scripts.static_release import smoke
+
+    smoke_remote.failures['data/current.json'] = [status]
+    with pytest.raises(HTTPError) as error:
+        smoke('https://preview.example.workers.dev', smoke_remote.site)
+    assert error.value.code == status
+    assert smoke_remote.requests == ['data/current.json']
+    assert smoke_remote.delays == []
+
+
+@pytest.mark.parametrize('failure', ['pointer', 'cache', 'checksum'])
+def test_smoke_still_rejects_invalid_published_content(smoke_remote, failure):
+    from backend.scripts.static_release import smoke
+
+    if failure == 'pointer':
+        smoke_remote.bodies['data/current.json'] = b'{}'
+    elif failure == 'cache':
+        smoke_remote.headers['data/current.json'] = {'Cache-Control': 'public'}
+    else:
+        smoke_remote.bodies['assets/app-one.js'] = b'changed'
+    with pytest.raises(ValueError, match='pointer|checksum'):
+        smoke('https://preview.example.workers.dev', smoke_remote.site)
+    assert smoke_remote.delays == []
+
+
+def test_smoke_checks_assets_concurrently_without_skipping_any(smoke_remote, monkeypatch):
+    import backend.scripts.static_release as module
+
+    original = module.urlopen
+    ready = Barrier(2, timeout=5)
+    lock = Lock()
+    active = 0
+    maximum = 0
+    names = {'assets/app-one.js', 'index.html'}
+
+    def get(request, timeout):
+        nonlocal active, maximum
+        name = urlparse(request.full_url).path.lstrip('/')
+        if name not in names:
+            return original(request, timeout)
+        with lock:
+            active += 1
+            maximum = max(maximum, active)
+        try:
+            ready.wait()
+            return original(request, timeout)
+        finally:
+            with lock:
+                active -= 1
+
+    monkeypatch.setattr(module, 'urlopen', get)
+    module.smoke('https://preview.example.workers.dev', smoke_remote.site)
+    assert maximum == 2
+    assert all(smoke_remote.requests.count(name) == 1 for name in names)
+    assert smoke_remote.requests.count('data/releases/missing/not-found.json') == 1

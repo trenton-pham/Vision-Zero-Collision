@@ -6,9 +6,12 @@ import hashlib
 import json
 import re
 import shutil
+import sys
 import tarfile
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
+from time import sleep
 from urllib.error import HTTPError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -18,7 +21,7 @@ MAX_FILES = 20_000
 MAX_FILE_SIZE = 25 * 1024 * 1024
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024
 MAX_EXPANDED_SIZE = 2 * 1024 * 1024 * 1024
-RELEASE_PATH = re.compile(r"(?:meta|resolver|provenance)\.json|neighborhoods\.geojson|citywide/\d{4}-\d{4}/(?:[0-9]|[12][0-9]|3[01])\.json|explorer/\d{4}-\d{4}\.json|neighborhoods/[^/.]+\.json")
+RELEASE_PATH = re.compile(r"(?:meta|resolver|provenance|neighborhood-series)\.json|neighborhoods\.geojson|citywide/\d{4}-\d{4}/(?:[0-9]|[12][0-9]|3[01])\.json|explorer/\d{4}-\d{4}\.json|neighborhoods/[^/.]+\.json")
 SECRET = re.compile(rb"mongodb(?:\+srv)?://|(?:ATLAS_PRIVATE_KEY|MONGODB_(?:URI|INGEST_URI|EXPORT_URI)|CLOUDFLARE_API_TOKEN)\s*[=:]|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\"(?:COLDETKEY|INCKEY|OBJECTID)\"", re.I)
 HEADERS = """/data/current.json
   Cache-Control: no-store
@@ -91,7 +94,10 @@ def validate_manifest(manifest: dict) -> str:
 
 
 def check(root: Path) -> dict:
-    files = inventory(root)
+    return _check_inventory(root, inventory(root))
+
+
+def _check_inventory(root: Path, files: dict[str, dict]) -> dict:
     current = json.loads((root / "data/current.json").read_bytes())
     release_id = validate_manifest(current)
     releases = root / "data/releases"
@@ -232,14 +238,26 @@ def preflight(base_url: str, previous_site: Path | None = None) -> None:
 
 
 def smoke(base_url: str, root: Path) -> None:
-    current = check(root)
+    files = inventory(root)
+    current = _check_inventory(root, files)
     base_url = base_url.rstrip("/")
     def get(name: str) -> tuple[bytes, object]:
         request = Request(base_url + "/" + name, headers={"User-Agent": "VisionZeroStaticVerifier/1.0"})
-        with urlopen(request, timeout=60) as response:
-            if response.status != 200:
-                raise ValueError("Unexpected HTTP status")
-            return response.read(), response.headers
+        for attempt in range(5):
+            try:
+                with urlopen(request, timeout=60) as response:
+                    if response.status != 200:
+                        raise ValueError("Unexpected HTTP status")
+                    return response.read(), response.headers
+            except HTTPError as error:
+                if error.code not in {500, 502, 503, 504}:
+                    raise
+                ray = error.headers.get("CF-Ray", "unavailable") if error.headers else "unavailable"
+                print(f"GET {request.full_url}: HTTP {error.code}, attempt {attempt + 1}/5, CF-Ray {ray}", file=sys.stderr, flush=True)
+                error.close()
+                if attempt == 4:
+                    raise
+                sleep(2 ** (attempt + 1))
     pointer, headers = get("data/current.json")
     if json.loads(pointer) != current or "no-store" not in headers.get("Cache-Control", ""):
         raise ValueError("Published pointer or its cache policy is wrong")
@@ -251,13 +269,14 @@ def smoke(base_url: str, root: Path) -> None:
         content, _ = get(route)
         if content != (root / "index.html").read_bytes():
             raise ValueError("Dashboard deep link does not serve the app")
-    files = inventory(root)
-    samples = {"index.html", *[name for name in files if name.startswith("assets/")], *[f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name in {"meta.json", "resolver.json", "neighborhoods.geojson"}]}
+    samples = {"index.html", *[name for name in files if name.startswith("assets/")], *[f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name in {"meta.json", "resolver.json", "neighborhoods.geojson", "neighborhood-series.json"}]}
     samples.update(next((f"data/releases/{current['releaseId']}/{name}" for name in current["files"] if name.startswith(prefix)), "") for prefix in ("citywide/", "explorer/", "neighborhoods/"))
-    for name in samples - {""}:
+    def verify_asset(name: str) -> None:
         content, _ = get(name)
         if digest(content) != files[name]:
             raise ValueError("Published asset checksum mismatch")
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(verify_asset, sorted(samples - {""})))
     try:
         get("data/releases/missing/not-found.json")
     except HTTPError as error:

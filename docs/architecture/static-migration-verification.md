@@ -30,7 +30,7 @@ Before cutover, Render metadata reported 106,799 collisions through October 5, 2
 
 Cloudflare bootstrap version `8612ba33-59ba-4f40-99ad-1046fc43a87d` initialized the static Worker with its production workers.dev address disabled. No public dashboard cutover is established by that initialization.
 
-The current-Atlas export passed after the computer’s temporary IP access rule was added. Production publication and the live desktop/mobile checks passed. The Render service is suspended with automatic deployment off; its configuration and last deployment remain as a recovery reference. GitHub production credentials and the website URL are configured.
+The current-Atlas export passed after the computer's temporary IP access rule was added. Production publication and the live desktop/mobile checks passed. The Render service is suspended with automatic deployment off; its configuration and last deployment remain as a recovery reference. GitHub production credentials and the website URL are configured.
 
 ## Cloudflare preview
 
@@ -48,7 +48,7 @@ Pull-request verification run [42080838911](https://github.com/trenton-pham/Visi
 
 ## Completed production release
 
-- Live dashboard: [vision-zero-collision.rice-farmer-bot.workers.dev](https://vision-zero-collision.rice-farmer-bot.workers.dev).
+- Live dashboard: [vision-zero-collision.trentonpham.workers.dev](https://vision-zero-collision.trentonpham.workers.dev).
 - Cloudflare version: `16b59408-4e03-40f8-a855-f93a9794ac93`.
 - Release ID: `678bbee3b43575afef7ff81e1f5f9542d1aca36d5c6366e2e6d0aa8d9ccc224e`.
 - Published dataset: `20261008T172723Z-fbef0eb54182`, 106,799 collisions through October 5, 2026. Atlas was not refreshed or rolled back during cutover.
@@ -61,6 +61,6 @@ Pull-request verification run [42080838911](https://github.com/trenton-pham/Visi
 
 The hosted export matches 2,670 local analytical files byte for byte. Resolver geometry has platform projection differences of at most `1.862645149230957e-09` metres in coordinates and `9.369105100631714e-07` square metres in areas; WGS84 geometry and the projection definition match. Using the actual hosted geometry, all 232 Python/browser reference cases still match IDs, methods, and reported distances.
 
-Website rollback was exercised on an isolated free Cloudflare Worker: version A → B → A restored both assets and headers. The temporary Worker was deleted. Atlas rollback was exercised in the isolated MongoDB integration suite. Production Atlas data was unchanged. The actual hosted recovery archive was restored separately, as described above.
+Website rollback was exercised on an isolated free Cloudflare Worker: version A  to  B  to  A restored both assets and headers. The temporary Worker was deleted. Atlas rollback was exercised in the isolated MongoDB integration suite. Production Atlas data was unchanged. The actual hosted recovery archive was restored separately, as described above.
 
 Local receipts for the final checks are `.audit/static-migration/production-browser.txt`, `production-map-click.txt`, `post-render-browser.txt`, `production-idle-first-visit.json`, `github-production-archive-recovery.json`, `cloudflare-rollback-verification.json`, `hosted-resolver-verification.json`, and `resolver-platform-difference.json`.
