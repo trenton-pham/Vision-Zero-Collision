@@ -63,6 +63,7 @@ export type TrendGrain = 'annual' | 'monthly' | 'weekly'
 const weeklyContributionSchema = z.object({
   weekStart: z.iso.date(),
   year,
+  month: z.number().int().min(1).max(12).optional(),
   collisionCount: z.number().int().positive(),
   totalSeverity: z.number().int().nonnegative(),
 })
@@ -70,7 +71,11 @@ export const weeklySeriesSchema = z.object({
   snapshotDate: z.iso.date(),
   citywide: z.array(weeklyContributionSchema),
   neighborhoods: z.record(z.string(), z.array(weeklyContributionSchema)),
-})
+}).refine(({ citywide, neighborhoods }) => {
+  const hasMonth = citywide[0]?.month !== undefined
+  return [citywide, ...Object.values(neighborhoods)]
+    .every((rows) => rows.every((row) => (row.month !== undefined) === hasMonth))
+}, { message: 'Weekly contributions must use the same month precision across the release.' })
 export type WeeklySeries = z.infer<typeof weeklySeriesSchema>
 
 const trendPeriodSchema = z.object({

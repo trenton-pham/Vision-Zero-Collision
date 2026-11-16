@@ -52,7 +52,84 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 
+it('commits chart months with the keyboard and restores them on Back without refetching year data', async () => {
+  const { user } = setup()
+  await user.click(await screen.findByRole('button', { name: 'Last 12 months' }))
+  const from = screen.getByRole('combobox', { name: 'From month' })
+  expect(from).toHaveValue('2025-01')
+  const thumb = screen.getByRole('slider', { name: 'Chart start month' })
+  thumb.focus()
+  await user.keyboard('{ArrowRight}')
+  expect(from).toHaveValue('2025-02')
+  expect(new URLSearchParams(window.location.search).get('trendFrom')).toBe('2025-02')
+  await user.click(screen.getByRole('button', { name: 'Back' }))
+  await waitFor(() => expect(from).toHaveValue('2025-01'))
+  expect(api.explorer).toHaveBeenCalledTimes(1)
+  await user.click(screen.getByRole('button', { name: 'Reset' }))
+  expect(from).toHaveValue('2021-01')
+  expect(new URLSearchParams(window.location.search).has('trendThrough')).toBe(false)
+})
+
+it.each([
+  { handle: 'start', key: 'Home', from: '2021-01', through: '2024-05' },
+  { handle: 'start', key: 'End', from: '2024-05', through: '2024-05' },
+  { handle: 'end', key: 'Home', from: '2024-02', through: '2024-02' },
+  { handle: 'end', key: 'End', from: '2024-02', through: '2025-12' },
+  { handle: 'start', key: 'PageUp', from: '2024-05', through: '2024-05' },
+  { handle: 'end', key: 'PageDown', from: '2024-02', through: '2024-02' },
+])('moves only the chart $handle handle on $key', async ({ handle, key, from, through }) => {
+  window.history.replaceState(null, '', '/neighborhoods?start=2021&end=2025&trendFrom=2024-02&trendThrough=2024-05')
+  const { user } = setup()
+  const thumb = await screen.findByRole('slider', { name: `Chart ${handle} month` })
+  thumb.focus()
+  await user.keyboard(`{${key}}`)
+  expect(screen.getByRole('combobox', { name: 'From month' })).toHaveValue(from)
+  expect(screen.getByRole('combobox', { name: 'Through month' })).toHaveValue(through)
+  expect(thumb).toHaveFocus()
+  if (from === through) {
+    await user.keyboard(handle === 'start' ? '{ArrowRight}' : '{ArrowLeft}')
+    expect(screen.getByRole('combobox', { name: 'From month' })).toHaveValue(from)
+    expect(screen.getByRole('combobox', { name: 'Through month' })).toHaveValue(through)
+    expect(thumb).toHaveFocus()
+  }
+})
+
+it('retains a shared month range when switching back from a year-only weekly release', async () => {
+  window.history.replaceState(null, '', '/neighborhoods?start=2025&end=2025&grain=weekly&trendFrom=2025-04&trendThrough=2025-04')
+  vi.spyOn(api, 'weeklySeries').mockResolvedValue({
+    snapshotDate: '2026-01-01',
+    citywide: [{ weekStart: '2025-03-31', year: 2025, collisionCount: 1, totalSeverity: 0 }],
+    neighborhoods: {},
+  })
+  const { user } = setup({ ...releaseManifest, files: { ...releaseManifest.files, 'weekly-series.json': { sha256: 'b'.repeat(64), size: 100 } } })
+  expect(await screen.findByText(/Weekly uses the observed years on this release/)).toBeVisible()
+  expect(screen.queryByRole('group', { name: 'Chart date range' })).not.toBeInTheDocument()
+  await user.click(screen.getByRole('button', { name: 'Monthly' }))
+  expect(screen.getByRole('combobox', { name: 'From month' })).toHaveValue('2025-04')
+  expect(screen.getByRole('combobox', { name: 'Through month' })).toHaveValue('2025-04')
+})
+
 describe('map resolution lifecycle', () => {
+  it.each(['chart control', 'before React commits'])('keeps the lookup and chart dates after a month change via %s', async (navigation) => {
+    const pending = pendingResolution()
+    const request = vi.spyOn(api, 'resolveNeighborhood').mockReturnValue(pending.promise)
+    const { user } = setup()
+    await user.click(await screen.findByRole('button', { name: 'Resolve map' }))
+    if (navigation === 'chart control') {
+      await user.click(screen.getByRole('button', { name: 'Last 12 months' }))
+    } else {
+      window.history.pushState(null, '', '/neighborhoods?start=2021&end=2025&trendFrom=2025-01&trendThrough=2025-12')
+    }
+    expect(request.mock.calls[0]?.[3]?.aborted).toBe(false)
+    await act(async () => { pending.resolve(assigned); await pending.promise })
+    await waitFor(() => {
+      const params = new URLSearchParams(window.location.search)
+      expect(params.get('neighborhood')).toBe('fremont')
+      expect(params.get('trendFrom')).toBe('2025-01')
+      expect(params.get('trendThrough')).toBe('2025-12')
+    })
+  })
+
   it('announces completion only after selected context arrives and retains the requested scope while loading', async () => {
     let complete: (value: typeof neighborhoodContext) => void = () => {}
     vi.spyOn(api, 'neighborhoodContext').mockImplementation(() => new Promise((resolve) => { complete = resolve }))

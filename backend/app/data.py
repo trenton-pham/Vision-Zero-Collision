@@ -415,17 +415,17 @@ class DataStore:
         )
 
     def weekly_series(self) -> WeeklySeries:
-        rows = self.collisions[["neighborhood_id", "YEAR", "severity_score"]].copy()
+        rows = self.collisions[["neighborhood_id", "YEAR", "MONTH", "severity_score"]].copy()
         dates = pd.to_datetime(self.collisions["INCDATE"], utc=True).dt.tz_localize(None)
         rows["weekStart"] = dates.dt.to_period("W-SUN").dt.start_time.dt.date
 
         def contributions(grouped: pd.DataFrame) -> list[WeeklyContribution]:
             return [
-                WeeklyContribution(weekStart=week, year=year, collisionCount=count, totalSeverity=burden)
-                for week, year, count, burden in grouped.itertuples(index=False, name=None)
+                WeeklyContribution(weekStart=week, year=year, month=month, collisionCount=count, totalSeverity=burden)
+                for week, year, month, count, burden in grouped.itertuples(index=False, name=None)
             ]
 
-        week_keys = ["weekStart", "YEAR"]
+        week_keys = ["weekStart", "YEAR", "MONTH"]
         metrics = {"collisionCount": ("severity_score", "size"), "totalSeverity": ("severity_score", "sum")}
         citywide = rows.groupby(week_keys).agg(**metrics).reset_index()
         assigned = rows.groupby(["neighborhood_id", *week_keys], observed=True).agg(**metrics).reset_index()

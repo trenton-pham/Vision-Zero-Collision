@@ -26,7 +26,7 @@ The research questions are:
 | Modeling | Scikit-learn, XGBoost, LightGBM, CatBoost, PyTorch |
 | Dashboard | React, TypeScript, Vite, React-Leaflet, Recharts |
 | API & Data Storage | FastAPI, local Parquet artifacts, MongoDB Atlas |
-| Deployment & Refresh | Cloudflare Workers Static Assets, GitHub Actions; retained Render reference |
+| Deployment & Refresh | Cloudflare Workers Static Assets, GitHub Actions |
 
 ## Datasets
 
@@ -137,7 +137,7 @@ The dashboard displays observed collision metrics and does not serve model predi
 - Neural-network comparisons describe one historical split and seed. They do not establish superiority across seeds or future forecasting.
 - The model uses a random split of historical grid cells. Temporal validation and spatial holdouts are needed to assess future prediction and generalization to other areas. The latitude and longitude bins also have unequal physical dimensions.
 - `geo.ipynb` uses neighborhood polygons and projected areas for downtown density. The dashboard uses a rectangular downtown boundary for count and severity comparisons. Notebook heatmaps weight vehicles, while dashboard heatmaps count collisions. The dashboard calculates KDE in latitude and longitude and displays relative density.
-- The static publication path serves precomputed results from Cloudflare without a sleeping application server. Atlas ingestion remains in GitHub Actions. Render is suspended, with its configuration retained for recovery.
+- The static publication path serves precomputed results from Cloudflare without a sleeping application server. Atlas ingestion remains in GitHub Actions.
 
 ## Next steps
 
@@ -169,6 +169,7 @@ The dashboard has two views:
 - With no neighborhood selected, Neighborhood Explorer shows all-severity Seattle statistics and trends. Selecting a neighborhood shows local statistics. Clearing it restores the citywide baseline.
 - Neighborhood Explorer inspector grids omit Night and Weekend distribution shares without removing those measures from the API or Citywide Analysis.
 - Annual trend is the default. `grain=monthly` shows zero-filled monthly observations from January 2015 through the latest received month.
+- Collision trends can narrow the selected years to an inclusive month range. Use the chart slider, month selectors, or Last 12 months. The chart range is shareable in `trendFrom` and `trendThrough` URL parameters. The map, inspector, and annual comparison use Observed years.
 - `grain=weekly` shows Monday–Sunday collision counts and severity burden through the latest accepted incident. Weeks clipped by the selected years or snapshot coverage are marked partial. Weeks ending fewer than 36 weeks before the snapshot date are provisional because reports can arrive late or be revised.
 - Partial years are labeled with the latest received incident date and excluded from trend and spatial-shift comparisons.
 - Trend comparisons use non-overlapping first and last three-year averages only when at least six complete years are present.
@@ -336,34 +337,6 @@ After building and assembling `build/site` as described in the static hosting gu
 The [October 18, 2026 verification record](./.audit/onboarding-verification.md) covers application commit `2a7fa31`, including its live deployment and browser checks. Those historical results do not establish that later commits are deployed. Container checks performed after later changes must be recorded separately. Direct Atlas inspection was blocked during that audit.
 
 MongoDB integration tests run when `MONGODB_TEST_URI` is set. Use a separate test database instance; GitHub Actions supplies MongoDB 8.2 as a service container.
-
-## Docker (retained Render reference)
-
-The Docker configuration below documents the previous Render API deployment. Its last deployed image is retained for recovery. Use the development container or the static hosting guide for the new dashboard; a newly built legacy image does not include the static export.
-
-Build from the repository root. Running the image requires an already published MongoDB dataset and a read-only runtime URI:
-
-```bash
-docker build -t seattle-collision-dashboard .
-docker run --rm -p 8000:8000 \
-  -e DASHBOARD_DATA_BACKEND=mongodb \
-  -e MONGODB_URI='mongodb+srv://...' \
-  -e MONGODB_DATABASE=seattle_collision \
-  seattle-collision-dashboard
-```
-
-The multi-stage image builds React with Node 22 and serves the compiled application with FastAPI on Python 3.11. It contains no production dataset.
-
-## Render and Atlas setup
-
-These are the retained deployment's setup instructions. Use the [static hosting guide](./docs/deployment/static-hosting.md) for new publications. Render is suspended and automatic deployment is off. Its last deployed commit is `7c03b224fbf18ae021e57c04aee641898fd88c10`.
-
-1. Create an Atlas Free cluster in AWS `us-west-2` and create separate read-only runtime and read/write ingestion database users.
-2. Create the Render service from `render.yaml`, set its `MONGODB_URI` secret to the read-only user, and add all [outbound IP ranges shown for the Render service](https://render.com/docs/outbound-ip-addresses) to the Atlas project IP access list.
-3. Run the GitHub workflow manually once to seed the first live version, then deploy or restart Render.
-4. Confirm `/readyz` reports the active dataset version and `/api/meta` reports its `dataAsOf` date.
-
-[Render Free services](https://render.com/docs/free) sleep after 15 minutes without inbound traffic and take about a minute to wake. [Atlas Free clusters](https://www.mongodb.com/docs/atlas/reference/free-shared-limitations/) have storage and throughput limits and do not include managed backups. Account for these constraints when choosing hosting for a public deployment.
 
 ## Credits and sources
 
