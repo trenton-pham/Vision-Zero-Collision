@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation, useNavigationType } from 'react-router-dom'
 import { z } from 'zod'
+import type { TrendGrain } from './contracts'
 
 const stampSchema = z.object({ id: z.number().int().positive(), source: z.enum(['none', 'pointer', 'keyboard']) })
 const navigationSchema = z.object({ dashboardMotion: stampSchema })
@@ -144,7 +145,7 @@ export function useContentEntrance<T extends HTMLElement>(ready: boolean, entry:
   return root
 }
 
-export function useGrainReveal(grain: 'annual' | 'monthly') {
+export function useGrainReveal(grain: TrendGrain) {
   const root = useRef<HTMLDivElement>(null)
   const previous = useRef(grain)
   const navigation = useNavigationMotion()

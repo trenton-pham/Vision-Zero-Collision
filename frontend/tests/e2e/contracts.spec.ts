@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { z } from 'zod'
-import { citywideBundleSchema, datasetMetaSchema, explorerBundleSchema, neighborhoodBundleSchema, neighborhoodFeatureCollectionSchema, releaseManifestSchema, resolverBundleSchema, neighborhoodSeriesSchema } from '../../src/lib/contracts'
+import { citywideBundleSchema, datasetMetaSchema, explorerBundleSchema, neighborhoodBundleSchema, neighborhoodFeatureCollectionSchema, releaseManifestSchema, resolverBundleSchema, neighborhoodSeriesSchema, weeklySeriesSchema } from '../../src/lib/contracts'
 
 test('all static schemas accept real local release payloads', async ({ request }) => {
   const manifest = releaseManifestSchema.parse(await (await request.get('/data/current.json')).json())
@@ -10,6 +10,7 @@ test('all static schemas accept real local release payloads', async ({ request }
     { path: 'neighborhoods.geojson', schema: neighborhoodFeatureCollectionSchema },
     { path: 'resolver.json', schema: resolverBundleSchema },
     { path: 'neighborhood-series.json', schema: neighborhoodSeriesSchema },
+    { path: 'weekly-series.json', schema: weeklySeriesSchema },
     { path: 'neighborhoods/ballard.json', schema: neighborhoodBundleSchema },
   ]
   for (const range of ['2015-2026', '2025-2025', '2026-2026']) {

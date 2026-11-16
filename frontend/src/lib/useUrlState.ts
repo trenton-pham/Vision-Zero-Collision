@@ -4,6 +4,7 @@ import { useDatasetMeta } from './dataset'
 import { isCitywideSeverity, type CitywideSeverity } from './severity'
 import { parseMapMetric, type MapMetric } from './mapMetrics'
 import { snapshotMotion } from './motion'
+import type { TrendGrain } from './contracts'
 
 function toYear(value: string | null, fallback: number, minimum: number, maximum: number) {
   if (value === null || value.trim() === '') return fallback
@@ -25,7 +26,8 @@ export function useDashboardParams() {
   const canonicalNeighborhoods = JSON.stringify(neighborhoods)
   const rawMetric = searchParams.get('metric')
   const mapMetric = parseMapMetric(rawMetric)
-  const trendGrain: 'annual' | 'monthly' = searchParams.get('grain') === 'monthly' ? 'monthly' : 'annual'
+  const rawGrain = searchParams.get('grain')
+  const trendGrain: TrendGrain = rawGrain === 'monthly' || rawGrain === 'weekly' ? rawGrain : 'annual'
   const cityLayer: 'kde' | 'heatmap' = searchParams.get('layer') === 'kde' ? 'kde' : 'heatmap'
   const rawSeverity = searchParams.get('severity')
   const severities = useMemo(
@@ -89,7 +91,7 @@ export function useDashboardParams() {
       }, { replace, state: { dashboardMotion: motion } })
     },
     setMapMetric: (metric: MapMetric) => update({ metric }),
-    setTrendGrain: (grain: 'annual' | 'monthly') => update({ grain: grain === 'annual' ? null : grain }),
+    setTrendGrain: (grain: TrendGrain) => update({ grain: grain === 'annual' ? null : grain }),
     setCityLayer: (layer: 'heatmap' | 'kde') => update({ layer }),
     setSeverities: (values: CitywideSeverity[]) => update({ severity: values.join(',') }),
   }

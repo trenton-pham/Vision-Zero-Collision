@@ -108,6 +108,7 @@ def analytical_files(store: DataStore, shard_index: int = 0, shard_count: int = 
         yield "neighborhoods.geojson", store.geojson
         yield "resolver.json", resolver_geometry(store)
         yield "neighborhood-series.json", neighborhood_series(store)
+        yield "weekly-series.json", store.weekly_series().model_dump(mode="json")
     ranges = year_ranges(store)
     for start, end in assigned_ranges(ranges, shard_index, shard_count):
         yield f"explorer/{start}-{end}.json", {
@@ -236,6 +237,7 @@ def verify_analytical_outputs(
             compare("neighborhoods.geojson", response("/api/neighborhoods/geojson", []))
             compare("resolver.json", resolver_geometry(store))
             compare("neighborhood-series.json", neighborhood_series(store))
+            compare("weekly-series.json", response("/api/neighborhoods/weekly-series", []))
         minimum, maximum = min(store.available_years), max(store.available_years)
         ranges = list(combinations_with_replacement(range(minimum, maximum + 1), 2))
         labels = ["property-damage", "injury", "serious-injury", "fatal", "unknown"]
@@ -306,7 +308,7 @@ def merge_exports(
         ranges = list(combinations_with_replacement(range(min(years), max(years) + 1), 2))
         expected = {"provenance.json"}
         if index == 0:
-            expected.update({"meta.json", "neighborhoods.geojson", "resolver.json", "neighborhood-series.json"})
+            expected.update({"meta.json", "neighborhoods.geojson", "resolver.json", "neighborhood-series.json", "weekly-series.json"})
         for start, end in assigned_ranges(ranges, index, shard_count):
             expected.add(f"explorer/{start}-{end}.json")
             expected.update(f"citywide/{start}-{end}/{mask}.json" for mask in range(32))

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -74,6 +75,19 @@ class MonthlyMetric(ApiModel):
     totalSeverity: int
     meanSeverity: float | None
     isPartial: bool
+
+
+class WeeklyContribution(ApiModel):
+    weekStart: date
+    year: int
+    collisionCount: int = Field(gt=0)
+    totalSeverity: int = Field(ge=0)
+
+
+class WeeklySeries(ApiModel):
+    snapshotDate: date
+    citywide: list[WeeklyContribution]
+    neighborhoods: dict[str, list[WeeklyContribution]]
 
 
 class TrendPeriod(ApiModel):

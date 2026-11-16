@@ -39,7 +39,7 @@ The research questions are:
 
 Git excludes raw and cleaned datasets, processed collision GeoJSON, and generated dashboard artifacts. The checked-in Parquet, boundaries, and manifest let you run the local dashboard and modeling notebook without downloading raw data.
 
-The cleaning manifest records 109,040 cleaned collisions. Spatial analysis excludes 2,990 of them because they lack geometry. Collision data ends August 31, 2026, and vehicle data ends January 23, 2026. The monthly dashboard refresh excludes vehicle data. Check `meta` in `/data/current.json` for live dashboard coverage, which may differ from this snapshot.
+The cleaning manifest records 109,040 cleaned collisions. Spatial analysis excludes 2,990 of them because they lack geometry. Collision data ends August 31, 2026, and vehicle data ends January 23, 2026. The weekly dashboard refresh excludes vehicle data. Check `meta` in `/data/current.json` for live dashboard coverage, which may differ from this snapshot.
 
 ## Clean the data
 
@@ -156,10 +156,10 @@ The dashboard has two views:
 
 | View | Description |
 | --- | --- |
-| Neighborhood Explorer | Map and searchable neighborhood selection, all-severity collision/injury context, and annual or monthly trends |
+| Neighborhood Explorer | Map and searchable neighborhood selection, all-severity collision/injury context, and annual, monthly, or weekly trends |
 | Citywide Analysis | Independent year/severity filters, collision heatmap, KDE density, pre/post-2020 centroid shift, and downtown vs. outer-area comparisons |
 
-[Open the dashboard](https://vision-zero-collision.trentonpham.workers.dev). The [static hosting guide](./docs/deployment/static-hosting.md) covers local setup, monthly publication, verification, and recovery.
+[Open the dashboard](https://vision-zero-collision.trentonpham.workers.dev). The [static hosting guide](./docs/deployment/static-hosting.md) covers local setup, weekly publication, verification, and recovery.
 
 ### Product rules
 
@@ -169,6 +169,7 @@ The dashboard has two views:
 - With no neighborhood selected, Neighborhood Explorer shows all-severity Seattle statistics and trends. Selecting a neighborhood shows local statistics. Clearing it restores the citywide baseline.
 - Neighborhood Explorer inspector grids omit Night and Weekend distribution shares without removing those measures from the API or Citywide Analysis.
 - Annual trend is the default. `grain=monthly` shows zero-filled monthly observations from January 2015 through the latest received month.
+- `grain=weekly` shows Monday–Sunday collision counts and severity burden through the latest accepted incident. Weeks clipped by the selected years or snapshot coverage are marked partial. Weeks ending fewer than 36 weeks before the snapshot date are provisional because reports can arrive late or be revised.
 - Partial years are labeled with the latest received incident date and excluded from trend and spatial-shift comparisons.
 - Trend comparisons use non-overlapping first and last three-year averages only when at least six complete years are present.
 - The dashboard is public and read-only. Publication and rollback use a separate ingestion identity with database write access.
@@ -278,11 +279,11 @@ The checked-in spatial snapshot's regression baseline is:
 
 The local builder enforces this row-count and assignment baseline. If you replace the processed source, review the baseline and related tests. Production sync validates changing live datasets separately.
 
-## Monthly MongoDB pipeline
+## Weekly MongoDB pipeline
 
 Production stores versioned collision and aggregate documents in MongoDB. A sync writes and validates a new version before switching `dataset_state.activeVersion`. Failures before that switch leave the active version unchanged. After a failed job, check the active version before retrying or rolling back. The publication workflow exports the pinned Atlas version and deploys its analytical files with React. Browsers check the current release manifest every five minutes. The local reference API can still refresh an in-memory snapshot.
 
-The ingestion job queries the ArcGIS object-ID list and downloads records in batches of 1,000. It checks for source edits during the download, validates collision fields and geometry, assigns neighborhoods, and reconciles annual and monthly totals. The ingestion manifest records source and spatial row counts, accepted exclusions, the published-content fingerprint, and the difference from the 106,050-record baseline. Each monthly run downloads the full source, so it captures historical edits and deletions. It does not refresh vehicle data.
+The ingestion job queries the ArcGIS object-ID list and downloads records in batches of 1,000. It checks for source edits during the download, validates collision fields and geometry, assigns neighborhoods, and reconciles annual and monthly totals. The ingestion manifest records source and spatial row counts, accepted exclusions, the published-content fingerprint, and the difference from the 106,050-record baseline. Each weekly run downloads the full collision source, so it captures historical edits and deletions. Vehicle data is outside this refresh.
 
 The publication gate checks both source feature count and usable spatial collision count for decreases greater than 1%.
 
@@ -292,7 +293,7 @@ Configure the [publication secrets](./docs/deployment/static-hosting.md#cloudfla
 - `ATLAS_PUBLIC_KEY` and `ATLAS_PRIVATE_KEY`: Atlas API credentials allowed to create temporary project IP access-list entries
 - `ATLAS_PROJECT_ID`: Atlas project identifier
 
-The [Monthly collision sync workflow](./.github/workflows/monthly-collision-sync.yml) runs at 3:17 AM America/Los_Angeles on the 8th of each month. You can also start it manually and choose dry-run mode. It admits the runner IP to Atlas for two hours. Failures appear as failed Actions checks.
+The [collision sync workflow](./.github/workflows/monthly-collision-sync.yml) runs Wednesdays at 3:17 AM America/Los_Angeles. You can also start it manually and choose dry-run mode. It admits the runner IP to Atlas for two hours. Failures appear as failed Actions checks.
 
 [GitHub scheduled workflows](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) run from the default branch and may be delayed. GitHub disables schedules in public repositories after 60 days without activity. Schedule notifications follow the settings of the user who last changed the cron schedule.
 

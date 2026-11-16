@@ -58,6 +58,21 @@ export const monthlyMetricSchema = annualMetricSchema.extend({
 })
 export type MonthlyMetric = z.infer<typeof monthlyMetricSchema>
 
+export type TrendGrain = 'annual' | 'monthly' | 'weekly'
+
+const weeklyContributionSchema = z.object({
+  weekStart: z.iso.date(),
+  year,
+  collisionCount: z.number().int().positive(),
+  totalSeverity: z.number().int().nonnegative(),
+})
+export const weeklySeriesSchema = z.object({
+  snapshotDate: z.iso.date(),
+  citywide: z.array(weeklyContributionSchema),
+  neighborhoods: z.record(z.string(), z.array(weeklyContributionSchema)),
+})
+export type WeeklySeries = z.infer<typeof weeklySeriesSchema>
+
 const trendPeriodSchema = z.object({
   years,
   averageCollisions: z.number(),

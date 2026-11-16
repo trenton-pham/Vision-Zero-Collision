@@ -40,6 +40,12 @@ try {
     if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click()
     await page.getByRole('heading', { name: 'Ballard', exact: true }).waitFor()
     await expect(inspector.locator('[data-statistic]').first()).toHaveText(/\d/)
+    if (Object.hasOwn(release.files, 'weekly-series.json')) {
+      await page.getByRole('button', { name: 'Weekly', exact: true }).click()
+      await page.getByRole('img', { name: /^Weekly trend chart/ }).waitFor()
+      await page.getByText('View weekly chart data').click()
+      await expect(page.getByRole('table', { name: /^Weekly collisions/ }).locator('tbody tr').first()).toBeVisible()
+    }
     await page.goto(new URL('/citywide?layer=kde&severity=fatal', origin).href)
     await page.getByRole('heading', { name: 'Citywide Analysis', exact: true }).waitFor()
     await page.locator('[data-statistics-summary] [data-statistic]').first().waitFor()

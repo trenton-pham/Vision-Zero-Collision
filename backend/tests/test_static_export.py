@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import copy
 import json
+from collections import Counter
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -42,7 +44,7 @@ def test_every_exported_selection_matches_python(single_year_store: DataStore, r
     directory, manifest = release
     assert len([key for key in manifest["files"] if key.startswith("citywide/")]) == 32
     assert len([key for key in manifest["files"] if key.startswith("neighborhoods/")]) == 94
-    assert verify_analytical_outputs(single_year_store, directory) == 131
+    assert verify_analytical_outputs(single_year_store, directory) == 132
     for mask in range(32):
         value = json.loads((directory / f"citywide/2025-2025/{mask}.json").read_bytes())
         assert value["summary"]["severities"] == severity_selection(mask)
@@ -158,6 +160,23 @@ def test_neighborhood_series_uses_known_time_denominator(store: DataStore, monke
             & store.collisions["YEAR"].eq(year) & store.collisions["MONTH"].eq(month)
         ]
         assert row["knownTimeCollisions"] == int(raw["HOUR"].notna().sum())
+
+
+def test_weekly_series_reconciles_by_scope_monday_and_incident_year(store: DataStore) -> None:
+    series = store.weekly_series()
+    assert set(series.neighborhoods) == set(store.name_by_id)
+    for scope, contributions in {"citywide": series.citywide, **series.neighborhoods}.items():
+        counts: Counter = Counter()
+        burdens: Counter = Counter()
+        raw = store.collisions if scope == "citywide" else store.collisions[store.collisions["neighborhood_id"].eq(scope)]
+        for row in raw.itertuples():
+            day = row.INCDATE.date()
+            key = (day - timedelta(days=day.weekday()), row.YEAR)
+            counts[key] += 1
+            burdens[key] += row.severity_score
+        assert len(contributions) == len(counts)
+        assert {(row.weekStart, row.year): row.collisionCount for row in contributions} == counts
+        assert {(row.weekStart, row.year): row.totalSeverity for row in contributions} == burdens
 
 
 @pytest.fixture(scope="module")

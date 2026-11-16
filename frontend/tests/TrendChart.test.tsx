@@ -1,9 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TrendChart } from '../src/components/TrendChart'
 import type { AnnualMetric, DatasetMeta } from '../src/lib/contracts'
 import { DatasetMetaProvider } from '../src/lib/dataset'
+
+afterEach(() => vi.restoreAllMocks())
 
 const meta: DatasetMeta = {
   dataAsOf: '2027-02-28',
@@ -56,4 +58,16 @@ describe('TrendChart partial-year metadata', () => {
     expect(screen.getByText(/2027 partial · received through FEB 28/i)).toBeInTheDocument()
     expect(screen.getByRole('img')).toHaveAccessibleName(/2027 observations are partial/i)
   })
+})
+
+it('draws a visible marker when exactly one week is provisional', async () => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(DOMRect.fromRect({ width: 680, height: 260 }))
+  const weekly = [
+    { weekStart: '2025-12-22', coverageStart: '2025-12-22', coverageEnd: '2025-12-28', collisionCount: 12, totalSeverity: 4, isClipped: false, isProvisional: false },
+    { weekStart: '2025-12-29', coverageStart: '2025-12-29', coverageEnd: '2025-12-31', collisionCount: 16, totalSeverity: 23, isClipped: true, isProvisional: true },
+  ]
+  const { container } = render(<DatasetMetaProvider meta={meta}><TrendChart grain="weekly" weekly={weekly}/></DatasetMetaProvider>)
+  await waitFor(() => expect(container.querySelector('line.recharts-reference-line-line')).toBeInTheDocument())
+  await userEvent.click(screen.getByText('View weekly chart data'))
+  expect(screen.getByRole('row', { name: /Dec 29.*31, 2025/ })).toHaveTextContent('Partial week · Provisional')
 })

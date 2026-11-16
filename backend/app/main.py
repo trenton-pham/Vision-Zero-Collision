@@ -24,6 +24,7 @@ from .schemas import (
     NeighborhoodMetricSet,
     ResolveResponse,
     SpatialShiftResponse,
+    WeeklySeries,
 )
 
 
@@ -140,6 +141,11 @@ def resolve_neighborhood(
 @app.get("/api/neighborhoods/citywide-trend", response_model=CitywideTrendContext, tags=["neighborhoods"])
 def citywide_neighborhood_trend(start_year: int, end_year: int, store: Store) -> CitywideTrendContext:
     return safe_year_call(store.citywide_trend, start_year, end_year)
+
+
+@app.get("/api/neighborhoods/weekly-series", response_model=WeeklySeries, tags=["neighborhoods"])
+def neighborhood_weekly_series(store: Store) -> WeeklySeries:
+    return store.weekly_series()
 
 
 @app.get("/api/neighborhoods/{neighborhood_id}/context", response_model=NeighborhoodContext, tags=["neighborhoods"])

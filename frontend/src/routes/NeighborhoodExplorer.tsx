@@ -2,11 +2,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { MAP_METRICS, parseMapMetric } from '../lib/mapMetrics'
-import { api } from '../lib/api'
+import { api, weeklySeriesFile } from '../lib/api'
 import { combineNeighborhoods } from '../lib/combineNeighborhoods'
+import type { TrendGrain } from '../lib/contracts'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { useDatasetMeta, useRelease } from '../lib/dataset'
+import { weeklyTrend } from '../lib/weeklyTrend'
 import { snapshotMotion, useContentEntrance, useGrainReveal, useRouteEntrance, useStatisticsFade, type MotionStamp, type StatisticsRetry } from '../lib/motion'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodMap } from '../components/NeighborhoodMap'
@@ -30,6 +32,14 @@ export function NeighborhoodExplorer() {
   const resolveController = useRef<AbortController | null>(null)
   const neighborhoods = state.neighborhoods
   const neighborhood = neighborhoods.length === 1 ? neighborhoods[0] : undefined
+  const grain = state.trendGrain
+  const weeklyAvailable = Object.hasOwn(release.files, weeklySeriesFile)
+  const weekly = useQuery({
+    queryKey: ['weekly-series', release.releaseId],
+    queryFn: grain === 'weekly' && weeklyAvailable ? ({ signal }) => api.weeklySeries(release, signal) : skipToken,
+    select: (series) => weeklyTrend(series, neighborhoods, state.startYear, state.endYear, meta.dataAsOf),
+    staleTime: Infinity,
+  })
   const geo = useQuery({ queryKey: ['neighborhood-geojson', release.releaseId], queryFn: ({ signal }) => api.neighborhoods(release, signal), staleTime: Infinity })
   const explorer = useQuery({
     queryKey: ['explorer', release.releaseId, state.startYear, state.endYear],
@@ -142,8 +152,9 @@ export function NeighborhoodExplorer() {
   const statistics = useStatisticsFade({ identity: statisticsIdentity, revision: activeQuery.dataUpdatedAt, ready: activeQuery.isSuccess, failed: activeQuery.isError && !activeQuery.isFetching, retry: statisticsRetry.current })
   const mapEntrance = useContentEntrance<HTMLElement>(!!geo.data && summary.isSuccess && !summary.isPlaceholderData, entrance)
   const inspectorEntrance = useContentEntrance<HTMLDivElement>(activeQuery.isSuccess, entrance)
-  const trendEntrance = useContentEntrance<HTMLDivElement>(activeQuery.isSuccess, entrance)
-  const grainReveal = useGrainReveal(state.trendGrain)
+  const trendReady = grain === 'weekly' ? weekly.isSuccess : activeQuery.isSuccess
+  const trendEntrance = useContentEntrance<HTMLDivElement>(trendReady, entrance)
+  const grainReveal = useGrainReveal(grain)
   const inspectorName = neighborhoods.length > 1 ? `${neighborhoods.length} neighborhoods combined`
     : neighborhood ? context.data?.neighborhood.name ?? geo.data?.features.find((feature) => feature.properties.id === neighborhood)?.properties.name ?? 'Selected neighborhood'
     : 'Seattle citywide'
@@ -155,9 +166,9 @@ export function NeighborhoodExplorer() {
     }
   }, [activeQuery.dataUpdatedAt, activeQuery.isFetching, activeQuery.error, inspectorName, statisticsIdentity, state.startYear, state.endYear])
 
-  function setTrendGrain(grain: 'annual' | 'monthly') {
+  function setTrendGrain(grain: TrendGrain) {
     state.setTrendGrain(grain)
-    setAnnouncement(`${grain === 'monthly' ? 'Monthly' : 'Annual'} trend displayed for ${trendScope}.`)
+    setAnnouncement(`${grain.charAt(0).toUpperCase() + grain.slice(1)} trend selected for ${trendScope}.`)
   }
 
   return (
@@ -229,10 +240,11 @@ export function NeighborhoodExplorer() {
       <section data-motion-surface className={styles.trendSection} aria-label={`${trendScope} collision trend`}>
         <div className={styles.trendHead}>
           <div className={styles.trendTitle}>
-            <div><h2>Collision trends</h2><p>{trendScope} · {state.trendGrain} observations</p></div>
+            <div><h2>Collision trends</h2><p>{trendScope} · {grain} observations</p></div>
             <div className={styles.grainControl} role="group" aria-label="Trend time interval">
-              <button type="button" aria-pressed={state.trendGrain === 'annual'} onClick={() => setTrendGrain('annual')}>Annual</button>
-              <button type="button" aria-pressed={state.trendGrain === 'monthly'} onClick={() => setTrendGrain('monthly')}>Monthly</button>
+              <button type="button" aria-pressed={grain === 'annual'} onClick={() => setTrendGrain('annual')}>Annual</button>
+              <button type="button" aria-pressed={grain === 'monthly'} onClick={() => setTrendGrain('monthly')}>Monthly</button>
+              <button type="button" aria-pressed={grain === 'weekly'} onClick={() => setTrendGrain('weekly')}>Weekly</button>
             </div>
           </div>
           {activeQuery.data && <div className={styles.comparison}>
@@ -243,10 +255,17 @@ export function NeighborhoodExplorer() {
             </> : <><span>Trend comparison</span><strong>Insufficient complete years</strong></>}
           </div>}
         </div>
-        <div ref={trendEntrance} className={styles.trendBody} aria-busy={activeQuery.isFetching}>
-          {activeQuery.isLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
-          {activeQuery.error && !activeQuery.data && <p className={styles.methodNote}>Trend unavailable. Retry the statistics request above to restore this chart.</p>}
-          {activeQuery.data && <TrendChart chartRef={grainReveal} annual={activeQuery.data.annual} monthly={activeQuery.data.monthly} grain={state.trendGrain}/>}
+        <div ref={trendEntrance} className={styles.trendBody} aria-busy={grain === 'weekly' ? weekly.isFetching : activeQuery.isFetching}>
+          {grain === 'weekly' ? <>
+            {!weeklyAvailable && <p className={styles.methodNote}>Weekly data is unavailable for this release. Select Annual or Monthly to view the trend.</p>}
+            {weekly.isLoading && <LoadingState label={`Loading ${trendScope} weekly trend`}/>}
+            {weeklyAvailable && weekly.error && <ErrorState error={weekly.error} onRetry={() => { void weekly.refetch() }}/>}
+            {weeklyAvailable && !weekly.error && weekly.data && <TrendChart chartRef={grainReveal} grain="weekly" weekly={weekly.data}/>}
+          </> : <>
+            {activeQuery.isLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
+            {activeQuery.error && !activeQuery.data && <p className={styles.methodNote}>Trend unavailable. Retry the statistics request above to restore this chart.</p>}
+            {activeQuery.data && <TrendChart chartRef={grainReveal} annual={activeQuery.data.annual} monthly={activeQuery.data.monthly} grain={grain}/>}
+          </>}
         </div>
       </section>
     </div>

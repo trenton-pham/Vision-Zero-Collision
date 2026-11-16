@@ -2,7 +2,7 @@
 
 The live dashboard is [vision-zero-collision.trentonpham.workers.dev](https://vision-zero-collision.trentonpham.workers.dev). Production publication and desktop/mobile browser checks passed on November 5, 2026. The legacy Render service is suspended; its configuration and last deployment (`7c03b224fbf18ae021e57c04aee641898fd88c10`) are retained temporarily as a recovery reference.
 
-React and versioned JSON responses are served directly by Cloudflare Workers Static Assets. There is no Worker request handler, production Python process, or browser database connection. Python/FastAPI remains the reference implementation and local development server. Atlas retains immutable datasets and the authoritative monthly synchronization process.
+React and versioned JSON responses are served directly by Cloudflare Workers Static Assets. There is no Worker request handler, production Python process, or browser database connection. Python/FastAPI remains the reference implementation and local development server. Atlas retains immutable datasets and the authoritative weekly synchronization process.
 
 ## Local development and verification
 
@@ -59,7 +59,7 @@ Set the production environment variable `STATIC_WEBSITE_URL` to `https://vision-
 
 Keep secrets in the GitHub environment or an explicitly selected, Git-ignored local file. The exporter accepts `--env-file .env.static-export`; it does not automatically load arbitrary `.env` files. Credentials never become Worker bindings or frontend variables.
 
-Run the initial production publication through GitHub Actions so its recovery archive is recorded with its promoted Cloudflare version. Pull-request checks never receive production secrets or deploy. The workflow runs on main pushes, scheduled monthly updates, and manual dispatches.
+Run the initial production publication through GitHub Actions so its recovery archive is recorded with its promoted Cloudflare version. Pull-request checks never receive production secrets or deploy. The workflow runs on main pushes, scheduled weekly updates, and manual dispatches.
 
 ## Publication behavior
 
@@ -68,11 +68,13 @@ The workflow **Collision data and static website** supports:
 | Action | Behavior |
 | --- | --- |
 | Main push or manual `publish-only` | Export and publish the existing active Atlas version |
-| Monthly schedule or manual `refresh-and-publish` | Perform the full authoritative ArcGIS synchronization, then export its published result |
+| Weekly schedule or manual `refresh-and-publish` | Perform the full authoritative ArcGIS synchronization, then export its published result |
 | `dry_run` | Validate without changing the public website; refresh dry runs also leave Atlas unchanged |
 | `website-rollback` | Restore a retained Cloudflare version without changing Atlas |
 
-The schedule remains the eighth of each month at 3:17 AM America/Los_Angeles. Full synchronization preserves historical corrections and deletions, date checks, reconciliation, and both greater-than-one-percent decrease guards.
+The schedule runs Wednesdays at 3:17 AM America/Los_Angeles. Full synchronization preserves historical corrections and deletions, date checks, reconciliation, and both greater-than-one-percent decrease guards. The workflow filename still contains `monthly` because archive discovery uses that filename.
+
+For the cadence change, run `refresh-and-publish` with `dry_run` on `main`. After the first scheduled run, record the Atlas dataset version, live Cloudflare release ID, and workflow run. Compare the same closed weeks across the two retained release archives to track changes in counts and severity burden. For record-level backfill analysis, compare authorized snapshots by `COLDETKEY` and track additions, removals, and severity changes separately. The 36-week display window is an initial reporting-lag policy based on SDOT's Added date, which measures a source timestamp. It does not establish the first date a record was visible in the feed.
 
 The exporter reads one explicit dataset version. A `no_change` ingestion result exports the already published version, not the candidate manifest. Production runs are serialized and check main's revision again immediately before promotion. For recovery, start a new manual workflow run instead of rerunning an older attempt. Reruns are rejected before archive restoration or cleanup can delete a still-live version's recovery material.
 

@@ -7,6 +7,7 @@ import {
   neighborhoodFeatureCollectionSchema,
   releaseManifestSchema,
   resolverBundleSchema,
+  weeklySeriesSchema,
   type ReleaseManifest,
 } from './contracts'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from './severity'
@@ -16,6 +17,8 @@ export class ReleaseUnavailableError extends Error {
     super('This dataset release is no longer available. Checking for the current release.')
   }
 }
+
+export const weeklySeriesFile = 'weekly-series.json'
 
 function isAbortError(error: unknown) {
   return error !== null && typeof error === 'object' && 'name' in error && error.name === 'AbortError'
@@ -63,6 +66,8 @@ export const api = {
     releaseRequest(release, `explorer/${startYear}-${endYear}.json`, explorerBundleSchema, signal),
   neighborhoodSeries: (release: ReleaseManifest, signal?: AbortSignal) =>
     releaseRequest(release, 'neighborhood-series.json', neighborhoodSeriesSchema, signal),
+  weeklySeries: (release: ReleaseManifest, signal?: AbortSignal) =>
+    releaseRequest(release, weeklySeriesFile, weeklySeriesSchema, signal),
   neighborhoodContext: async (release: ReleaseManifest, id: string, startYear: number, endYear: number, signal?: AbortSignal) => {
     const bundle = await releaseRequest(release, `neighborhoods/${encodeURIComponent(id)}.json`, neighborhoodBundleSchema, signal)
     const context = bundle.contexts[`${startYear}-${endYear}`]

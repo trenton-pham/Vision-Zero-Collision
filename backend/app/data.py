@@ -42,6 +42,8 @@ from .schemas import (
     SpatialShiftResponse,
     TrendComparison,
     TrendPeriod,
+    WeeklyContribution,
+    WeeklySeries,
 )
 
 
@@ -411,6 +413,27 @@ class DataStore:
             comparison=self._trend(annual_rows),
             warnings=self._warnings(start_year, end_year),
         )
+
+    def weekly_series(self) -> WeeklySeries:
+        rows = self.collisions[["neighborhood_id", "YEAR", "severity_score"]].copy()
+        dates = pd.to_datetime(self.collisions["INCDATE"], utc=True).dt.tz_localize(None)
+        rows["weekStart"] = dates.dt.to_period("W-SUN").dt.start_time.dt.date
+
+        def contributions(grouped: pd.DataFrame) -> list[WeeklyContribution]:
+            return [
+                WeeklyContribution(weekStart=week, year=year, collisionCount=count, totalSeverity=burden)
+                for week, year, count, burden in grouped.itertuples(index=False, name=None)
+            ]
+
+        week_keys = ["weekStart", "YEAR"]
+        metrics = {"collisionCount": ("severity_score", "size"), "totalSeverity": ("severity_score", "sum")}
+        citywide = rows.groupby(week_keys).agg(**metrics).reset_index()
+        assigned = rows.groupby(["neighborhood_id", *week_keys], observed=True).agg(**metrics).reset_index()
+        neighborhoods: dict[str, list[WeeklyContribution]] = {name: [] for name in self.name_by_id}
+        for scope, group in assigned.groupby("neighborhood_id", observed=True):
+            neighborhoods[str(scope)] = contributions(group.drop(columns="neighborhood_id"))
+        snapshot_date = datetime.fromisoformat(self.manifest["builtAt"]).astimezone(ZoneInfo("America/Los_Angeles")).date()
+        return WeeklySeries(snapshotDate=snapshot_date, citywide=contributions(citywide), neighborhoods=neighborhoods)
 
     def resolve(self, lat: float, lng: float) -> ResolveResponse:
         point = Point(lng, lat)
