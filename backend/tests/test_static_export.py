@@ -162,7 +162,7 @@ def test_neighborhood_series_uses_known_time_denominator(store: DataStore, monke
         assert row["knownTimeCollisions"] == int(raw["HOUR"].notna().sum())
 
 
-def test_weekly_series_reconciles_by_scope_monday_and_incident_year(store: DataStore) -> None:
+def test_weekly_series_reconciles_by_scope_monday_and_incident_month(store: DataStore) -> None:
     series = store.weekly_series()
     assert set(series.neighborhoods) == set(store.name_by_id)
     for scope, contributions in {"citywide": series.citywide, **series.neighborhoods}.items():
@@ -171,12 +171,12 @@ def test_weekly_series_reconciles_by_scope_monday_and_incident_year(store: DataS
         raw = store.collisions if scope == "citywide" else store.collisions[store.collisions["neighborhood_id"].eq(scope)]
         for row in raw.itertuples():
             day = row.INCDATE.date()
-            key = (day - timedelta(days=day.weekday()), row.YEAR)
+            key = (day - timedelta(days=day.weekday()), day.year, day.month)
             counts[key] += 1
             burdens[key] += row.severity_score
         assert len(contributions) == len(counts)
-        assert {(row.weekStart, row.year): row.collisionCount for row in contributions} == counts
-        assert {(row.weekStart, row.year): row.totalSeverity for row in contributions} == burdens
+        assert {(row.weekStart, row.year, row.month): row.collisionCount for row in contributions} == counts
+        assert {(row.weekStart, row.year, row.month): row.totalSeverity for row in contributions} == burdens
 
 
 @pytest.fixture(scope="module")

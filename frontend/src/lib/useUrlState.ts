@@ -5,11 +5,22 @@ import { isCitywideSeverity, type CitywideSeverity } from './severity'
 import { parseMapMetric, type MapMetric } from './mapMetrics'
 import { snapshotMotion } from './motion'
 import type { TrendGrain } from './contracts'
+import { trendMonthRange, type MonthRange } from './trendRange'
 
 function toYear(value: string | null, fallback: number, minimum: number, maximum: number) {
   if (value === null || value.trim() === '') return fallback
   const parsed = Number(value)
   return Number.isInteger(parsed) ? Math.min(maximum, Math.max(minimum, parsed)) : fallback
+}
+
+function chartBounds(startYear: number, endYear: number, coverageMonth: string): MonthRange {
+  const through = `${endYear}-12`
+  return { from: `${startYear}-01`, through: coverageMonth < through ? coverageMonth : through }
+}
+
+function chartRangeParams(range: MonthRange, bounds: MonthRange) {
+  const full = range.from === bounds.from && range.through === bounds.through
+  return { trendFrom: full ? null : range.from, trendThrough: full ? null : range.through }
 }
 
 export function useDashboardParams() {
@@ -21,6 +32,11 @@ export function useDashboardParams() {
   const rawEnd = toYear(searchParams.get('end'), maximumYear, minimumYear, maximumYear)
   const startYear = Math.min(rawStart, rawEnd)
   const endYear = Math.max(rawStart, rawEnd)
+  const coverageMonth = meta.dataAsOf.slice(0, 7)
+  const trendBounds = chartBounds(startYear, endYear, coverageMonth)
+  const trendFrom = searchParams.get('trendFrom')
+  const trendThrough = searchParams.get('trendThrough')
+  const trendRange = trendMonthRange(trendFrom, trendThrough, trendBounds)
   const rawNeighborhoods = JSON.stringify(searchParams.getAll('neighborhood'))
   const neighborhoods = useMemo(() => [...new Set(searchParams.getAll('neighborhood'))].filter(Boolean).sort(), [rawNeighborhoods])
   const canonicalNeighborhoods = JSON.stringify(neighborhoods)
@@ -76,14 +92,20 @@ export function useDashboardParams() {
     neighborhoods,
     mapMetric,
     trendGrain,
+    trendBounds,
+    trendRange,
     cityLayer,
     severities,
     minimumYear,
     maximumYear,
-    setYears: (start: number, end: number) => update({ start, end }),
-    setNeighborhoods: (ids: string[], motion = snapshotMotion(), replace = false) => {
+    setYears: (start: number, end: number) => {
+      const bounds = chartBounds(Math.min(start, end), Math.max(start, end), coverageMonth)
+      const range = trendMonthRange(trendFrom, trendThrough, bounds)
+      update({ start, end, ...chartRangeParams(range, bounds) })
+    },
+    setNeighborhoods: (ids: string[], motion = snapshotMotion(), { replace = false, search }: { replace?: boolean; search?: string } = {}) => {
       setSearchParams((current) => {
-        const next = new URLSearchParams(current)
+        const next = new URLSearchParams(search ?? current)
         next.delete('neighborhood')
         const selected = [...new Set(ids)].filter(Boolean).sort()
         selected.forEach((id) => next.append('neighborhood', id))
@@ -92,6 +114,10 @@ export function useDashboardParams() {
     },
     setMapMetric: (metric: MapMetric) => update({ metric }),
     setTrendGrain: (grain: TrendGrain) => update({ grain: grain === 'annual' ? null : grain }),
+    setTrendRange: ({ from, through }: MonthRange) => {
+      if (from === trendRange.from && through === trendRange.through) return
+      update(chartRangeParams({ from, through }, trendBounds))
+    },
     setCityLayer: (layer: 'heatmap' | 'kde') => update({ layer }),
     setSeverities: (values: CitywideSeverity[]) => update({ severity: values.join(',') }),
   }

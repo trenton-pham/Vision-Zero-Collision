@@ -80,6 +80,7 @@ class MonthlyMetric(ApiModel):
 class WeeklyContribution(ApiModel):
     weekStart: date
     year: int
+    month: int = Field(ge=1, le=12)
     collisionCount: int = Field(gt=0)
     totalSeverity: int = Field(ge=0)
 

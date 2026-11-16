@@ -1,4 +1,5 @@
 import type { WeeklySeries } from './contracts'
+import { monthAt, monthIndex, type MonthRange } from './trendRange'
 
 const DAY = 86_400_000
 const WEEK = 7 * DAY
@@ -17,9 +18,21 @@ function dateKey(day: number) {
   return new Date(day).toISOString().slice(0, 10)
 }
 
-export function weeklyTrend(series: WeeklySeries, ids: string[], startYear: number, endYear: number, dataAsOf: string): WeeklyMetric[] {
-  const start = Date.UTC(startYear, 0, 1)
-  const end = Math.min(Date.UTC(endYear, 11, 31), Date.parse(dataAsOf))
+type WeeklyTrendFilters = {
+  ids: string[]
+  startYear: number
+  endYear: number
+  dataAsOf: string
+  monthRange?: MonthRange
+}
+
+export function weeklyTrend(series: WeeklySeries, { ids, startYear, endYear, dataAsOf, monthRange }: WeeklyTrendFilters): WeeklyMetric[] {
+  const range = series.citywide[0]?.month === undefined ? undefined : monthRange
+  const start = range ? Date.parse(`${range.from}-01`) : Date.UTC(startYear, 0, 1)
+  const lastDay = range ? Date.parse(`${monthAt(monthIndex(range.through) + 1)}-01`) - DAY : Date.UTC(endYear, 11, 31)
+  const end = Math.min(lastDay, Date.parse(dataAsOf))
+  const minimumMonth = range ? monthIndex(range.from) : startYear * 12
+  const maximumMonth = range ? monthIndex(range.through) : endYear * 12 + 11
   const snapshot = Date.parse(series.snapshotDate)
   const periods = new Map<string, Totals>()
   const scopes = ids.length ? [...new Set(ids)].map((id) => {
@@ -31,6 +44,10 @@ export function weeklyTrend(series: WeeklySeries, ids: string[], startYear: numb
   for (const rows of scopes) {
     for (const row of rows) {
       if (row.year < startYear || row.year > endYear) continue
+      if (row.month !== undefined) {
+        const month = row.year * 12 + row.month - 1
+        if (month < minimumMonth || month > maximumMonth) continue
+      }
       const totals = periods.get(row.weekStart) ?? { collisionCount: 0, totalSeverity: 0 }
       totals.collisionCount += row.collisionCount
       totals.totalSeverity += row.totalSeverity

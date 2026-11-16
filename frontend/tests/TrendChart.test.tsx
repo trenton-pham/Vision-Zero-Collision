@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TrendChart } from '../src/components/TrendChart'
 import type { AnnualMetric, DatasetMeta } from '../src/lib/contracts'
 import { DatasetMetaProvider } from '../src/lib/dataset'
+import { annualTrendFromMonths } from '../src/lib/trendRange'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -70,4 +71,16 @@ it('draws a visible marker when exactly one week is provisional', async () => {
   await waitFor(() => expect(container.querySelector('line.recharts-reference-line-line')).toBeInTheDocument())
   await userEvent.click(screen.getByText('View weekly chart data'))
   expect(screen.getByRole('row', { name: /Dec 29.*31, 2025/ })).toHaveTextContent('Partial week · Provisional')
+})
+
+it('shows the summed months and coverage for a sliced annual point', async () => {
+  const user = userEvent.setup()
+  const selected = [
+    { ...annualRow, year: 2026, month: 4, period: '2026-04', collisionCount: 83, totalSeverity: 62, isPartial: false },
+    { ...annualRow, year: 2026, month: 5, period: '2026-05', collisionCount: 45, totalSeverity: 18, isPartial: false },
+  ]
+  render(<DatasetMetaProvider meta={meta}><TrendChart annual={annualTrendFromMonths(selected)} monthly={selected} grain="annual"/></DatasetMetaProvider>)
+  await user.click(screen.getByText('View annual chart data'))
+  const row = screen.getByRole('row', { name: /2026 128 80/ })
+  expect(row).toHaveTextContent('Partial year · Apr 2026 – May 2026')
 })

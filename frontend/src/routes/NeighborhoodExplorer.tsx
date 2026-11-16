@@ -7,6 +7,7 @@ import { combineNeighborhoods } from '../lib/combineNeighborhoods'
 import type { TrendGrain } from '../lib/contracts'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
+import { annualTrendFromMonths } from '../lib/trendRange'
 import { useDatasetMeta, useRelease } from '../lib/dataset'
 import { weeklyTrend } from '../lib/weeklyTrend'
 import { snapshotMotion, useContentEntrance, useGrainReveal, useRouteEntrance, useStatisticsFade, type MotionStamp, type StatisticsRetry } from '../lib/motion'
@@ -15,13 +16,22 @@ import { NeighborhoodMap } from '../components/NeighborhoodMap'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
 import { ErrorState, LoadingState } from '../components/States'
 import { TrendChart } from '../components/TrendChart'
+import { TrendRangeControl } from '../components/TrendRangeControl'
 import styles from './NeighborhoodExplorer.module.css'
+
+function mapResolutionLocation({ pathname, search, hash }: Pick<Location, 'pathname' | 'search' | 'hash'>) {
+  const params = new URLSearchParams(search)
+  params.delete('trendFrom')
+  params.delete('trendThrough')
+  return `${pathname}?${params}${hash}`
+}
 
 export function NeighborhoodExplorer() {
   const state = useDashboardParams()
   const meta = useDatasetMeta()
   const { release, recoverRelease } = useRelease()
   const location = useLocation()
+  const resolutionLocation = mapResolutionLocation(location)
   const entrance = useRouteEntrance()
   const [announcement, setAnnouncement] = useState('')
   const [resolving, setResolving] = useState(false)
@@ -37,7 +47,14 @@ export function NeighborhoodExplorer() {
   const weekly = useQuery({
     queryKey: ['weekly-series', release.releaseId],
     queryFn: grain === 'weekly' && weeklyAvailable ? ({ signal }) => api.weeklySeries(release, signal) : skipToken,
-    select: (series) => weeklyTrend(series, neighborhoods, state.startYear, state.endYear, meta.dataAsOf),
+    select: (series) => {
+      const monthPrecision = series.citywide[0]?.month !== undefined
+      const points = weeklyTrend(series, {
+        ids: neighborhoods, startYear: state.startYear, endYear: state.endYear,
+        dataAsOf: meta.dataAsOf, monthRange: state.trendRange,
+      })
+      return { monthPrecision, points }
+    },
     staleTime: Infinity,
   })
   const geo = useQuery({ queryKey: ['neighborhood-geojson', release.releaseId], queryFn: ({ signal }) => api.neighborhoods(release, signal), staleTime: Infinity })
@@ -75,23 +92,23 @@ export function NeighborhoodExplorer() {
     const known = new Set(geo.data.features.map((feature) => feature.properties.id))
     const valid = neighborhoods.filter((id) => known.has(id))
     if (valid.length === neighborhoods.length) return
-    state.setNeighborhoods(valid, snapshotMotion(), true)
+    state.setNeighborhoods(valid, snapshotMotion(), { replace: true })
     normalizationNotice.current = 'Unknown neighborhoods were removed from the selection. '
     setAnnouncement(normalizationNotice.current)
   }, [geo.data, neighborhoods, state.setNeighborhoods])
 
-  function select(id: string | null, name?: string | null, motion?: MotionStamp) {
+  function select(id: string | null, name?: string | null, motion?: MotionStamp, search?: string) {
     const removed = id !== null && neighborhoods.includes(id)
     const next = id === null ? [] : removed ? neighborhoods.filter((selected) => selected !== id) : [...neighborhoods, id]
-    state.setNeighborhoods(next, motion)
+    state.setNeighborhoods(next, motion, { search })
     setSelectionPulse((value) => value + 1)
     setAnnouncement(next.length === 0
       ? 'Neighborhood selection cleared. Loading Seattle citywide statistics.'
       : `${name ?? id} ${removed ? 'removed' : 'selected'}. Loading statistics.`)
   }
 
-  const currentSelection = useRef({ select, location })
-  useLayoutEffect(() => { currentSelection.current = { select, location } })
+  const currentSelection = useRef({ select, resolutionLocation })
+  useLayoutEffect(() => { currentSelection.current = { select, resolutionLocation } })
 
   function invalidateResolution() {
     resolveGeneration.current += 1
@@ -103,7 +120,7 @@ export function NeighborhoodExplorer() {
     invalidateResolution()
     setResolving(false)
     return invalidateResolution
-  }, [location.key, release.releaseId])
+  }, [resolutionLocation, release.releaseId])
 
   function selectManually(id: string | null, name?: string | null) {
     invalidateResolution()
@@ -114,9 +131,8 @@ export function NeighborhoodExplorer() {
   async function resolve(lat: number, lng: number) {
     const motion = snapshotMotion()
     invalidateResolution()
-    const committedLocation = currentSelection.current.location
-    const requestLocation = `${committedLocation.pathname}${committedLocation.search}${committedLocation.hash}`
-    const matchesLocation = () => requestLocation === `${window.location.pathname}${window.location.search}${window.location.hash}`
+    const requestLocation = currentSelection.current.resolutionLocation
+    const matchesLocation = () => requestLocation === mapResolutionLocation(window.location)
     if (!matchesLocation()) {
       setResolving(false)
       return
@@ -129,7 +145,7 @@ export function NeighborhoodExplorer() {
     try {
       const result = await api.resolveNeighborhood(release, lat, lng, controller.signal)
       if (!isCurrent()) return
-      if (result.id) currentSelection.current.select(result.id, result.name, motion)
+      if (result.id) currentSelection.current.select(result.id, result.name, motion, window.location.search)
       else setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
     } catch (error) {
       if (isCurrent()) {
@@ -147,6 +163,9 @@ export function NeighborhoodExplorer() {
   const initialLoading = geo.isLoading || summary.isLoading
   const initialError = geo.error ?? summary.error
   const activeQuery = neighborhoods.length > 1 ? combined : neighborhood ? context : citywideTrend
+  const { from, through } = state.trendRange
+  const narrowed = from !== state.trendBounds.from || through !== state.trendBounds.through
+  const chartMonths = activeQuery.data?.monthly.filter(({ period }) => period >= from && period <= through)
   const statisticsIdentity = JSON.stringify([neighborhoods, state.startYear, state.endYear])
   const statisticsRetry = useRef<StatisticsRetry | null>(null)
   const statistics = useStatisticsFade({ identity: statisticsIdentity, revision: activeQuery.dataUpdatedAt, ready: activeQuery.isSuccess, failed: activeQuery.isError && !activeQuery.isFetching, retry: statisticsRetry.current })
@@ -252,19 +271,28 @@ export function NeighborhoodExplorer() {
               <span>{activeQuery.data.comparison.firstPeriod.years.join(', ')} vs {activeQuery.data.comparison.lastPeriod.years.join(', ')} · annual averages</span>
               <strong data-statistic className={(activeQuery.data.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.collisionChangePercent)} collisions</strong>
               <strong data-statistic className={(activeQuery.data.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.severityChangePercent)} burden</strong>
-            </> : <><span>Trend comparison</span><strong>Insufficient complete years</strong></>}
+            </> : <><span>Trend comparison · {state.startYear}–{state.endYear}</span><strong>Insufficient complete years</strong></>}
           </div>}
         </div>
+        {(grain !== 'weekly' || weekly.data?.monthPrecision) && <TrendRangeControl
+          bounds={state.trendBounds} range={state.trendRange} onChange={state.setTrendRange}
+        />}
         <div ref={trendEntrance} className={styles.trendBody} aria-busy={grain === 'weekly' ? weekly.isFetching : activeQuery.isFetching}>
           {grain === 'weekly' ? <>
             {!weeklyAvailable && <p className={styles.methodNote}>Weekly data is unavailable for this release. Select Annual or Monthly to view the trend.</p>}
             {weekly.isLoading && <LoadingState label={`Loading ${trendScope} weekly trend`}/>}
             {weeklyAvailable && weekly.error && <ErrorState error={weekly.error} onRetry={() => { void weekly.refetch() }}/>}
-            {weeklyAvailable && !weekly.error && weekly.data && <TrendChart chartRef={grainReveal} grain="weekly" weekly={weekly.data}/>}
+            {weekly.data && !weekly.error && <>
+              {!weekly.data.monthPrecision && <p className={styles.methodNote}>Weekly uses the observed years on this release. For a month range, select Annual or Monthly.</p>}
+              <TrendChart chartRef={grainReveal} grain="weekly" weekly={weekly.data.points}/>
+            </>}
           </> : <>
             {activeQuery.isLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
             {activeQuery.error && !activeQuery.data && <p className={styles.methodNote}>Trend unavailable. Retry the statistics request above to restore this chart.</p>}
-            {activeQuery.data && <TrendChart chartRef={grainReveal} annual={activeQuery.data.annual} monthly={activeQuery.data.monthly} grain={grain}/>}
+            {activeQuery.data && chartMonths && <TrendChart chartRef={grainReveal}
+              annual={grain === 'annual' && narrowed ? annualTrendFromMonths(chartMonths) : activeQuery.data.annual}
+              monthly={chartMonths} grain={grain}
+            />}
           </>}
         </div>
       </section>
