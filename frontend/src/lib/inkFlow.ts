@@ -58,7 +58,8 @@ export function inkFlow(kde: KdeResponse, levelCount = 20): InkFlow {
   let maximum = 0
   for (const value of smooth) maximum = Math.max(maximum, value)
   if (maximum <= 0) return { levels: [], bounds }
-  const thresholds = Array.from({ length: levelCount }, (_, index) => maximum * ((index + 1) / (levelCount + 1)) ** 1.25)
+  // The lowest ring starts at 7% of the peak so smoothing halos never spill past the city's edge onto water.
+  const thresholds = Array.from({ length: levelCount }, (_, index) => maximum * (0.07 + 0.93 * ((index + 1) / (levelCount + 1)) ** 1.25))
   const toLngLat = ([x, y]: number[]): [number, number] => [
     west + ((x ?? 0) - 0.5) / (width - 1) * (east - west),
     south + ((y ?? 0) - 0.5) / (height - 1) * (north - south),

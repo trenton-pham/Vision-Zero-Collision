@@ -6,7 +6,7 @@
 .severitySwatch { background: var(--ramp-5); }
 .partialMarker { margin: 0; padding: 12px 20px; color: var(--ink-2); font-size: .8125rem; line-height: 1.5; }
 .dataTable { padding: 0 20px 12px; color: var(--ink-2); font-size: .875rem; }
-.dataTable summary { min-height: 44px; display: list-item; padding: 12px 0; cursor: pointer; }
+.dataTable summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
 .tableScroll { max-height: 320px; overflow: auto; }
 .dataTable table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 .dataTable caption { text-align: left; padding: 12px 0; color: var(--ink); }

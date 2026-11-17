@@ -20,6 +20,14 @@ export function SeattleMark(props: IconProps) {
   return <svg {...base} viewBox="0 0 32 32" {...props}><circle cx="16" cy="16" r="14.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5 18.5c4-.6 6.5-5.5 11-5.5s6.4 3.6 11 3" stroke="currentColor" strokeWidth="1.1" opacity=".55"/><path d="M7.5 23c3.8-1.6 6-4.6 9.5-4.6s5.2 2 8 1.6" stroke="currentColor" strokeWidth="1.1" opacity=".55"/><circle cx="19.5" cy="16.2" r="3.4" fill="currentColor"/></svg>
 }
 
+export function ArrowIcon(props: IconProps) {
+  return <svg {...base} {...props}><path d="M4 12h15m-5-5 5 5-5 5" stroke="currentColor" strokeWidth="1.6"/></svg>
+}
+
+export function CloseIcon(props: IconProps) {
+  return <svg {...base} {...props}><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" strokeWidth="1.6"/></svg>
+}
+
 export function AlertIcon(props: IconProps) {
   return <svg {...base} {...props}><path d="M12 3 2.8 20h18.4L12 3Z" stroke="currentColor" strokeWidth="1.5"/><path d="M12 9v5m0 3v.2" stroke="currentColor" strokeWidth="1.8"/></svg>
 }

@@ -1,7 +1,6 @@
 .page { min-height: 100%; padding: 24px; }
-.command { position: relative; display: grid; grid-template-columns: minmax(250px, 1fr) minmax(240px, 360px) 190px; gap: 20px; align-items: end; margin-bottom: 24px; }
+.command { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(240px, 360px) 190px; gap: 20px; align-items: end; margin-bottom: 24px; }
 .command h1, .trendHead h2 { margin: 0; font: 300 2.5rem/1.1 var(--font-display); letter-spacing: -.005em; text-wrap: balance; }
-.command > :not([data-backdrop]) { position: relative; z-index: 1; }
 .command p, .trendTitle p { margin: 8px 0 0; color: var(--ink-2); font-size: .875rem; line-height: 1.5; }
 .metricSelect { color: var(--ink-2); font: 500 .8125rem/1.4 var(--font-ui); }
 .metricSelect select { width: 100%; height: 46px; margin-top: 8px; padding: 0 10px; border: 1px solid var(--rule-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); font: 400 .875rem/1.4 var(--font-ui); }

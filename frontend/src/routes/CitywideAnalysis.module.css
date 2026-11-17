@@ -9,9 +9,9 @@
 .severity input { position: absolute; opacity: 0; }
 .severity span, .severity button { min-height: 44px; padding: 0 12px; border: 1px solid var(--rule-strong); border-radius: var(--radius-control); display: flex; align-items: center; background: transparent; color: var(--ink-2); font: 400 .8125rem/1.4 var(--font-ui); }
 .severity button { cursor: pointer; }
-.severity span svg { width: 14px; height: 14px; margin-right: 6px; opacity: 0; }
+.severity span svg { width: 14px; height: 14px; margin-right: 6px; display: none; }
 .severity input:checked + span { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
-.severity input:checked + span svg { opacity: 1; }
+.severity input:checked + span svg { display: block; }
 .severity input:focus-visible + span { outline: 2px solid var(--focus); outline-offset: 3px; }
 .warning { margin-bottom: 16px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: var(--radius-control); background: var(--sunk); color: var(--ink-2); font-size: .8125rem; line-height: 1.5; }
 .updating { min-height: 24px; margin: 0; color: var(--ink-2); font-size: .875rem; }
@@ -26,9 +26,15 @@
 .readouts { border: 1px solid var(--rule); border-left: 0; border-radius: 0 var(--radius-card) var(--radius-card) 0; background: var(--surface); }
 .readouts dl { grid-template-columns: minmax(0, 1fr); border: 0; }
 .readouts dl > div { min-height: 0; padding: 18px 20px; border-right: 0; }
-.cardRow { margin-top: 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.extraReadout { padding: 18px 20px; display: grid; gap: 6px; border-top: 1px solid var(--rule); }
+.extraReadout strong { color: var(--ink); font: 600 1.625rem/1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.extraReadout span:last-child { color: var(--ink-2); font-size: .75rem; line-height: 1.4; }
+.cardRow { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: stretch; }
 .cardRow .analysisCard { border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-rest); }
-.featured { background: var(--ink) !important; border-color: var(--ink) !important; color: var(--paper); }
+.cardRow .featured { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+:global(:root[data-theme='dark']) .cardRow .featured { background: var(--accent-soft); border-color: var(--accent); }
+:global(:root[data-theme='dark']) .cardRow .featured .cardLabel, :global(:root[data-theme='dark']) .cardRow .featured .shiftValue { color: var(--ink); }
+:global(:root[data-theme='dark']) .cardRow .featured p, :global(:root[data-theme='dark']) .cardRow .featured small { color: var(--ink-2); }
 .cardRow .featured .cardLabel, .cardRow .featured .shiftValue { color: var(--paper); }
 .cardRow .featured p, .cardRow .featured small { color: color-mix(in srgb, var(--paper) 80%, var(--ink)); }
 .analysisCard { padding: 20px; }
@@ -54,7 +60,7 @@
 .chartData caption { text-align: left; padding: 12px 0; color: var(--ink-2); }
 .chartData td, .chartData th { padding: 10px 4px; text-align: right; border-bottom: 1px solid var(--rule); }
 .chartData th:first-child { text-align: left; }
-@media (max-width: 1100px) { .command { display: grid; } .cardRow { grid-template-columns: 1fr 1fr; } .cardRow > :first-child { grid-column: 1 / -1; } }
+@media (max-width: 1100px) { .command { display: grid; } .cardRow { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 960px) { .workspace { display: flex; flex-direction: column; gap: 20px; } .mapColumn, .readouts { width: 100%; border-radius: var(--radius-card); } .readouts { border-left: 1px solid var(--rule); } .readouts dl { grid-template-columns: repeat(2, minmax(0, 1fr)); } .readouts dl > div { border-right: 1px solid var(--rule); } }
 @media (max-width: 700px) { .cardRow { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 600px) {

@@ -1,4 +1,4 @@
-import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { MonthlyMetric } from '../lib/contracts'
 import { useDatasetMeta } from '../lib/dataset'
 import { receivedThrough } from '../lib/format'
@@ -75,11 +75,11 @@ export function TrendChart(props: Props) {
   const firstComplete = completeYears[0]
   const partialSegments: Array<(year: number) => boolean> = []
   if (annual[0]?.isPartial && firstComplete) {
-    partialSegments.push((year) => year <= firstComplete.year)
+    partialSegments.push((year) => year < firstComplete.year)
   }
   if (annual.at(-1)?.isPartial) {
     const lastComplete = completeYears.at(-1)?.year ?? -Infinity
-    partialSegments.push((year) => year >= lastComplete)
+    partialSegments.push((year) => year > lastComplete)
   }
   const receivedThroughDate = receivedThrough(meta.dataAsOf)
   const monthlyTicks = monthly.filter((item, index) => index === 0 || item.month === 1).map((item) => item.period)
@@ -90,9 +90,9 @@ export function TrendChart(props: Props) {
   const hasSlicedYear = annual.some((row) => row.isPartial && row.coverage)
   const hasProvisionalWeeks = provisional.length > 0
   const coverageNote = hasSlicedYear
-    ? 'Dashed segments distinguish partial years. The table shows the months included.'
+    ? 'Hollow points mark partial years. The table shows the months included.'
     : partialYear
-    ? `The ${partialYear} observations are partial.${grain === 'annual' ? ' Dashed segments distinguish incomplete annual observations.' : ''}`
+    ? `The ${partialYear} observations are partial.${grain === 'annual' ? ' Hollow points mark incomplete annual observations.' : ''}`
     : hasProvisionalWeeks ? 'Provisional weeks may gain reports or be revised.' : ''
   return (
     <div>
@@ -138,15 +138,16 @@ export function TrendChart(props: Props) {
             <Area type="linear" dataKey={(row: ChartRow) => grain === 'annual' && 'isPartial' in row && row.isPartial ? null : row.collisionCount} name="Collisions" stroke="var(--ink-3)" fill="var(--ink-3)" fillOpacity={0.12} isAnimationActive={false}/>
             <Line type="linear" dataKey={(row: ChartRow) => grain === 'annual' && 'isPartial' in row && row.isPartial ? null : row.totalSeverity} name="Severity burden" stroke="var(--ramp-5)" strokeWidth={2} dot={false} isAnimationActive={false}/>
             {partialSegments.flatMap((includes, index) => [
-              <Line key={`count-${index}`} type="linear" dataKey={(row: AnnualTrendPoint) => includes(row.year) ? row.collisionCount : null} name="Collisions" stroke="var(--ink-3)" strokeDasharray="5 4" dot={{ r: 3, fill: 'var(--surface)' }} isAnimationActive={false}/>,
-              <Line key={`burden-${index}`} type="linear" dataKey={(row: AnnualTrendPoint) => includes(row.year) ? row.totalSeverity : null} name="Severity burden" stroke="var(--ramp-5)" strokeDasharray="5 4" dot={{ r: 3, fill: 'var(--surface)' }} isAnimationActive={false}/>,
+              <Line key={`count-${index}`} type="linear" dataKey={(row: AnnualTrendPoint) => includes(row.year) ? row.collisionCount : null} name="Collisions" stroke="var(--ink-3)" dot={{ r: 4, strokeWidth: 2, fill: 'var(--surface)' }} isAnimationActive={false}/>,
+              <Line key={`burden-${index}`} type="linear" dataKey={(row: AnnualTrendPoint) => includes(row.year) ? row.totalSeverity : null} name="Severity burden" stroke="var(--ramp-5)" dot={{ r: 4, strokeWidth: 2, fill: 'var(--surface)' }} isAnimationActive={false}/>,
             ])}
+            {grain === 'annual' && annual.filter((row) => row.isPartial).map((row) => <ReferenceDot key={`partial-label-${row.year}`} x={row.year} y={row.collisionCount} r={0} ifOverflow="visible" label={{ value: row.coverage ? annualCoverage(row).replace('Partial year · ', '') : row.year === Number(meta.dataAsOf.slice(0, 4)) ? `Jan–${new Date(`${meta.dataAsOf}T00:00:00Z`).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })}` : 'Partial', position: 'left', offset: 10, fill: 'var(--ink-2)', fontSize: 11 }}/>)}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
       {hasSlicedYear
-        ? <p className={styles.partialMarker}>Dashed segments show partial years. View chart data for the months included.{annualByYear.has(Number(meta.dataAsOf.slice(0, 4))) && ` Latest incident in this snapshot: ${weekDate.format(new Date(meta.dataAsOf))}.`}</p>
-        : partialYear && <p className={styles.partialMarker}>{partialYear} partial · received through {receivedThroughDate}{grain === 'annual' ? '. Dashed segments show the incomplete year.' : '.'}</p>}
+        ? <p className={styles.partialMarker}>Hollow points show partial years. View chart data for the months included.{annualByYear.has(Number(meta.dataAsOf.slice(0, 4))) && ` Latest incident in this snapshot: ${weekDate.format(new Date(meta.dataAsOf))}.`}</p>
+        : partialYear && <p className={styles.partialMarker}>{partialYear} partial · received through {receivedThroughDate}{grain === 'annual' ? '. The hollow point shows the incomplete year.' : '.'}</p>}
       {grain === 'weekly' && <p className={styles.partialMarker}>Latest incident in this snapshot: {weekDate.format(new Date(meta.dataAsOf))}.{hasProvisionalWeeks && ` Weeks that ended less than ${provisionalWeeks} weeks before the snapshot are provisional. Counts and severity can change as reports arrive or are revised.`}</p>}
       <details className={styles.dataTable}>
         <summary>View {grain} chart data</summary>

@@ -1,7 +1,7 @@
 .page { min-height: 100%; padding: 24px 32px 48px; }
-.hero { min-height: calc(100vh - 132px); display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr) 200px; gap: 32px; align-items: center; }
+.hero { min-height: calc(100vh - 132px); display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr) 200px; gap: 32px; align-items: center; }
 .copy { display: grid; gap: 28px; align-content: center; }
-.headline { margin: 0; font: 300 clamp(2.5rem, 3.5vw, 3.875rem)/1.06 var(--font-display); letter-spacing: -.01em; text-wrap: balance; }
+.headline { margin: 0; font: 300 clamp(2.75rem, 3.9vw, 4.25rem)/1.05 var(--font-display); letter-spacing: -.01em; text-wrap: balance; }
 .headline span { display: block; }
 .accentLine { color: var(--accent); }
 .lede { max-width: 46ch; margin: 0; color: var(--ink-2); font-size: 1rem; line-height: 1.6; }
@@ -18,7 +18,7 @@
 .readouts dl { margin: 0; display: grid; }
 .readouts dl > div { padding: 16px 0; border-bottom: 1px solid var(--rule); }
 .readouts dt, .cardLabel { color: var(--ink-3); font: 500 .6875rem/1.3 var(--font-ui); letter-spacing: .12em; text-transform: uppercase; }
-.readouts dd { margin: 6px 0 0; color: var(--ink); font: 600 1.5rem/1.1 var(--font-ui); font-variant-numeric: tabular-nums; }
+.readouts dd { margin: 6px 0 0; color: var(--ink); font: 400 1.625rem/1.1 var(--font-ui); font-variant-numeric: tabular-nums; }
 .readouts p { margin: 0; color: var(--ink-2); font-size: .75rem; line-height: 1.4; }
 .observations { margin-top: 16px; }
 .observations h2 { margin: 0 0 20px; font-size: 1.75rem; line-height: 1.2; }
@@ -27,9 +27,12 @@
 .card:hover { border-color: var(--rule-strong); }
 .card strong { font: 600 2rem/1.1 var(--font-ui); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .card p { margin: 0; color: var(--ink-2); font-size: .875rem; line-height: 1.55; }
-.cardLink { font-size: 1.25rem; }
+.cardLink { width: 22px; height: 22px; }
+.arrow { width: 18px; height: 18px; }
 .featured { background: var(--ink); border-color: var(--ink); color: var(--paper); }
 .featured .cardLabel, .featured p { color: color-mix(in srgb, var(--paper) 80%, var(--ink)); }
+:global(:root[data-theme='dark']) .featured { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
+:global(:root[data-theme='dark']) .featured .cardLabel, :global(:root[data-theme='dark']) .featured p { color: var(--ink-2); }
 @media (max-width: 1200px) {
   .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 0; }
   .readouts { grid-column: 1 / -1; padding: 0; border: 0; }

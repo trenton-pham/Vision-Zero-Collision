@@ -9,10 +9,10 @@ test('the overview headline and readouts come from the pinned release', async ({
   const maxYear = Math.max(...release.meta.availableYears)
   const bundle = citywideBundleSchema.parse(await (await request.get(`/data/releases/${release.releaseId}/citywide/${minYear}-${maxYear}/0.json`)).json())
   const count = new Intl.NumberFormat('en-US').format(bundle.summary.metrics.collisionCount)
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${count} collisions since ${minYear},mapped by burden.`)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(`${count} collisions since ${minYear},drawn where they concentrate.`)
   const readouts = page.getByRole('complementary', { name: 'Selected years at a glance' })
-  await expect(readouts.locator('dd').nth(1)).toHaveText(count)
-  await expect(readouts.locator('dd').nth(2)).toHaveText(new Intl.NumberFormat('en-US').format(bundle.summary.metrics.totalSeverity))
+  await expect(readouts.locator('dd').nth(0)).toHaveText(new Intl.NumberFormat('en-US').format(bundle.summary.metrics.totalSeverity))
+  await expect(readouts.locator('dd').nth(3)).toHaveText(new Intl.NumberFormat('en-US').format(bundle.summary.metrics.fatalities))
   await expect(page.getByRole('img', { name: /^Collision density across Seattle/ })).toBeVisible()
 })
 

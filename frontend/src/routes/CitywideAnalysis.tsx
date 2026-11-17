@@ -91,6 +91,11 @@ export function CitywideAnalysis() {
             </section>
             <aside className={styles.readouts} aria-label="Citywide figures" data-statistics-summary aria-busy={summary.isFetching}>
               <MetricGrid metrics={summary.data.metrics} variant="headline"/>
+              <div className={styles.extraReadout}>
+                <span className="readout-label">Downtown mean severity</span>
+                <strong data-statistic={latestCompleteDowntownYear?.downtownMeanSeverity != null ? '' : undefined}>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong>
+                <span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'No complete year in range' : 'Loading comparison'}</span>
+              </div>
             </aside>
           </div>
           <div className={styles.cardRow}>
@@ -115,10 +120,6 @@ export function CitywideAnalysis() {
                   </ResponsiveContainer>
                 </div> : <EmptyState title="No complete years in range" body="Choose a range with a complete year for the downtown comparison."/>)}
                 {completeDowntownYears.length > 0 && <details className={styles.chartData}><summary>View comparison data</summary><div><table><caption>Complete-year collision counts</caption><thead><tr><th scope="col">Year</th><th scope="col">Downtown</th><th scope="col">Rest of Seattle</th></tr></thead><tbody>{completeDowntownYears.map((row) => <tr key={row.year}><th scope="row">{row.year}</th><td>{integer.format(row.downtownCollisions)}</td><td>{integer.format(row.outerCollisions)}</td></tr>)}</tbody></table></div></details>}
-              </section>
-              <section className={styles.analysisCard}>
-                <h2 className={styles.cardLabel}>Downtown mean severity</h2>
-                <div className={styles.splitMetric}><strong data-statistic={latestCompleteDowntownYear?.downtownMeanSeverity != null ? '' : undefined}>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong><span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'no complete year in range' : 'Loading comparison'}</span></div>
               </section>
           </div>
           <details data-statistics-summary className={styles.secondaryMetrics}>

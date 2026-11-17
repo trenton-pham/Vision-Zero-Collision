@@ -24,7 +24,7 @@ function YearRangeControl() {
     <div className={styles.yearControl} aria-label="Observed year range">
       <div className={styles.yearMeta}>
         <span>Observed years</span>
-        <strong>{draftYears[0]} — {draftYears[1]}</strong>
+        <strong>{draftYears[0]}–{draftYears[1]}</strong>
       </div>
       <Slider.Root
         className={styles.slider}

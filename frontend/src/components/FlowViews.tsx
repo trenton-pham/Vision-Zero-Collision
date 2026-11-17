@@ -27,8 +27,3 @@ export function CurrentFlow() {
     </Link>
   )
 }
-
-export function FlowBackdrop() {
-  const { kde } = useCitywideKde(false)
-  return kde && kde.collisionCount > 0 ? <div className={styles.backdropClip} data-backdrop aria-hidden="true"><InkFlow className={styles.backdrop} kde={kde} levels={20} weight={0.8}/></div> : null
-}

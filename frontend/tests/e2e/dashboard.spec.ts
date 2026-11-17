@@ -57,7 +57,7 @@ test('citywide context follows the selected year range', async ({ page }) => {
   await page.goto('/neighborhoods?start=2025&end=2025')
   const citywideInspector = page.getByRole('complementary', { name: 'Seattle citywide context' })
   if (await citywideInspector.locator('#neighborhood-details').getAttribute('open') === null) await citywideInspector.locator('#neighborhood-details > summary').click()
-  await expect(citywideInspector).toContainText('2025—2025 · all severity levels')
+  await expect(citywideInspector).toContainText('2025–2025 · all severity levels')
   await expect(citywideInspector.getByText('5,629', { exact: true })).toBeVisible()
 })
 
@@ -327,7 +327,7 @@ for (const navigation of ['years', 'grain', 'back', 'citywide']) {
     if (navigation === 'years') {
       await page.getByRole('slider', { name: 'Start year' }).press('ArrowRight')
       await expect(page).toHaveURL(/start=2022(?:&|$)/)
-      await expect(page.getByRole('complementary', { name: 'Seattle citywide context' })).toContainText('2022—2025')
+      await expect(page.getByRole('complementary', { name: 'Seattle citywide context' })).toContainText('2022–2025')
     }
     if (navigation === 'grain') {
       await page.getByRole('button', { name: 'Monthly' }).click()
@@ -370,7 +370,7 @@ for (const navigation of ['years', 'grain']) {
       await expect(page.getByRole('heading', { name: 'Collision trends' })).toBeVisible()
     }
     const expected = new URL(page.url()).searchParams
-    await expect(page.getByRole('complementary', { name: 'Seattle citywide context' })).toContainText(`${expected.get('start')}—${expected.get('end')}`)
+    await expect(page.getByRole('complementary', { name: 'Seattle citywide context' })).toContainText(`${expected.get('start')}–${expected.get('end')}`)
     const map = await settledMap(page)
     await map.scrollIntoViewIfNeeded()
     await map.click()

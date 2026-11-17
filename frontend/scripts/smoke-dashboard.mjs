@@ -21,7 +21,7 @@ try {
       }
     })
     await page.goto(new URL('/', origin).href)
-    await page.getByRole('heading', { level: 1, name: /mapped by burden\.$/ }).waitFor()
+    await page.getByRole('heading', { level: 1, name: /where they concentrate\.$/ }).waitFor()
     await page.getByRole('img', { name: /^Collision density across Seattle/ }).waitFor()
     await page.goto(new URL('/neighborhoods', origin).href)
     await page.getByRole('heading', { name: 'Neighborhood Explorer', exact: true }).waitFor()

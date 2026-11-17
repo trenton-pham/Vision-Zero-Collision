@@ -6,6 +6,7 @@ import { integer, receivedThrough } from '../lib/format'
 import { storyObservations } from '../lib/storyObservations'
 import { useDashboardParams } from '../lib/useUrlState'
 import { InkFlow } from '../components/InkFlow'
+import { ArrowIcon } from '../components/Icons'
 import { ErrorState, LoadingState } from '../components/States'
 import styles from './CitywideStory.module.css'
 
@@ -37,26 +38,26 @@ export function CitywideStory() {
         <div className={styles.copy}>
           <h1 id="story-title" className={styles.headline}>
             <span>{integer.format(metrics.collisionCount)} collisions {span},</span>
-            <span className={styles.accentLine}>mapped by burden.</span>
+            <span className={styles.accentLine}>drawn where they concentrate.</span>
           </h1>
           <p className={styles.lede}>
             Seattle Department of Transportation collision records{partial.length ? `, with ${partial.join(', ')} received through ${receivedThrough(meta.dataAsOf)}` : ''}. The ink lines trace where collisions concentrate; each neighborhood on the map is colored by its observed severity burden.
           </p>
           <div className={styles.actions}>
-            <Link className={styles.primary} to={`/neighborhoods?${range}`}>Explore neighborhoods <span aria-hidden="true">→</span></Link>
+            <Link className={styles.primary} to={`/neighborhoods?${range}`}>Explore neighborhoods <ArrowIcon className={styles.arrow}/></Link>
             <Link className={styles.secondary} to={`/citywide?${range}`}>Citywide analysis</Link>
           </div>
         </div>
         <figure className={styles.flow}>
           {citywide.data.kde.collisionCount > 0
-            ? <InkFlow kde={citywide.data.kde} weight={1.1} label={`Collision density across Seattle, ${startYear} to ${endYear}, drawn as contour lines that darken where collisions concentrate.`}/>
+            ? <InkFlow key={`${release.releaseId}-${startYear}-${endYear}`} draw kde={citywide.data.kde} weight={1.1} label={`Collision density across Seattle, ${startYear} to ${endYear}, drawn as contour lines that darken where collisions concentrate.`}/>
             : <p className={styles.empty}>No mapped collisions in the selected years.</p>}
         </figure>
         <aside className={styles.readouts} aria-label="Selected years at a glance">
           <dl>
-            <div><dt>Years</dt><dd>{startYear === endYear ? startYear : `${startYear}–${endYear}`}</dd></div>
-            <div><dt>Collisions</dt><dd data-statistic>{integer.format(metrics.collisionCount)}</dd></div>
             <div><dt>Severity burden</dt><dd data-statistic>{integer.format(metrics.totalSeverity)}</dd></div>
+            <div><dt>Injuries</dt><dd data-statistic>{integer.format(metrics.injuries)}</dd></div>
+            <div><dt>Serious injuries</dt><dd data-statistic>{integer.format(metrics.seriousInjuries)}</dd></div>
             <div><dt>Fatalities</dt><dd data-statistic>{integer.format(metrics.fatalities)}</dd></div>
           </dl>
           {partial.length > 0 && <p>{partial.join(', ')} partial · left out of comparisons</p>}
@@ -70,7 +71,7 @@ export function CitywideStory() {
               <span className={styles.cardLabel}>{card.label}</span>
               <strong>{card.value}</strong>
               <p>{card.body}</p>
-              <span className={styles.cardLink} aria-hidden="true">→</span>
+              <ArrowIcon className={styles.cardLink}/>
             </Link>
           ))}
         </div>
