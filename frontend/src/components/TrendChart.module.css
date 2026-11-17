@@ -1,16 +1,16 @@
 .chart { height: 260px; position: relative; }
-.legend { position: absolute; z-index: 2; left: 24px; top: 12px; display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--text-secondary); font-size: .75rem; line-height: 1.4; }
+.legend { position: absolute; z-index: 2; left: 24px; top: 12px; display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--ink-2); font-size: .75rem; line-height: 1.4; }
 .legend span { display: inline-flex; align-items: center; gap: 8px; }
-.legend i { width: 20px; height: 3px; display: block; }
-.collisionSwatch { background: var(--selection); }
-.severitySwatch { background: var(--support); }
-.partialMarker { margin: 0; padding: 12px 20px; color: var(--caution); font-size: .8125rem; line-height: 1.5; }
-.dataTable { padding: 0 20px 12px; color: var(--text-secondary); font-size: .875rem; }
-.dataTable summary { min-height: 44px; display: list-item; padding: 12px 0; cursor: pointer; }
+.legend i { width: 20px; height: 3px; border-radius: 2px; display: block; }
+.collisionSwatch { background: var(--ink-3); }
+.severitySwatch { background: var(--ramp-5); }
+.partialMarker { margin: 0; padding: 12px 20px; color: var(--ink-2); font-size: .8125rem; line-height: 1.5; }
+.dataTable { padding: 0 20px 12px; color: var(--ink-2); font-size: .875rem; }
+.dataTable summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
 .tableScroll { max-height: 320px; overflow: auto; }
 .dataTable table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.dataTable caption { text-align: left; padding: 12px 0; color: var(--text-primary); }
-.dataTable th, .dataTable td { text-align: right; padding: 12px 8px; border-bottom: 1px solid var(--border); }
+.dataTable caption { text-align: left; padding: 12px 0; color: var(--ink); }
+.dataTable th, .dataTable td { text-align: right; padding: 12px 8px; border-bottom: 1px solid var(--rule); }
 .dataTable th:first-child { text-align: left; }
-.dataTable thead th { color: var(--text-primary); font-weight: 500; }
+.dataTable thead th { color: var(--ink); font-weight: 500; }
 @media (max-width: 600px) { .chart { height: 240px; } .legend { left: 16px; } .dataTable { padding-inline: 16px; } .dataTable th,.dataTable td { padding: 10px 4px; font-size: .75rem; } }

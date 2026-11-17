@@ -41,6 +41,19 @@ describe('theme preference', () => {
     expect(localStorage.getItem('scd-theme')).toBeNull()
   })
 
+  it('updates data-theme before children render so they read the new tokens', () => {
+    const seen: string[] = []
+    function Reader() {
+      const { resolvedTheme } = useTheme()
+      seen.push(`${resolvedTheme}:${document.documentElement.dataset.theme}`)
+      return null
+    }
+    render(<ThemeProvider><Controls/><Reader/></ThemeProvider>)
+    fireEvent.click(screen.getByText('Dark'))
+    expect(seen.at(-1)).toBe('dark:dark')
+    expect(seen.every((entry) => entry.split(':')[0] === entry.split(':')[1])).toBe(true)
+  })
+
   it('restores a saved selection and ignores invalid stored values', () => {
     localStorage.setItem('scd-theme', 'dark')
     const saved = render(<ThemeProvider><Controls/></ThemeProvider>)

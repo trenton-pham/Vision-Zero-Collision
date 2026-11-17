@@ -12,7 +12,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          maps: ['leaflet', 'react-leaflet'],
+          maps: ['maplibre-gl'],
           charts: ['recharts'],
           query: ['@tanstack/react-query'],
         },

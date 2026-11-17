@@ -1,31 +1,25 @@
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { CitywideMap } from '../components/CitywideMap'
 import { CheckIcon } from '../components/Icons'
 import { MetricGrid } from '../components/MetricGrid'
 import { EmptyState, ErrorState, LoadingState } from '../components/States'
-import { api } from '../lib/api'
+import { citywideQuery } from '../lib/api'
 import { useRelease } from '../lib/dataset'
-import { integer, metricValue } from '../lib/format'
+import { integer, metricValue, yearSpan } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
-import { snapshotMotion, useContentEntrance, useRouteEntrance, useStatisticsFade, type StatisticsRetry } from '../lib/motion'
 import styles from './CitywideAnalysis.module.css'
 
-function yearSpan(years: number[] | undefined) {
-  if (!years?.length) return 'no complete years'
-  return years.length === 1 ? String(years[0]) : `${years[0]}–${years.at(-1)}`
-}
+const CitywideMap = lazy(() => import('../components/CitywideMap').then((module) => ({ default: module.CitywideMap })))
+
 
 export function CitywideAnalysis() {
   const state = useDashboardParams()
-  const entrance = useRouteEntrance()
   const [filtersOpen, setFiltersOpen] = useState(() => !window.matchMedia('(max-width: 600px)').matches)
   const { release } = useRelease()
   const bundle = useQuery({
-    queryKey: ['citywide', release.releaseId, state.startYear, state.endYear, state.severities],
-    queryFn: ({ signal }) => api.citywide(release, state.startYear, state.endYear, state.severities, signal),
+    ...citywideQuery(release, state.startYear, state.endYear, state.severities),
     placeholderData: (previous, query) => query?.queryKey[1] === release.releaseId ? previous : undefined,
     staleTime: Infinity,
   })
@@ -43,32 +37,20 @@ export function CitywideAnalysis() {
   const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error
   const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
   const latestCompleteDowntownYear = completeDowntownYears.at(-1)
-  const statisticsIdentity = JSON.stringify([state.startYear, state.endYear, [...state.severities].sort()])
-  const summaryRetry = useRef<StatisticsRetry | null>(null)
-  const shiftRetry = useRef<StatisticsRetry | null>(null)
-  const downtownRetry = useRef<StatisticsRetry | null>(null)
-  const summaryStatistics = useStatisticsFade({ identity: statisticsIdentity, revision: summary.dataUpdatedAt, ready: summary.isSuccess && !summary.isPlaceholderData, failed: summary.isError && !summary.isFetching, retry: summaryRetry.current, selector: '[data-statistics-summary] [data-statistic]' })
-  const shiftStatistics = useStatisticsFade<HTMLElement>({ identity: statisticsIdentity, revision: shift.dataUpdatedAt, ready: shift.isSuccess, failed: shift.isError && !shift.isFetching, retry: shiftRetry.current })
-  const downtownStatistics = useStatisticsFade<HTMLElement>({ identity: statisticsIdentity, revision: downtown.dataUpdatedAt, ready: downtown.isSuccess, failed: downtown.isError && !downtown.isFetching, retry: downtownRetry.current })
 
-  const headlineEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && !summary.isPlaceholderData, entrance)
-  const mapEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && !summary.isPlaceholderData && layerQuery.isSuccess, entrance)
-  const shiftEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && shift.isSuccess && shift.data?.shiftMeters != null, entrance)
-  const downtownChartEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && downtown.isSuccess, entrance)
-  const downtownMeanEntrance = useContentEntrance<HTMLDivElement>(summary.isSuccess && downtown.isSuccess && latestCompleteDowntownYear?.downtownMeanSeverity != null, entrance)
 
   function toggleSeverity(value: CitywideSeverity) {
     state.setSeverities(state.severities.includes(value) ? state.severities.filter((item) => item !== value) : [...state.severities, value])
   }
 
   return (
-    <div ref={summaryStatistics} className={styles.page}>
+    <div className={styles.page}>
       <section className={styles.command}>
         <div>
           <h1>Citywide Analysis</h1>
           <p>Explore collision concentrations and changes across Seattle.</p>
         </div>
-        <details data-motion-controls id="severity-filters" className={styles.filterDetails} open={filtersOpen} onToggle={(event) => setFiltersOpen(event.currentTarget.open)}>
+        <details id="severity-filters" className={styles.filterDetails} open={filtersOpen} onToggle={(event) => setFiltersOpen(event.currentTarget.open)}>
           <summary>Severity filters · {state.severities.length ? `${state.severities.length} selected` : 'all levels'}</summary>
           <fieldset className={styles.severity}>
             <legend className="sr-only">Severity</legend>
@@ -81,16 +63,11 @@ export function CitywideAnalysis() {
       {summary.isLoading && <LoadingState label="Computing citywide analysis"/>}
       <p className={styles.updating} role="status">{!summary.isLoading && (summary.isFetching || layerQuery.isFetching || shift.isFetching || downtown.isFetching) ? 'Computing citywide analysis…' : ''}</p>
       {firstError && <ErrorState error={firstError} onRetry={() => {
-        const stamp = snapshotMotion()
-        summaryRetry.current = { identity: statisticsIdentity, stamp, afterRevision: summary.dataUpdatedAt }
-        shiftRetry.current = { identity: statisticsIdentity, stamp, afterRevision: shift.dataUpdatedAt }
-        downtownRetry.current = { identity: statisticsIdentity, stamp, afterRevision: downtown.dataUpdatedAt }
         void bundle.refetch()
       }}/>}
       {summary.data && !summary.isLoading && (
         <>
           {summary.data.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning} · excluded from spatial shift and downtown comparison</div>)}
-          <div ref={headlineEntrance} data-statistics-summary aria-busy={summary.isFetching}><MetricGrid metrics={summary.data.metrics} compact variant="headline"/></div>
           <div className={styles.workspace} aria-busy={summary.isFetching || layerQuery.isFetching}>
             <section className={styles.mapColumn}>
               <div className={styles.panelBar}>
@@ -106,39 +83,43 @@ export function CitywideAnalysis() {
                   <button id="kde-tab" role="tab" aria-controls="density-panel" tabIndex={state.cityLayer === 'kde' ? 0 : -1} aria-selected={state.cityLayer === 'kde'} onClick={() => state.setCityLayer('kde')}>KDE density</button>
                 </div>
               </div>
-              <div ref={mapEntrance} id="density-panel" role="tabpanel" aria-labelledby={`${state.cityLayer}-tab`} tabIndex={0}>
-                {summary.data.metrics.collisionCount === 0 ? <EmptyState title="No collisions match" body="Broaden the year range or severity filters to restore the map."/> : <CitywideMap layer={state.cityLayer} heatmap={heatmap.data} kde={kde.data} shift={shift.data} downtown={downtown.data}/>}
+              <div id="density-panel" role="tabpanel" aria-labelledby={`${state.cityLayer}-tab`} tabIndex={0}>
+                {summary.data.metrics.collisionCount === 0 ? <EmptyState title="No collisions match" body="Broaden the year range or severity filters to restore the map."/> : <Suspense fallback={<LoadingState label="Loading map"/>}><CitywideMap layer={state.cityLayer} heatmap={heatmap.data} kde={kde.data} shift={shift.data} downtown={downtown.data}/></Suspense>}
               </div>
               <p className={styles.mapNote}>{state.cityLayer === 'kde' ? 'KDE smooths nearby collision locations into relative density. Values describe concentration, not the probability of a future collision.' : 'Each circle summarizes collisions in a grid cell. Larger circles represent more records.'}</p>
             </section>
-            <aside className={styles.analysisRail}>
-              <section className={styles.analysisCard}>
+            <aside className={styles.readouts} aria-label="Citywide figures" data-statistics-summary aria-busy={summary.isFetching}>
+              <MetricGrid metrics={summary.data.metrics} variant="headline"/>
+              <div className={styles.extraReadout}>
+                <span className="readout-label">Downtown mean severity</span>
+                <strong data-statistic={latestCompleteDowntownYear?.downtownMeanSeverity != null ? '' : undefined}>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong>
+                <span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'No complete year in range' : 'Loading comparison'}</span>
+              </div>
+            </aside>
+          </div>
+          <div className={styles.cardRow}>
+              <section className={`${styles.analysisCard} ${styles.featured}`}>
                 <h2 className={styles.cardLabel}>Complete-year spatial shift</h2>
-                <div ref={shiftEntrance}><strong ref={shiftStatistics} data-statistic={shift.data?.shiftMeters != null ? '' : undefined} className={styles.shiftValue}>{shift.data?.shiftMeters == null ? '—' : `${integer.format(shift.data.shiftMeters)} m`}</strong></div>
+                <div><strong data-statistic={shift.data?.shiftMeters != null ? '' : undefined} className={styles.shiftValue}>{shift.data?.shiftMeters == null ? '—' : `${integer.format(shift.data.shiftMeters)} m`}</strong></div>
                 <p>{shift.data?.status === 'available' ? `${yearSpan(shift.data.before.years)} average collision location to ${yearSpan(shift.data.after.years)} average location.` : 'The selected range needs complete years on both sides of 2020.'}</p>
                 {shift.data?.excludedYears.length ? <small>Excluded: {shift.data.excludedYears.join(', ')} partial</small> : null}
               </section>
               <section className={styles.analysisCard}>
                 <h2 className={styles.cardLabel}>Downtown vs rest of Seattle</h2>
                 <div className={styles.seriesLegend} aria-hidden="true"><span><i className={styles.downtownSwatch}/>Downtown</span><span><i className={styles.outerSwatch}/>Rest of Seattle</span></div>
-                {downtown.data && (completeDowntownYears.length ? <div ref={downtownChartEntrance} className={styles.chart} role="img" aria-label="Complete-year collision comparison. Amber line shows downtown collisions. Blue line shows outer Seattle collisions.">
+                {downtown.data && (completeDowntownYears.length ? <div className={styles.chart} role="img" aria-label="Complete-year collision comparison. Violet line shows downtown collisions. Gray line shows the rest of Seattle.">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={completeDowntownYears} margin={{ top: 10, right: 4, bottom: 0, left: -22 }}>
-                      <XAxis dataKey="year" stroke="var(--text-secondary)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }}/>
-                      <YAxis stroke="var(--text-secondary)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} tickFormatter={(value: number) => value >= 1000 ? `${value / 1000}k` : String(value)}/>
-                      <Tooltip contentStyle={{ background: 'var(--panel-raised)', color: 'var(--text-primary)', border: '1px solid var(--border-strong)', borderRadius: 0 }}/>
-                      <Line dataKey="downtownCollisions" name="Downtown" stroke="var(--caution)" dot={false} isAnimationActive={false}/>
-                      <Line dataKey="outerCollisions" name="Rest of Seattle" stroke="var(--selection)" dot={false} isAnimationActive={false}/>
+                      <XAxis dataKey="year" stroke="var(--ink-2)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }}/>
+                      <YAxis stroke="var(--ink-2)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} tickFormatter={(value: number) => value >= 1000 ? `${value / 1000}k` : String(value)}/>
+                      <Tooltip contentStyle={{ background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--rule-strong)', borderRadius: 'var(--radius-control)', boxShadow: 'var(--shadow-float)' }}/>
+                      <Line dataKey="downtownCollisions" name="Downtown" stroke="var(--accent)" strokeWidth={2} dot={false} isAnimationActive={false}/>
+                      <Line dataKey="outerCollisions" name="Rest of Seattle" stroke="var(--ink-3)" strokeWidth={2} dot={false} isAnimationActive={false}/>
                     </LineChart>
                   </ResponsiveContainer>
                 </div> : <EmptyState title="No complete years in range" body="Choose a range with a complete year for the downtown comparison."/>)}
                 {completeDowntownYears.length > 0 && <details className={styles.chartData}><summary>View comparison data</summary><div><table><caption>Complete-year collision counts</caption><thead><tr><th scope="col">Year</th><th scope="col">Downtown</th><th scope="col">Rest of Seattle</th></tr></thead><tbody>{completeDowntownYears.map((row) => <tr key={row.year}><th scope="row">{row.year}</th><td>{integer.format(row.downtownCollisions)}</td><td>{integer.format(row.outerCollisions)}</td></tr>)}</tbody></table></div></details>}
               </section>
-              <section className={styles.analysisCard}>
-                <h2 className={styles.cardLabel}>Downtown mean severity</h2>
-                <div ref={downtownMeanEntrance} className={styles.splitMetric}><strong ref={downtownStatistics} data-statistic={latestCompleteDowntownYear?.downtownMeanSeverity != null ? '' : undefined}>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong><span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'no complete year in range' : 'Loading comparison'}</span></div>
-              </section>
-            </aside>
           </div>
           <details data-statistics-summary className={styles.secondaryMetrics}>
             <summary>More collision measures</summary>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
 export type Theme = 'system' | 'light' | 'dark'
 type ResolvedTheme = Exclude<Theme, 'system'>
@@ -31,10 +31,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => media.removeEventListener('change', update)
   }, [])
 
-  useLayoutEffect(() => {
+  if (document.documentElement.dataset.theme !== resolvedTheme || document.documentElement.style.colorScheme !== resolvedTheme) {
     document.documentElement.dataset.theme = resolvedTheme
     document.documentElement.style.colorScheme = resolvedTheme
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#06111c' : '#f3f6f8')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#0a1222' : '#f5f6f9')
+  }
+
+  useEffect(() => {
     try {
       if (theme === 'system') localStorage.removeItem(storageKey)
       else localStorage.setItem(storageKey, theme)

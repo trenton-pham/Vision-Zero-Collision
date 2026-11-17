@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
+import { readMap, settledMap } from './static-helpers'
 
 test('annual tooltips show each metric once at complete and partial years', async ({ page }) => {
   await page.goto('/neighborhoods?start=2024&end=2026')
@@ -56,12 +57,8 @@ test('theme persists and repaints the density canvas without losing the selected
   await page.goto('/citywide?start=2025&end=2025')
   const theme = page.getByRole('combobox', { name: 'Appearance' })
   await theme.selectOption('dark')
-  const canvas = page.locator('.leaflet-overlay-pane canvas')
-  const image = () => canvas.evaluate((element) => {
-    if (!(element instanceof HTMLCanvasElement)) throw new Error('Expected density canvas')
-    return element.toDataURL()
-  })
-  await expect(canvas).toBeVisible()
+  const image = async () => (await readMap(page)).image
+  await settledMap(page)
   await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
   const dark = await image()
   await theme.selectOption('light')
@@ -76,8 +73,8 @@ test('theme persists and repaints the density canvas without losing the selected
   await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'kde-tab')
   await expect(page).toHaveURL(/layer=kde/)
   await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
-  const highKey = page.getByText('>0.60–1.00').locator('i')
-  await expect(highKey).toHaveCSS('background-color', 'rgb(0, 127, 139)')
+  const highKey = page.getByText('Higher density').locator('i')
+  await expect(highKey).toHaveCSS('background-color', 'rgb(14, 29, 58)')
   for (const appearance of ['dark', 'light']) {
     await theme.selectOption(appearance)
     const result = await new AxeBuilder({ page }).analyze()
@@ -93,10 +90,10 @@ test('theme persists and repaints the density canvas without losing the selected
 test('mobile results stay near the controls and all layouts stay within the viewport', async ({ page }, testInfo) => {
   for (const route of ['neighborhoods', 'citywide']) {
     await page.goto(`/${route}`)
-    await expect(page.locator('.leaflet-container')).toBeVisible()
+    await expect(page.locator('.maplibregl-map')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0)
     if (testInfo.project.name === 'mobile') {
-      const map = await page.locator('.leaflet-container').boundingBox()
+      const map = await page.locator('.maplibregl-map').boundingBox()
       expect(map?.y).toBeLessThan(750)
       if (route === 'neighborhoods') {
         const title = await page.getByRole('heading', { name: 'Seattle citywide', exact: true }).boundingBox()

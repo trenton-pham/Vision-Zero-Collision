@@ -38,9 +38,7 @@ __pycache__/
 .audit/
 .playwright-mcp/
 .serena/
-DESIGN.md
 FIGMA.md
-PRODUCT.md
 
 .DS_Store
 

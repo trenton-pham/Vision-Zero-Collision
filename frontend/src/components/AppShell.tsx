@@ -1,27 +1,17 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
-import { NavLink, Outlet, useLocation, useNavigate, type NavLinkProps } from 'react-router-dom'
+import { NavLink, Outlet } from 'react-router-dom'
 import { api, ReleaseUnavailableError } from '../lib/api'
 import { ReleaseProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
 import { receivedThrough } from '../lib/format'
 import { useTheme } from '../lib/theme'
-import { snapshotMotion, useMotionInput } from '../lib/motion'
 import { ErrorState, LoadingState } from './States'
-import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
+import { AnalysisIcon, MapIcon, OverviewIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
 
-function DashboardLink({ to, ...props }: Omit<NavLinkProps, 'to' | 'onClick'> & { to: string }) {
-  const navigate = useNavigate()
-  const location = useLocation()
-  return <NavLink {...props} to={to} onClick={(event) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
-      || (props.target && props.target !== '_self') || location.pathname === to) return
-    event.preventDefault()
-    navigate(to, { state: { dashboardMotion: snapshotMotion(), dashboardEntry: true } })
-  }}/>
-}
+const CurrentFlow = lazy(() => import('./FlowViews').then((module) => ({ default: module.CurrentFlow })))
 
 function YearRangeControl() {
   const { startYear, endYear, minimumYear, maximumYear, setYears } = useDashboardParams()
@@ -31,10 +21,10 @@ function YearRangeControl() {
   const partial = meta.partialYears.includes(draftYears[1])
   const receivedThroughDate = receivedThrough(meta.dataAsOf)
   return (
-    <div data-motion-controls className={styles.yearControl} aria-label="Observed year range">
+    <div className={styles.yearControl} aria-label="Observed year range">
       <div className={styles.yearMeta}>
         <span>Observed years</span>
-        <strong>{draftYears[0]} — {draftYears[1]}</strong>
+        <strong>{draftYears[0]}–{draftYears[1]}</strong>
       </div>
       <Slider.Root
         className={styles.slider}
@@ -62,34 +52,47 @@ function YearRangeControl() {
   )
 }
 
-function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: ReactNode }) {
+function ShellContent({ dataAsOf, partialYears = [], children }: { dataAsOf?: string; partialYears?: number[]; children: ReactNode }) {
   const { theme, setTheme } = useTheme()
   return (
       <div className={styles.shell}>
         <aside className={styles.rail} aria-label="Primary navigation">
-          <DashboardLink className={styles.brand} to="/neighborhoods" aria-label="Seattle Collision Dashboard">
+          <NavLink className={styles.brand} to="/" aria-label="Seattle Collision Dashboard">
             <SeattleMark />
-            <span>SCD</span>
-          </DashboardLink>
+            <span>Seattle Collision</span>
+          </NavLink>
           <nav className={styles.nav}>
-            <DashboardLink aria-label="Neighborhood Explorer" title="Neighborhood Explorer" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/neighborhoods">
-              <MapIcon/><span>Neighborhoods</span>
-            </DashboardLink>
-            <DashboardLink aria-label="Citywide Analysis" title="Citywide Analysis" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/citywide">
-              <AnalysisIcon/><span>Citywide</span>
-            </DashboardLink>
+            <NavLink end aria-label="Overview" title="Overview" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/">
+              <span className={styles.navIcon}><OverviewIcon/></span><span>Overview</span>
+            </NavLink>
+            <NavLink aria-label="Neighborhood Explorer" title="Neighborhood Explorer" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/neighborhoods">
+              <span className={styles.navIcon}><MapIcon/></span><span>Neighborhoods</span>
+            </NavLink>
+            <NavLink aria-label="Citywide Analysis" title="Citywide Analysis" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/citywide">
+              <span className={styles.navIcon}><AnalysisIcon/></span><span>Citywide</span>
+            </NavLink>
           </nav>
-          <div className={styles.dataStatus}>
-            <span className={styles.statusDot}/>
-            <span>Data as of</span>
-            <strong>{dataAsOf ?? 'Loading'}</strong>
-          </div>
+          {dataAsOf && <section className={styles.widget} aria-label="Current flow">
+            <span className="readout-label">Current flow</span>
+            <Suspense fallback={null}><CurrentFlow/></Suspense>
+          </section>}
+          <section className={styles.widget} aria-label="Dataset">
+            <span className="readout-label">Data as of</span>
+            <strong className={styles.widgetValue}>{dataAsOf ?? 'Loading'}</strong>
+            {partialYears.length > 0 && <span className={styles.widgetNote}>{partialYears.join(', ')} partial · excluded from comparisons</span>}
+          </section>
+          <section className={styles.widget} aria-label="Severity ramp, lower to higher burden">
+            <span className="readout-label">Severity ramp</span>
+            <ol className={styles.ramp} aria-hidden="true">{[1, 2, 3, 4, 5, 6].map((step) => <li key={step} style={{ background: `var(--ramp-${step})` }}/>)}</ol>
+            <div className={styles.rampEnds} aria-hidden="true"><span>Lower burden</span><span>Higher</span></div>
+          </section>
         </aside>
         <header className={styles.header}>
-          <div className={styles.mobileBrand}><SeattleMark/><span>Seattle Collision</span></div>
+          <div className={styles.mobileBrand}><SeattleMark/><span className={styles.mobileBrandText}>Seattle Collision</span></div>
           <nav className={styles.mobileNav} aria-label="Mobile navigation">
-            <DashboardLink to="/neighborhoods">Neighborhoods</DashboardLink>
-            <DashboardLink to="/citywide">Citywide</DashboardLink>
+            <NavLink end to="/">Overview</NavLink>
+            <NavLink to="/neighborhoods">Neighborhoods</NavLink>
+            <NavLink to="/citywide">Citywide</NavLink>
           </nav>
           <label className={styles.themeControl}>
             <span>Appearance</span>
@@ -110,7 +113,6 @@ function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: Rea
 }
 
 export function AppShell() {
-  useMotionInput()
   const queryClient = useQueryClient()
   const recoveredRelease = useRef<string | null>(null)
   const release = useQuery({
@@ -129,7 +131,7 @@ export function AppShell() {
     if (event.type === 'updated' && event.action.type === 'error') recoverRelease(event.query.state.error)
   }), [queryClient, recoverRelease])
 
-  const content = <ShellContent dataAsOf={release.data?.meta.dataAsOf}>
+  const content = <ShellContent dataAsOf={release.data?.meta.dataAsOf} partialYears={release.data?.meta.partialYears}>
     {release.error && <ErrorState error={release.error} onRetry={() => void release.refetch()}/>}
     {release.data ? <Outlet/> : !release.error && <LoadingState label="Loading dataset metadata"/>}
   </ShellContent>

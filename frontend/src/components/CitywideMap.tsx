@@ -1,9 +1,17 @@
-import { CircleMarker, MapContainer, Polyline, Rectangle, TileLayer } from 'react-leaflet'
-import { useTheme } from '../lib/theme'
+import { useEffect, useMemo } from 'react'
+import type { ExpressionSpecification, GeoJSONSource } from 'maplibre-gl'
+import type { FeatureCollection } from 'geojson'
+import 'maplibre-gl/dist/maplibre-gl.css'
 import type { DowntownComparisonResponse, HeatmapResponse, KdeResponse, SpatialShiftResponse } from '../lib/contracts'
+import { inkFlow, inkStroke } from '../lib/inkFlow'
+import { useMapLibre } from './useMapLibre'
 import styles from './CitywideMap.module.css'
 
-const CENTER: [number, number] = [47.612, -122.334]
+const empty: FeatureCollection = { type: 'FeatureCollection', features: [] }
+const points = (rows: { lat: number; lng: number; value: number }[]): FeatureCollection => ({
+  type: 'FeatureCollection',
+  features: rows.map(({ lat, lng, value }) => ({ type: 'Feature', properties: { value }, geometry: { type: 'Point', coordinates: [lng, lat] } })),
+})
 
 export function CitywideMap({
   layer,
@@ -18,40 +26,77 @@ export function CitywideMap({
   shift?: SpatialShiftResponse
   downtown?: DowntownComparisonResponse
 }) {
-  const { resolvedTheme } = useTheme()
-  const light = resolvedTheme === 'light'
-  const lowColor = light ? '#1463c9' : '#2f84ff'
-  const countHighColor = light ? '#986000' : '#f3a52b'
-  const densityHighColor = light ? '#007f8b' : '#27d1df'
-  const beforeColor = light ? '#526779' : '#a1b4c5'
-  const shiftPoints: [[number, number], [number, number]] | null = shift?.status === 'available'
-    ? [[shift.before.centroidLat, shift.before.centroidLng], [shift.after.centroidLat, shift.after.centroidLng]]
+  const { containerRef, map, failed, idle, tokens } = useMapLibre('Citywide collision density map')
+  const lowColor = tokens.ramp[1] ?? tokens.ink3
+  const highColor = tokens.ramp[4] ?? tokens.ink2
+  const shiftPoints = shift?.status === 'available'
+    ? [[shift.before.centroidLng, shift.before.centroidLat], [shift.after.centroidLng, shift.after.centroidLat]]
     : null
   const bbox = downtown?.bbox
+
+  const data = useMemo(() => ({
+    heatmap: heatmap ? points(heatmap.points.map((point) => ({ ...point, value: point.weight / Math.max(1, heatmap.maxWeight) }))) : empty,
+    kde: kde ? { type: 'FeatureCollection', features: inkFlow(kde).levels.map((level, index, all) => ({ type: 'Feature', properties: { ...inkStroke(level.fraction), top: index === all.length - 1 }, geometry: { type: 'MultiPolygon', coordinates: level.rings } })) } as FeatureCollection : empty,
+    downtown: bbox ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[bbox.xMin, bbox.yMin], [bbox.xMax, bbox.yMin], [bbox.xMax, bbox.yMax], [bbox.xMin, bbox.yMax], [bbox.xMin, bbox.yMin]]] } }] } as FeatureCollection : empty,
+    shift: shiftPoints ? { type: 'FeatureCollection', features: [
+      { type: 'Feature', properties: { role: 'path' }, geometry: { type: 'LineString', coordinates: shiftPoints } },
+      { type: 'Feature', properties: { role: 'before' }, geometry: { type: 'Point', coordinates: shiftPoints[0] } },
+      { type: 'Feature', properties: { role: 'after' }, geometry: { type: 'Point', coordinates: shiftPoints[1] } },
+    ] } as FeatureCollection : empty,
+  }), [heatmap, kde, bbox, shift])
+
+  useEffect(() => {
+    if (!map) return
+    for (const id of ['heatmap', 'kde', 'downtown', 'shift']) map.addSource(id, { type: 'geojson', data: empty })
+    const value: ExpressionSpecification = ['get', 'value']
+    map.addLayer({ id: 'heatmap', type: 'circle', source: 'heatmap', paint: { 'circle-radius': ['+', 2, ['*', ['sqrt', value], 14]], 'circle-opacity': ['+', .16, ['*', value, .6]] } }, 'place-label')
+    map.addLayer({ id: 'kde-drop', type: 'fill', source: 'kde', filter: ['==', ['get', 'top'], true], paint: { 'fill-opacity': 0.85 } }, 'place-label')
+    map.addLayer({ id: 'kde', type: 'line', source: 'kde', layout: { 'line-join': 'round' }, paint: { 'line-width': ['*', ['get', 'width'], 1.6], 'line-opacity': ['get', 'opacity'] } }, 'place-label')
+    map.addLayer({ id: 'downtown', type: 'line', source: 'downtown', paint: { 'line-width': 1.5, 'line-dasharray': [3, 2] } })
+    map.addLayer({ id: 'shift-path', type: 'line', source: 'shift', filter: ['==', ['get', 'role'], 'path'], paint: { 'line-width': 2, 'line-dasharray': [2, 2] } })
+    map.addLayer({ id: 'shift-points', type: 'circle', source: 'shift', filter: ['!=', ['get', 'role'], 'path'], paint: { 'circle-radius': ['match', ['get', 'role'], 'after', 6, 5] } })
+  }, [map])
+
+  useEffect(() => {
+    if (!map) return
+    map.setPaintProperty('heatmap', 'circle-color', ['case', ['>', ['get', 'value'], .55], highColor, lowColor])
+    map.setPaintProperty('kde', 'line-color', tokens.ink)
+    map.setPaintProperty('kde-drop', 'fill-color', tokens.ink)
+    map.setPaintProperty('downtown', 'line-color', tokens.ink2)
+    map.setPaintProperty('shift-path', 'line-color', tokens.accent)
+    map.setPaintProperty('shift-points', 'circle-color', ['match', ['get', 'role'], 'after', tokens.accent, tokens.ink3])
+  }, [map, tokens, lowColor, highColor])
+
+  useEffect(() => {
+    if (!map) return
+    for (const [id, collection] of Object.entries(data)) map.getSource<GeoJSONSource>(id)?.setData(collection)
+  }, [map, data])
+
+  useEffect(() => {
+    if (!map) return
+    map.setLayoutProperty('heatmap', 'visibility', layer === 'heatmap' ? 'visible' : 'none')
+    for (const id of ['kde', 'kde-drop']) map.setLayoutProperty(id, 'visibility', layer === 'kde' ? 'visible' : 'none')
+  }, [map, layer])
+
   return (
-    <div className={styles.frame}>
-      <MapContainer className={styles.map} center={CENTER} zoom={11} preferCanvas zoomControl attributionControl aria-label="Citywide collision density map">
-        <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-        {layer === 'heatmap' && heatmap?.points.map((point, index) => {
-          const ratio = point.weight / Math.max(1, heatmap.maxWeight)
-          return <CircleMarker key={`heatmap-${point.lat}-${point.lng}-${index}`} center={[point.lat, point.lng]} radius={2 + Math.sqrt(ratio) * 14} pathOptions={{ stroke: false, fillColor: ratio > .55 ? countHighColor : lowColor, fillOpacity: .16 + ratio * .6 }}/>
-        })}
-        {layer === 'kde' && kde?.cells.filter((cell) => cell.density > .06).map((cell, index) => (
-          <CircleMarker key={`kde-${cell.lat}-${cell.lng}-${index}`} center={[cell.lat, cell.lng]} radius={2.5 + cell.density * 6} pathOptions={{ stroke: false, fillColor: cell.density > .6 ? densityHighColor : lowColor, fillOpacity: .06 + cell.density * .5 }}/>
-        ))}
-        {bbox && <Rectangle bounds={[[bbox.yMin, bbox.xMin], [bbox.yMax, bbox.xMax]]} pathOptions={{ color: countHighColor, weight: 1, dashArray: '5 4', fillOpacity: .02 }}/>}
-        {shiftPoints !== null && <><Polyline positions={shiftPoints} pathOptions={{ color: densityHighColor, weight: 2, dashArray: '5 5' }}/><CircleMarker center={shiftPoints[0]} radius={5} pathOptions={{ color: beforeColor, fillColor: beforeColor, fillOpacity: 1 }}/><CircleMarker center={shiftPoints[1]} radius={6} pathOptions={{ color: densityHighColor, fillColor: densityHighColor, fillOpacity: 1 }}/></>}
-      </MapContainer>
+    <div className={styles.frame} aria-busy={!failed && !idle}>
+      {failed
+        ? <p className={styles.unavailable} role="note">Map unavailable in this browser. The summary and charts still follow the selected filters.</p>
+        : <div ref={containerRef} className={styles.map}/>}
       <div className={styles.legend}>
-        <strong>{layer === 'heatmap' ? 'Collisions per grid cell' : 'Relative smoothed density (KDE)'}</strong>
-        {(layer === 'kde' || (heatmap?.maxWeight ?? 0) > 0) && <>
-          <span><i style={{ background: lowColor }}/>{layer === 'heatmap' ? `≤${Math.floor((heatmap?.maxWeight ?? 0) * .55)} collisions` : '0.06–0.60'}</span>
-          <span><i style={{ background: layer === 'heatmap' ? countHighColor : densityHighColor }}/>{layer === 'heatmap' ? `${Math.floor((heatmap?.maxWeight ?? 0) * .55) + 1}–${heatmap?.maxWeight ?? 0} collisions` : '>0.60–1.00'}</span>
+        <strong>{layer === 'heatmap' ? 'Collisions per grid cell' : 'Relative smoothed density (KDE), ink lines'}</strong>
+        {layer === 'kde' && <>
+          <span><i className={styles.inkLow} style={{ background: tokens.ink }}/>Lower density</span>
+          <span><i className={styles.inkHigh} style={{ background: tokens.ink }}/>Higher density</span>
         </>}
-        {bbox && <span className={styles.annotation}><i className={styles.outline} style={{ borderColor: countHighColor }}/>Downtown boundary</span>}
+        {layer === 'heatmap' && (heatmap?.maxWeight ?? 0) > 0 && <>
+          <span><i style={{ background: lowColor }}/>{`≤${Math.floor((heatmap?.maxWeight ?? 0) * .55)} collisions`}</span>
+          <span><i style={{ background: highColor }}/>{`${Math.floor((heatmap?.maxWeight ?? 0) * .55) + 1}–${heatmap?.maxWeight ?? 0} collisions`}</span>
+        </>}
+        {bbox && <span className={styles.annotation}><i className={styles.outline} style={{ borderColor: tokens.ink2 }}/>Downtown boundary</span>}
         {shiftPoints && shift?.status === 'available' && <>
-          <span className={styles.annotation}><i className={styles.centroid} style={{ background: beforeColor }}/>{shift.before.label} center</span>
-          <span className={styles.annotation}><i className={styles.centroid} style={{ background: densityHighColor }}/>{shift.after.label} center</span>
+          <span className={styles.annotation}><i className={styles.centroid} style={{ background: tokens.ink3 }}/>{shift.before.label} center</span>
+          <span className={styles.annotation}><i className={styles.centroid} style={{ background: tokens.accent }}/>{shift.after.label} center</span>
         </>}
       </div>
     </div>

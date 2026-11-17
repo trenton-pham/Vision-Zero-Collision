@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { useDatasetMeta } from './dataset'
 import { isCitywideSeverity, type CitywideSeverity } from './severity'
 import { parseMapMetric, type MapMetric } from './mapMetrics'
-import { snapshotMotion } from './motion'
 import type { TrendGrain } from './contracts'
 import { trendMonthRange, type MonthRange } from './trendRange'
 
@@ -73,7 +72,7 @@ export function useDashboardParams() {
   }, [rawMetric, mapMetric, rawSeverity, canonicalSeverity, rawNeighborhoods, canonicalNeighborhoods, neighborhoods, setSearchParams])
 
   const update = useCallback(
-    (changes: Record<string, string | number | null>, motion = snapshotMotion()) => {
+    (changes: Record<string, string | number | null>) => {
       setSearchParams((current) => {
         const next = new URLSearchParams(current)
         Object.entries(changes).forEach(([key, value]) => {
@@ -81,7 +80,7 @@ export function useDashboardParams() {
           else next.set(key, String(value))
         })
         return next
-      }, { replace: false, state: { dashboardMotion: motion } })
+      }, { replace: false })
     },
     [setSearchParams],
   )
@@ -103,14 +102,14 @@ export function useDashboardParams() {
       const range = trendMonthRange(trendFrom, trendThrough, bounds)
       update({ start, end, ...chartRangeParams(range, bounds) })
     },
-    setNeighborhoods: (ids: string[], motion = snapshotMotion(), { replace = false, search }: { replace?: boolean; search?: string } = {}) => {
+    setNeighborhoods: (ids: string[], { replace = false, search }: { replace?: boolean; search?: string } = {}) => {
       setSearchParams((current) => {
         const next = new URLSearchParams(search ?? current)
         next.delete('neighborhood')
         const selected = [...new Set(ids)].filter(Boolean).sort()
         selected.forEach((id) => next.append('neighborhood', id))
         return next
-      }, { replace, state: { dashboardMotion: motion } })
+      }, { replace })
     },
     setMapMetric: (metric: MapMetric) => update({ metric }),
     setTrendGrain: (grain: TrendGrain) => update({ grain: grain === 'annual' ? null : grain }),

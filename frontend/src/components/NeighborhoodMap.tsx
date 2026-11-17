@@ -1,51 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { useTheme } from '../lib/theme'
-import { GeoJSON, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
-import { DomEvent, geoJSON, type PathOptions } from 'leaflet'
-import type { Feature } from 'geojson'
-import type { NeighborhoodFeatureCollection, NeighborhoodMetricSet, NeighborhoodProperties } from '../lib/contracts'
-import type { MapMetric } from '../lib/mapMetrics'
+import { useEffect, useMemo, useRef } from 'react'
+import type { ExpressionSpecification, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl'
+import 'maplibre-gl/dist/maplibre-gl.css'
+import type { NeighborhoodFeatureCollection, NeighborhoodMetricSet } from '../lib/contracts'
+import { RAMP_STEPS, sqrtRampStep, sqrtRampStepFloor, type MapMetric } from '../lib/mapMetrics'
+import { geometryBounds, rampFill } from '../lib/mapStyle'
+import { useMapLibre } from './useMapLibre'
 import styles from './NeighborhoodMap.module.css'
 
-const CENTER: [number, number] = [47.612, -122.334]
+const SOURCE = 'neighborhoods'
 
 function metricNumber(metric: NeighborhoodMetricSet | undefined, key: MapMetric) {
   const value = metric?.[key]
   return typeof value === 'number' ? value : 0
-}
-
-function FitSelected({ collection, selectedIds, pulseKey }: { collection: NeighborhoodFeatureCollection; selectedIds: string[]; pulseKey: number }) {
-  const map = useMap()
-  useLayoutEffect(() => {
-    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }))
-    observer.observe(map.getContainer())
-    return () => observer.disconnect()
-  }, [map])
-  useLayoutEffect(() => {
-    const features = collection.features.filter((item) => selectedIds.includes(item.properties.id))
-    const selected = features.length > 0
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const bounds = geoJSON(selected ? { type: 'FeatureCollection', features } : collection).getBounds()
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: selected ? 14 : 11, animate: selected && !reduceMotion })
-  }, [collection, map, pulseKey, selectedIds])
-  return null
-}
-
-function ResetMap({ collection }: { collection: NeighborhoodFeatureCollection }) {
-  const map = useMap()
-  const button = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    if (button.current) DomEvent.disableClickPropagation(button.current)
-  }, [])
-  return <button ref={button} className={styles.reset} type="button" onClick={() => {
-    const bounds = geoJSON(collection).getBounds()
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 11, animate: false })
-  }}>Reset map</button>
-}
-
-function ClickResolver({ onClick }: { onClick: (lat: number, lng: number) => void }) {
-  useMapEvents({ click: ({ latlng }) => onClick(latlng.lat, latlng.lng) })
-  return null
 }
 
 export function NeighborhoodMap({
@@ -67,38 +33,70 @@ export function NeighborhoodMap({
   onResolve: (lat: number, lng: number) => void
   busy: boolean
 }) {
-  const { resolvedTheme } = useTheme()
-  const light = resolvedTheme === 'light'
+  const cityBounds = useMemo(() => geometryBounds(collection.features.map((feature) => feature.geometry)) ?? undefined, [collection])
+  const { containerRef, map, failed, idle, tokens } = useMapLibre('Interactive Seattle neighborhood collision map', cityBounds)
   const byId = useMemo(() => new Map(metrics.map((metric) => [metric.id, metric])), [metrics])
   const maximum = Math.max(0, ...metrics.map((metric) => metricNumber(metric, metricKey)))
-  const style = (feature?: Feature<GeoJSON.Geometry, NeighborhoodProperties>): PathOptions => {
-    const id = feature?.properties.id ?? ''
-    const selected = selectedIds.includes(id)
-    const ratio = Math.sqrt(metricNumber(byId.get(id), metricKey) / Math.max(1, maximum))
-    return {
-      color: selected ? (light ? '#1463c9' : '#2f84ff') : (light ? '#526779' : '#66839e'),
-      weight: selected ? 3 : 1,
-      fillColor: selected ? (light ? '#1463c9' : '#155ec6') : light
-        ? `rgb(${218 - Math.round(137 * ratio)}, ${232 - Math.round(96 * ratio)}, ${242 - Math.round(43 * ratio)})`
-        : `rgb(${10 + Math.round(12 * ratio)}, ${39 + Math.round(57 * ratio)}, ${60 + Math.round(102 * ratio)})`,
-      fillOpacity: selected ? 0.72 : 0.6,
+  const resolveRef = useRef(onResolve)
+  resolveRef.current = onResolve
+
+  useEffect(() => {
+    if (!map) return
+    map.addSource(SOURCE, { type: 'geojson', data: collection, promoteId: 'id' })
+    map.addLayer({ id: 'neighborhood-fill', type: 'fill', source: SOURCE, paint: { 'fill-opacity': 0.78 } }, 'place-label')
+    map.addLayer({ id: 'neighborhood-edge', type: 'line', source: SOURCE, paint: { 'line-width': 0.8 } }, 'place-label')
+    const selected: ExpressionSpecification = ['case', ['boolean', ['feature-state', 'selected'], false], 1, 0]
+    map.addLayer({ id: 'neighborhood-selected-casing', type: 'line', source: SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-width': 6, 'line-opacity': selected } })
+    map.addLayer({ id: 'neighborhood-selected', type: 'line', source: SOURCE, layout: { 'line-join': 'round' }, paint: { 'line-width': 3, 'line-opacity': selected } })
+    const click = ({ lngLat }: { lngLat: { lat: number; lng: number } }) => resolveRef.current(lngLat.lat, lngLat.lng)
+    map.on('click', click)
+    return () => { map.off('click', click) }
+  }, [map])
+
+  useEffect(() => {
+    if (!map) return
+    map.setPaintProperty('neighborhood-fill', 'fill-color', rampFill(tokens))
+    map.setPaintProperty('neighborhood-edge', 'line-color', tokens.paper)
+    map.setPaintProperty('neighborhood-selected-casing', 'line-color', tokens.paper)
+    map.setPaintProperty('neighborhood-selected', 'line-color', tokens.accent)
+  }, [map, tokens])
+
+  useEffect(() => {
+    if (!map) return
+    map.getSource<GeoJSONSource>(SOURCE)?.setData(collection)
+  }, [map, collection, geometryRevision])
+
+  useEffect(() => {
+    if (!map) return
+    for (const feature of collection.features) {
+      const id = feature.properties.id
+      map.setFeatureState({ source: SOURCE, id }, { step: sqrtRampStep(metricNumber(byId.get(id), metricKey), maximum), selected: selectedIds.includes(id) })
     }
+  }, [map, collection, geometryRevision, byId, metricKey, maximum, selectedIds])
+
+  function fit(bounds: LngLatBoundsLike | null | undefined, maxZoom: number, animate: boolean) {
+    if (map && bounds) map.fitBounds(bounds, { padding: 24, maxZoom, animate })
   }
+
+  useEffect(() => {
+    const features = collection.features.filter((item) => selectedIds.includes(item.properties.id))
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (features.length) fit(geometryBounds(features.map((feature) => feature.geometry)), 14, !reduceMotion)
+    else fit(cityBounds, 11, false)
+  }, [map, collection, cityBounds, pulseKey, selectedIds])
+
   return (
-    <div className={styles.frame} aria-busy={busy}>
-      <MapContainer className={styles.map} center={CENTER} zoom={11} zoomControl attributionControl aria-label="Interactive Seattle neighborhood collision map">
-        <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        <GeoJSON
-          key={geometryRevision}
-          data={collection}
-          style={style}
-        />
-        <ResetMap collection={collection}/>
-        <ClickResolver onClick={onResolve}/>
-        <FitSelected collection={collection} selectedIds={selectedIds} pulseKey={pulseKey}/>
-      </MapContainer>
-      <div className={styles.legend} aria-label="Neighborhood map scale"><span>0</span><i/><span>{maximum.toLocaleString()} (highest)</span></div>
-      <div className={styles.hint}>{busy ? 'Finding neighborhood…' : 'Click neighborhoods to add or remove them, or search by name'}</div>
+    <div className={styles.frame} aria-busy={busy || (!failed && !idle)}>
+      {failed
+        ? <p className={styles.unavailable} role="note">Map unavailable in this browser. Use the neighborhood search to select areas.</p>
+        : <div ref={containerRef} className={styles.map}/>}
+      {!failed && <button className={styles.reset} type="button" onClick={() => fit(cityBounds, 11, false)}>Reset map</button>}
+      <div className={styles.legend} role="img" aria-label={`Neighborhood map scale from 0 to ${maximum.toLocaleString()}, in ${RAMP_STEPS} steps from pale yellow to dark red`}>
+        <span>0</span>
+        <ol aria-hidden="true">{tokens.ramp.map((color, step) => <li key={step} style={{ background: color }} title={`${sqrtRampStepFloor(step, maximum).toLocaleString()}+`}/>)}</ol>
+        <span>{maximum.toLocaleString()} (highest)</span>
+      </div>
+      {!failed && <div className={styles.hint}>{busy ? 'Finding neighborhood…' : 'Click neighborhoods to add or remove them, or search by name'}</div>}
     </div>
   )
 }

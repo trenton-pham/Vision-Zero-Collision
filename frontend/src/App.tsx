@@ -4,6 +4,7 @@ import { AppShell } from './components/AppShell'
 import { LoadingState } from './components/States'
 
 const CitywideAnalysis = lazy(() => import('./routes/CitywideAnalysis').then((module) => ({ default: module.CitywideAnalysis })))
+const CitywideStory = lazy(() => import('./routes/CitywideStory').then((module) => ({ default: module.CitywideStory })))
 const NeighborhoodExplorer = lazy(() => import('./routes/NeighborhoodExplorer').then((module) => ({ default: module.NeighborhoodExplorer })))
 
 export function App() {
@@ -11,7 +12,7 @@ export function App() {
     <Suspense fallback={<LoadingState label="Loading application workspace"/>}>
       <Routes>
         <Route element={<AppShell/>}>
-          <Route index element={<Navigate to="/neighborhoods" replace/>}/>
+          <Route index element={<CitywideStory/>}/>
           <Route path="neighborhoods" element={<NeighborhoodExplorer/>}/>
           <Route path="citywide" element={<CitywideAnalysis/>}/>
           <Route path="*" element={<Navigate to="/neighborhoods" replace/>}/>

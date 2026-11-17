@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { NeighborhoodFeatureCollection } from '../lib/contracts'
-import { SearchIcon } from './Icons'
+import { CloseIcon, SearchIcon } from './Icons'
 import styles from './NeighborhoodPicker.module.css'
 
 type Option = { id: string; name: string }
@@ -106,7 +106,7 @@ export function NeighborhoodPicker({
         )}
       </div>
       {selected.length > 0 && <ul className={styles.selections} aria-label="Selected neighborhoods">
-        {selected.map((option) => <li key={option.id}><button type="button" onClick={() => onSelect(option.id)} aria-label={`Remove ${option.name}`}>{option.name}<span aria-hidden="true"> ×</span></button></li>)}
+        {selected.map((option) => <li key={option.id}><button type="button" onClick={() => onSelect(option.id)} aria-label={`Remove ${option.name}`}>{option.name}<CloseIcon className={styles.chipIcon}/></button></li>)}
       </ul>}
     </div>
   )
