@@ -3,6 +3,7 @@ import type { ExpressionSpecification, GeoJSONSource } from 'maplibre-gl'
 import type { FeatureCollection } from 'geojson'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { DowntownComparisonResponse, HeatmapResponse, KdeResponse, SpatialShiftResponse } from '../lib/contracts'
+import { inkFlow, inkStroke } from '../lib/inkFlow'
 import { useMapLibre } from './useMapLibre'
 import styles from './CitywideMap.module.css'
 
@@ -35,7 +36,7 @@ export function CitywideMap({
 
   const data = useMemo(() => ({
     heatmap: heatmap ? points(heatmap.points.map((point) => ({ ...point, value: point.weight / Math.max(1, heatmap.maxWeight) }))) : empty,
-    kde: kde ? points(kde.cells.filter((cell) => cell.density > .06).map((cell) => ({ ...cell, value: cell.density }))) : empty,
+    kde: kde ? { type: 'FeatureCollection', features: inkFlow(kde).levels.map((level, index, all) => ({ type: 'Feature', properties: { ...inkStroke(level.fraction), top: index === all.length - 1 }, geometry: { type: 'MultiPolygon', coordinates: level.rings } })) } as FeatureCollection : empty,
     downtown: bbox ? { type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[bbox.xMin, bbox.yMin], [bbox.xMax, bbox.yMin], [bbox.xMax, bbox.yMax], [bbox.xMin, bbox.yMax], [bbox.xMin, bbox.yMin]]] } }] } as FeatureCollection : empty,
     shift: shiftPoints ? { type: 'FeatureCollection', features: [
       { type: 'Feature', properties: { role: 'path' }, geometry: { type: 'LineString', coordinates: shiftPoints } },
@@ -49,7 +50,8 @@ export function CitywideMap({
     for (const id of ['heatmap', 'kde', 'downtown', 'shift']) map.addSource(id, { type: 'geojson', data: empty })
     const value: ExpressionSpecification = ['get', 'value']
     map.addLayer({ id: 'heatmap', type: 'circle', source: 'heatmap', paint: { 'circle-radius': ['+', 2, ['*', ['sqrt', value], 14]], 'circle-opacity': ['+', .16, ['*', value, .6]] } }, 'place-label')
-    map.addLayer({ id: 'kde', type: 'circle', source: 'kde', paint: { 'circle-radius': ['+', 2.5, ['*', value, 6]], 'circle-opacity': ['+', .06, ['*', value, .5]] } }, 'place-label')
+    map.addLayer({ id: 'kde-drop', type: 'fill', source: 'kde', filter: ['==', ['get', 'top'], true], paint: { 'fill-opacity': 0.85 } }, 'place-label')
+    map.addLayer({ id: 'kde', type: 'line', source: 'kde', layout: { 'line-join': 'round' }, paint: { 'line-width': ['*', ['get', 'width'], 1.6], 'line-opacity': ['get', 'opacity'] } }, 'place-label')
     map.addLayer({ id: 'downtown', type: 'line', source: 'downtown', paint: { 'line-width': 1.5, 'line-dasharray': [3, 2] } })
     map.addLayer({ id: 'shift-path', type: 'line', source: 'shift', filter: ['==', ['get', 'role'], 'path'], paint: { 'line-width': 2, 'line-dasharray': [2, 2] } })
     map.addLayer({ id: 'shift-points', type: 'circle', source: 'shift', filter: ['!=', ['get', 'role'], 'path'], paint: { 'circle-radius': ['match', ['get', 'role'], 'after', 6, 5] } })
@@ -58,7 +60,8 @@ export function CitywideMap({
   useEffect(() => {
     if (!map) return
     map.setPaintProperty('heatmap', 'circle-color', ['case', ['>', ['get', 'value'], .55], highColor, lowColor])
-    map.setPaintProperty('kde', 'circle-color', ['case', ['>', ['get', 'value'], .6], highColor, lowColor])
+    map.setPaintProperty('kde', 'line-color', tokens.ink)
+    map.setPaintProperty('kde-drop', 'fill-color', tokens.ink)
     map.setPaintProperty('downtown', 'line-color', tokens.ink2)
     map.setPaintProperty('shift-path', 'line-color', tokens.accent)
     map.setPaintProperty('shift-points', 'circle-color', ['match', ['get', 'role'], 'after', tokens.accent, tokens.ink3])
@@ -72,7 +75,7 @@ export function CitywideMap({
   useEffect(() => {
     if (!map) return
     map.setLayoutProperty('heatmap', 'visibility', layer === 'heatmap' ? 'visible' : 'none')
-    map.setLayoutProperty('kde', 'visibility', layer === 'kde' ? 'visible' : 'none')
+    for (const id of ['kde', 'kde-drop']) map.setLayoutProperty(id, 'visibility', layer === 'kde' ? 'visible' : 'none')
   }, [map, layer])
 
   return (
@@ -81,10 +84,14 @@ export function CitywideMap({
         ? <p className={styles.unavailable} role="note">Map unavailable in this browser. The summary and charts still follow the selected filters.</p>
         : <div ref={containerRef} className={styles.map}/>}
       <div className={styles.legend}>
-        <strong>{layer === 'heatmap' ? 'Collisions per grid cell' : 'Relative smoothed density (KDE)'}</strong>
-        {(layer === 'kde' || (heatmap?.maxWeight ?? 0) > 0) && <>
-          <span><i style={{ background: lowColor }}/>{layer === 'heatmap' ? `≤${Math.floor((heatmap?.maxWeight ?? 0) * .55)} collisions` : '0.06–0.60'}</span>
-          <span><i style={{ background: highColor }}/>{layer === 'heatmap' ? `${Math.floor((heatmap?.maxWeight ?? 0) * .55) + 1}–${heatmap?.maxWeight ?? 0} collisions` : '>0.60–1.00'}</span>
+        <strong>{layer === 'heatmap' ? 'Collisions per grid cell' : 'Relative smoothed density (KDE), ink lines'}</strong>
+        {layer === 'kde' && <>
+          <span><i className={styles.inkLow} style={{ background: tokens.ink }}/>Lower density</span>
+          <span><i className={styles.inkHigh} style={{ background: tokens.ink }}/>Higher density</span>
+        </>}
+        {layer === 'heatmap' && (heatmap?.maxWeight ?? 0) > 0 && <>
+          <span><i style={{ background: lowColor }}/>{`≤${Math.floor((heatmap?.maxWeight ?? 0) * .55)} collisions`}</span>
+          <span><i style={{ background: highColor }}/>{`${Math.floor((heatmap?.maxWeight ?? 0) * .55) + 1}–${heatmap?.maxWeight ?? 0} collisions`}</span>
         </>}
         {bbox && <span className={styles.annotation}><i className={styles.outline} style={{ borderColor: tokens.ink2 }}/>Downtown boundary</span>}
         {shiftPoints && shift?.status === 'available' && <>

@@ -17,6 +17,7 @@ import { TrendChart } from '../components/TrendChart'
 import { TrendRangeControl } from '../components/TrendRangeControl'
 import styles from './NeighborhoodExplorer.module.css'
 
+const FlowBackdrop = lazy(() => import('../components/FlowViews').then((module) => ({ default: module.FlowBackdrop })))
 const NeighborhoodMap = lazy(() => import('../components/NeighborhoodMap').then((module) => ({ default: module.NeighborhoodMap })))
 
 function mapResolutionLocation({ pathname, search, hash }: Pick<Location, 'pathname' | 'search' | 'hash'>) {
@@ -185,7 +186,8 @@ export function NeighborhoodExplorer() {
     <div className={styles.page}>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
       <section className={styles.command} aria-label="Neighborhood controls">
-        <div>
+        <Suspense fallback={null}><FlowBackdrop/></Suspense>
+        <div className={styles.title}>
           <h1>Neighborhood Explorer</h1>
           <p>Explore recorded collisions across Seattle's 94 neighborhoods.</p>
         </div>

@@ -73,8 +73,8 @@ test('theme persists and repaints the density canvas without losing the selected
   await expect(page.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'kde-tab')
   await expect(page).toHaveURL(/layer=kde/)
   await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
-  const highKey = page.getByText('>0.60–1.00').locator('i')
-  await expect(highKey).toHaveCSS('background-color', 'rgb(175, 47, 2)')
+  const highKey = page.getByText('Higher density').locator('i')
+  await expect(highKey).toHaveCSS('background-color', 'rgb(14, 29, 58)')
   for (const appearance of ['dark', 'light']) {
     await theme.selectOption(appearance)
     const result = await new AxeBuilder({ page }).analyze()

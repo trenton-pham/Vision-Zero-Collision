@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { basemapLayers, geometryBounds, rampFill, type MapTokens } from '../src/lib/mapStyle'
 
 const tokens = (prefix: string): MapTokens => ({
-  paper: `${prefix}-paper`, sunk: `${prefix}-sunk`, surface: `${prefix}-surface`, rule: `${prefix}-rule`, ruleStrong: `${prefix}-rule-strong`,
+  paper: `${prefix}-paper`, sunk: `${prefix}-sunk`, surface: `${prefix}-surface`, rule: `${prefix}-rule`, ruleStrong: `${prefix}-rule-strong`, ink: `${prefix}-ink`,
   ink2: `${prefix}-ink-2`, ink3: `${prefix}-ink-3`, accent: `${prefix}-accent`, ramp: [1, 2, 3, 4, 5, 6].map((step) => `${prefix}-ramp-${step}`),
 })
 

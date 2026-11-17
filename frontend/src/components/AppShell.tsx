@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
 import { NavLink, Outlet } from 'react-router-dom'
@@ -10,6 +10,8 @@ import { useTheme } from '../lib/theme'
 import { ErrorState, LoadingState } from './States'
 import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
+
+const CurrentFlow = lazy(() => import('./FlowViews').then((module) => ({ default: module.CurrentFlow })))
 
 function YearRangeControl() {
   const { startYear, endYear, minimumYear, maximumYear, setYears } = useDashboardParams()
@@ -67,6 +69,10 @@ function ShellContent({ dataAsOf, partialYears = [], children }: { dataAsOf?: st
               <span className={styles.navIcon}><AnalysisIcon/></span><span>Citywide</span>
             </NavLink>
           </nav>
+          {dataAsOf && <section className={styles.widget} aria-label="Current flow">
+            <span className="readout-label">Current flow</span>
+            <Suspense fallback={null}><CurrentFlow/></Suspense>
+          </section>}
           <section className={styles.widget} aria-label="Dataset">
             <span className="readout-label">Data as of</span>
             <strong className={styles.widgetValue}>{dataAsOf ?? 'Loading'}</strong>

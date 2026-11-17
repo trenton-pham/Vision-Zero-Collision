@@ -12,6 +12,8 @@
 .legend span { display: flex; align-items: center; gap: 6px; }
 .legend i { width: 14px; height: 5px; flex-shrink: 0; display: block; }
 .legend .annotation { flex-basis: 100%; }
+.legend .inkLow { height: 1px; opacity: .3; }
+.legend .inkHigh { height: 3px; opacity: .9; }
 .legend .outline { height: 10px; border: 1px dashed; background: transparent; }
 .legend .centroid { width: 8px; height: 8px; border-radius: 50%; }
 @media (max-width: 760px) { .frame { height: 440px; } }

@@ -8,6 +8,7 @@ export type MapTokens = {
   surface: string
   rule: string
   ruleStrong: string
+  ink: string
   ink2: string
   ink3: string
   accent: string
@@ -23,6 +24,7 @@ export function readMapTokens(): MapTokens {
     surface: token('--surface'),
     rule: token('--rule'),
     ruleStrong: token('--rule-strong'),
+    ink: token('--ink'),
     ink2: token('--ink-2'),
     ink3: token('--ink-3'),
     accent: token('--accent'),

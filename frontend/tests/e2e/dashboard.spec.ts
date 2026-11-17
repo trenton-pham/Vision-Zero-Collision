@@ -106,9 +106,10 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
   await page.getByRole('tab', { name: 'KDE density' }).click()
   await expect(page).toHaveURL(/layer=kde/)
   await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
+  await expect(page.getByText('Relative smoothed density (KDE), ink lines')).toBeVisible()
   await expect.poll(async () => {
     const density = await readCanvas()
-    return density.densityPainted && density.image !== heatmap.image
+    return density.image !== heatmap.image
   }).toBe(true)
   const density = await readCanvas()
   await page.getByRole('tab', { name: 'Heatmap', exact: true }).click()
