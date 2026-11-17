@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { useTheme } from '../lib/theme'
+import { usePalette, useTheme } from '../lib/theme'
 import { GeoJSON, MapContainer, TileLayer, useMap, useMapEvents } from 'react-leaflet'
 import { DomEvent, geoJSON, type PathOptions } from 'leaflet'
 import type { Feature } from 'geojson'
@@ -68,11 +68,11 @@ export function NeighborhoodMap({
   busy: boolean
 }) {
   const { resolvedTheme } = useTheme()
-  const palette = useMemo(() => {
+  const palette = usePalette(resolvedTheme, () => {
     const css = getComputedStyle(document.documentElement)
     const token = (name: string) => css.getPropertyValue(name).trim()
     return { ramp: Array.from({ length: RAMP_STEPS }, (_, step) => token(`--ramp-${step + 1}`)), accent: token('--accent'), edge: token('--paper') }
-  }, [resolvedTheme])
+  })
   const byId = useMemo(() => new Map(metrics.map((metric) => [metric.id, metric])), [metrics])
   const maximum = Math.max(0, ...metrics.map((metric) => metricNumber(metric, metricKey)))
   const style = (feature?: Feature<GeoJSON.Geometry, NeighborhoodProperties>): PathOptions => {

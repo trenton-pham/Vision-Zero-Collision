@@ -1,6 +1,5 @@
 import { CircleMarker, MapContainer, Polyline, Rectangle, TileLayer } from 'react-leaflet'
-import { useMemo } from 'react'
-import { useTheme } from '../lib/theme'
+import { usePalette, useTheme } from '../lib/theme'
 import type { DowntownComparisonResponse, HeatmapResponse, KdeResponse, SpatialShiftResponse } from '../lib/contracts'
 import styles from './CitywideMap.module.css'
 
@@ -20,11 +19,11 @@ export function CitywideMap({
   downtown?: DowntownComparisonResponse
 }) {
   const { resolvedTheme } = useTheme()
-  const { lowColor, countHighColor, densityHighColor, annotationColor, afterColor, beforeColor } = useMemo(() => {
+  const { lowColor, countHighColor, densityHighColor, annotationColor, afterColor, beforeColor } = usePalette(resolvedTheme, () => {
     const css = getComputedStyle(document.documentElement)
     const token = (name: string) => css.getPropertyValue(name).trim()
     return { lowColor: token('--ramp-2'), countHighColor: token('--ramp-5'), densityHighColor: token('--ramp-5'), annotationColor: token('--ink-2'), afterColor: token('--accent'), beforeColor: token('--ink-3') }
-  }, [resolvedTheme])
+  })
   const shiftPoints: [[number, number], [number, number]] | null = shift?.status === 'available'
     ? [[shift.before.centroidLat, shift.before.centroidLng], [shift.after.centroidLat, shift.after.centroidLng]]
     : null

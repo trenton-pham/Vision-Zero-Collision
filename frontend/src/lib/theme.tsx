@@ -47,3 +47,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 export function useTheme() {
   return useContext(ThemeContext)
 }
+
+// ThemeProvider writes data-theme in a layout effect after children render, so read CSS tokens once effects settle.
+export function usePalette<T>(resolvedTheme: ResolvedTheme, read: () => T) {
+  const [palette, setPalette] = useState(read)
+  useEffect(() => setPalette(read()), [resolvedTheme])
+  return palette
+}
