@@ -13,7 +13,7 @@
 .widgetValue { color: var(--ink); font: 600 1rem/1.3 var(--font-ui); }
 .widgetNote { color: var(--ink-2); font-size: .75rem; line-height: 1.4; }
 .ramp { display: flex; gap: 3px; margin: 4px 0 0; padding: 0; list-style: none; }
-.ramp li { flex: 1; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08); }
+.ramp li { flex: 1; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--rule); }
 .rampEnds { display: flex; justify-content: space-between; color: var(--ink-3); font-size: .6875rem; }
 
 

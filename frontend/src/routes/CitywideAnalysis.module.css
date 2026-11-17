@@ -31,7 +31,7 @@
 .extraReadout span:last-child { color: var(--ink-2); font-size: .75rem; line-height: 1.4; }
 .cardRow { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: stretch; }
 .cardRow .analysisCard { border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-rest); }
-.cardRow .featured { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.cardRow .featured { background: var(--ink); border-color: var(--ink); color: var(--paper); box-shadow: none; }
 :global(:root[data-theme='dark']) .cardRow .featured { background: var(--accent-soft); border-color: var(--accent); }
 :global(:root[data-theme='dark']) .cardRow .featured .cardLabel, :global(:root[data-theme='dark']) .cardRow .featured .shiftValue { color: var(--ink); }
 :global(:root[data-theme='dark']) .cardRow .featured p, :global(:root[data-theme='dark']) .cardRow .featured small { color: var(--ink-2); }

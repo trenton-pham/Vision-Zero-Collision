@@ -29,7 +29,7 @@
 .card p { margin: 0; color: var(--ink-2); font-size: .875rem; line-height: 1.55; }
 .cardLink { width: 22px; height: 22px; }
 .arrow { width: 18px; height: 18px; }
-.featured { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.featured { background: var(--ink); border-color: var(--ink); color: var(--paper); box-shadow: none; }
 .featured .cardLabel, .featured p { color: color-mix(in srgb, var(--paper) 80%, var(--ink)); }
 :global(:root[data-theme='dark']) .featured { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
 :global(:root[data-theme='dark']) .featured .cardLabel, :global(:root[data-theme='dark']) .featured p { color: var(--ink-2); }

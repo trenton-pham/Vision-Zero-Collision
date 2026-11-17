@@ -9,7 +9,7 @@
 .unavailable { height: 100%; margin: 0; display: grid; place-items: center; padding: 24px; color: var(--ink-2); background: var(--sunk); text-align: center; font-size: var(--step--1); }
 .legend { position: absolute; border-radius: var(--radius-control); box-shadow: var(--shadow-float); z-index: 2; left: 14px; bottom: 32px; min-height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--rule); background: var(--overlay); color: var(--ink-2); font: 500 .75rem/1.4 var(--font-ui); }
 .legend ol { display: flex; gap: 2px; margin: 0; padding: 0; list-style: none; }
-.legend li { width: 14px; height: 10px; border-radius: 2px; }
+.legend li { width: 14px; height: 10px; border-radius: 2px; box-shadow: inset 0 0 0 1px var(--rule); }
 .hint { position: absolute; border-radius: var(--radius-control); box-shadow: var(--shadow-float); z-index: 2; right: 14px; top: 14px; max-width: calc(100% - 90px); padding: 9px 10px; border: 1px solid var(--rule); background: var(--overlay); color: var(--ink-2); font: 500 .75rem/1.4 var(--font-ui); }
 .reset { position: absolute; border-radius: var(--radius-control); box-shadow: var(--shadow-float); z-index: 2; top: 112px; left: 10px; min-height: 44px; padding: 0 12px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); font: 500 .75rem/1.4 var(--font-ui); cursor: pointer; }
 @media (max-width: 760px) { .frame, .map { min-height: 390px; height: 390px; } .hint { display: none; } }
