@@ -81,7 +81,7 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 
 The production container has one origin. FastAPI serves the compiled frontend from `frontend/dist` and handles `/api/...`. During development Vite serves the browser application and proxies `/api` and `/healthz` to FastAPI on port 8000. Browser map tiles come from OpenStreetMap separately.
 
-`main.tsx` creates one `QueryClient`, with a 60-second default stale time, one retry, and window-focus refetch disabled. `App.tsx` lazy-loads the two workspace routes. `AppShell` fetches `/api/meta` every five minutes, distributes metadata through Context, and invalidates other queries after a dataset version changes.
+`main.tsx` creates one `QueryClient`, with a 60-second default stale time, one retry, and window-focus refetch disabled. `App.tsx` lazy-loads the Overview, Neighborhood Explorer, and Citywide Analysis routes. `AppShell` fetches `/data/current.json` every five minutes, distributes metadata through Context, and invalidates other queries after a dataset version changes.
 
 Consider `/neighborhoods?start=2015&end=2025&neighborhood=ballard&grain=monthly`. `useDashboardParams` restores the year range, selected neighborhood, and chart grain. The explorer requests polygon geometry, all neighborhood summaries, and Ballard's context. React Query keys include the selected years and neighborhood, so changes select the appropriate cached result or start a request. Monthly and annual observations arrive together; switching grain changes chart presentation.
 
@@ -285,7 +285,7 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 **`frontend/src/main.tsx`** — Browser bootstrap importing fonts, tokens, and global styles. The maps load MapLibre and its CSS lazily. Mounts StrictMode, QueryClientProvider, BrowserRouter, and `App`.
 
-**`frontend/src/App.tsx`** — Lazy workspace routes within `AppShell`; redirects the root and unknown paths to `/neighborhoods`. Uses Suspense with the shared loading state.
+**`frontend/src/App.tsx`** — Lazy workspace routes within `AppShell`; the root renders the Overview and unknown paths redirect to `/neighborhoods`. Uses Suspense with the shared loading state.
 
 **`frontend/src/vite-env.d.ts`** — Vite client type reference for frontend build-time globals and asset typing. Compile-time support only.
 

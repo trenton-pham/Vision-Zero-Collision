@@ -228,7 +228,7 @@ The dashboard reads like a quiet instrument studio for Seattle's collision recor
 Two inks on cool paper, one violet, and one warm ramp that carries meaning. Both themes passed the dataviz palette validator: each ramp falls monotonically in lightness with adjacent steps at least 0.06 apart in OKLCH, and the violet never matches a ramp step.
 
 ### Primary
-- **Severity Ramp, paper** (Straw → Amber → Marigold → Vermilion → Rust → Brick): choropleth fills, the rail's ramp widget, the citywide heatmap circles (Amber below the high threshold, Rust above), and the burden line in the trend chart (Rust). Steps are assigned by `rampStep`, square-root spaced against the current maximum. Unchanged from the previous system on paper.
+- **Severity Ramp, paper** (Straw → Amber → Marigold → Vermilion → Rust → Brick): choropleth fills, the rail's ramp widget, the citywide heatmap circles (Amber below the high threshold, Rust above), and the burden line in the trend chart (Rust). Steps are assigned by `sqrtRampStep`, square-root spaced against the current maximum. Unchanged from the previous system on paper.
 - **Severity Ramp, night** (the `night-ramp-*` steps): the same yellow-to-red order retuned for indigo night. Lightness rises with burden so the highest burden is the most salient on dark; the lowest step clears the night ground at 2.4:1.
 
 ### Secondary
@@ -369,7 +369,7 @@ Gently rounded on a two-step scale: 6 px for controls, buttons, chips, notes, li
 ### Do:
 - **Do** read every color from the CSS tokens, including MapLibre paint and SVG ink, after the theme attribute settles.
 - **Do** compute every ink-flow from the release KDE for the selected years, so the hero, the thumbnail and the citywide layer always agree.
-- **Do** assign choropleth steps with `rampStep` and derive legend floors from the same function.
+- **Do** assign choropleth steps with `sqrtRampStep` and derive legend floors from `sqrtRampStepFloor`, which shares its integer arithmetic.
 - **Do** mark partial years with a hollow labeled point, a hatch or dashed segment and a caption, everywhere they appear.
 - **Do** generate observation cards by rule from the pinned release and phrase them as observations, never causes.
 - **Do** keep one featured card per row, first, and keep the rest as white sheets.
