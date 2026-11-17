@@ -76,6 +76,7 @@ test('chart month range survives reload and reconciles across all intervals', as
   await expect(page.getByRole('combobox', { name: 'Through month' })).toHaveValue('2025-04')
   for (const interval of ['Weekly', 'Monthly', 'Annual']) {
     if (interval !== 'Weekly') await page.getByRole('button', { name: interval, exact: true }).click()
+    await expect(page.getByRole('img', { name: new RegExp(`^${interval} trend chart`) })).toBeVisible()
     const table = page.getByRole('table', { name: new RegExp(`^${interval} collisions`) })
     if (!(await table.isVisible())) await page.getByText(`View ${interval.toLowerCase()} chart data`).click()
     const rows = table.locator('tbody tr')
