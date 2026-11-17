@@ -12,3 +12,15 @@ export type MapMetric = typeof MAP_METRICS[number][0]
 export function parseMapMetric(value: string | null): MapMetric {
   return MAP_METRICS.find(([key]) => key === value)?.[0] ?? 'collisionCount'
 }
+
+export const RAMP_STEPS = 6
+
+// Square-root spacing keeps low-burden neighborhoods distinguishable when a few dominate the maximum.
+export function rampStep(value: number, maximum: number) {
+  if (maximum <= 0 || value <= 0) return 0
+  return Math.min(RAMP_STEPS - 1, Math.floor(Math.sqrt(value / maximum) * RAMP_STEPS))
+}
+
+export function rampStepFloor(step: number, maximum: number) {
+  return Math.ceil(maximum * (step / RAMP_STEPS) ** 2)
+}

@@ -1,4 +1,5 @@
 import { CircleMarker, MapContainer, Polyline, Rectangle, TileLayer } from 'react-leaflet'
+import { useMemo } from 'react'
 import { useTheme } from '../lib/theme'
 import type { DowntownComparisonResponse, HeatmapResponse, KdeResponse, SpatialShiftResponse } from '../lib/contracts'
 import styles from './CitywideMap.module.css'
@@ -19,11 +20,11 @@ export function CitywideMap({
   downtown?: DowntownComparisonResponse
 }) {
   const { resolvedTheme } = useTheme()
-  const light = resolvedTheme === 'light'
-  const lowColor = light ? '#1463c9' : '#2f84ff'
-  const countHighColor = light ? '#986000' : '#f3a52b'
-  const densityHighColor = light ? '#007f8b' : '#27d1df'
-  const beforeColor = light ? '#526779' : '#a1b4c5'
+  const { lowColor, countHighColor, densityHighColor, annotationColor, afterColor, beforeColor } = useMemo(() => {
+    const css = getComputedStyle(document.documentElement)
+    const token = (name: string) => css.getPropertyValue(name).trim()
+    return { lowColor: token('--ramp-2'), countHighColor: token('--ramp-5'), densityHighColor: token('--ramp-5'), annotationColor: token('--ink-2'), afterColor: token('--accent'), beforeColor: token('--ink-3') }
+  }, [resolvedTheme])
   const shiftPoints: [[number, number], [number, number]] | null = shift?.status === 'available'
     ? [[shift.before.centroidLat, shift.before.centroidLng], [shift.after.centroidLat, shift.after.centroidLng]]
     : null
@@ -39,8 +40,8 @@ export function CitywideMap({
         {layer === 'kde' && kde?.cells.filter((cell) => cell.density > .06).map((cell, index) => (
           <CircleMarker key={`kde-${cell.lat}-${cell.lng}-${index}`} center={[cell.lat, cell.lng]} radius={2.5 + cell.density * 6} pathOptions={{ stroke: false, fillColor: cell.density > .6 ? densityHighColor : lowColor, fillOpacity: .06 + cell.density * .5 }}/>
         ))}
-        {bbox && <Rectangle bounds={[[bbox.yMin, bbox.xMin], [bbox.yMax, bbox.xMax]]} pathOptions={{ color: countHighColor, weight: 1, dashArray: '5 4', fillOpacity: .02 }}/>}
-        {shiftPoints !== null && <><Polyline positions={shiftPoints} pathOptions={{ color: densityHighColor, weight: 2, dashArray: '5 5' }}/><CircleMarker center={shiftPoints[0]} radius={5} pathOptions={{ color: beforeColor, fillColor: beforeColor, fillOpacity: 1 }}/><CircleMarker center={shiftPoints[1]} radius={6} pathOptions={{ color: densityHighColor, fillColor: densityHighColor, fillOpacity: 1 }}/></>}
+        {bbox && <Rectangle bounds={[[bbox.yMin, bbox.xMin], [bbox.yMax, bbox.xMax]]} pathOptions={{ color: annotationColor, weight: 1.5, dashArray: '5 4', fillOpacity: 0 }}/>}
+        {shiftPoints !== null && <><Polyline positions={shiftPoints} pathOptions={{ color: afterColor, weight: 2, dashArray: '5 5' }}/><CircleMarker center={shiftPoints[0]} radius={5} pathOptions={{ color: beforeColor, fillColor: beforeColor, fillOpacity: 1 }}/><CircleMarker center={shiftPoints[1]} radius={6} pathOptions={{ color: afterColor, fillColor: afterColor, fillOpacity: 1 }}/></>}
       </MapContainer>
       <div className={styles.legend}>
         <strong>{layer === 'heatmap' ? 'Collisions per grid cell' : 'Relative smoothed density (KDE)'}</strong>
@@ -48,10 +49,10 @@ export function CitywideMap({
           <span><i style={{ background: lowColor }}/>{layer === 'heatmap' ? `≤${Math.floor((heatmap?.maxWeight ?? 0) * .55)} collisions` : '0.06–0.60'}</span>
           <span><i style={{ background: layer === 'heatmap' ? countHighColor : densityHighColor }}/>{layer === 'heatmap' ? `${Math.floor((heatmap?.maxWeight ?? 0) * .55) + 1}–${heatmap?.maxWeight ?? 0} collisions` : '>0.60–1.00'}</span>
         </>}
-        {bbox && <span className={styles.annotation}><i className={styles.outline} style={{ borderColor: countHighColor }}/>Downtown boundary</span>}
+        {bbox && <span className={styles.annotation}><i className={styles.outline} style={{ borderColor: annotationColor }}/>Downtown boundary</span>}
         {shiftPoints && shift?.status === 'available' && <>
           <span className={styles.annotation}><i className={styles.centroid} style={{ background: beforeColor }}/>{shift.before.label} center</span>
-          <span className={styles.annotation}><i className={styles.centroid} style={{ background: densityHighColor }}/>{shift.after.label} center</span>
+          <span className={styles.annotation}><i className={styles.centroid} style={{ background: afterColor }}/>{shift.after.label} center</span>
         </>}
       </div>
     </div>

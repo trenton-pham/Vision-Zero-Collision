@@ -34,7 +34,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = resolvedTheme
     document.documentElement.style.colorScheme = resolvedTheme
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#06111c' : '#f3f6f8')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#16120e' : '#f8f7f3')
     try {
       if (theme === 'system') localStorage.removeItem(storageKey)
       else localStorage.setItem(storageKey, theme)

@@ -4,7 +4,7 @@ import { GeoJSON, MapContainer, TileLayer, useMap, useMapEvents } from 'react-le
 import { DomEvent, geoJSON, type PathOptions } from 'leaflet'
 import type { Feature } from 'geojson'
 import type { NeighborhoodFeatureCollection, NeighborhoodMetricSet, NeighborhoodProperties } from '../lib/contracts'
-import type { MapMetric } from '../lib/mapMetrics'
+import { RAMP_STEPS, rampStep, rampStepFloor, type MapMetric } from '../lib/mapMetrics'
 import styles from './NeighborhoodMap.module.css'
 
 const CENTER: [number, number] = [47.612, -122.334]
@@ -68,20 +68,21 @@ export function NeighborhoodMap({
   busy: boolean
 }) {
   const { resolvedTheme } = useTheme()
-  const light = resolvedTheme === 'light'
+  const palette = useMemo(() => {
+    const css = getComputedStyle(document.documentElement)
+    const token = (name: string) => css.getPropertyValue(name).trim()
+    return { ramp: Array.from({ length: RAMP_STEPS }, (_, step) => token(`--ramp-${step + 1}`)), accent: token('--accent'), edge: token('--paper') }
+  }, [resolvedTheme])
   const byId = useMemo(() => new Map(metrics.map((metric) => [metric.id, metric])), [metrics])
   const maximum = Math.max(0, ...metrics.map((metric) => metricNumber(metric, metricKey)))
   const style = (feature?: Feature<GeoJSON.Geometry, NeighborhoodProperties>): PathOptions => {
     const id = feature?.properties.id ?? ''
     const selected = selectedIds.includes(id)
-    const ratio = Math.sqrt(metricNumber(byId.get(id), metricKey) / Math.max(1, maximum))
     return {
-      color: selected ? (light ? '#1463c9' : '#2f84ff') : (light ? '#526779' : '#66839e'),
-      weight: selected ? 3 : 1,
-      fillColor: selected ? (light ? '#1463c9' : '#155ec6') : light
-        ? `rgb(${218 - Math.round(137 * ratio)}, ${232 - Math.round(96 * ratio)}, ${242 - Math.round(43 * ratio)})`
-        : `rgb(${10 + Math.round(12 * ratio)}, ${39 + Math.round(57 * ratio)}, ${60 + Math.round(102 * ratio)})`,
-      fillOpacity: selected ? 0.72 : 0.6,
+      color: selected ? palette.accent : palette.edge,
+      weight: selected ? 3.5 : 0.8,
+      fillColor: palette.ramp[rampStep(metricNumber(byId.get(id), metricKey), maximum)],
+      fillOpacity: 0.82,
     }
   }
   return (
@@ -97,7 +98,11 @@ export function NeighborhoodMap({
         <ClickResolver onClick={onResolve}/>
         <FitSelected collection={collection} selectedIds={selectedIds} pulseKey={pulseKey}/>
       </MapContainer>
-      <div className={styles.legend} aria-label="Neighborhood map scale"><span>0</span><i/><span>{maximum.toLocaleString()} (highest)</span></div>
+      <div className={styles.legend} role="img" aria-label={`Neighborhood map scale from 0 to ${maximum.toLocaleString()}, in ${RAMP_STEPS} steps from pale yellow to dark red`}>
+        <span>0</span>
+        <ol aria-hidden="true">{palette.ramp.map((color, step) => <li key={step} style={{ background: color }} title={`${rampStepFloor(step, maximum).toLocaleString()}+`}/>)}</ol>
+        <span>{maximum.toLocaleString()} (highest)</span>
+      </div>
       <div className={styles.hint}>{busy ? 'Finding neighborhood…' : 'Click neighborhoods to add or remove them, or search by name'}</div>
     </div>
   )

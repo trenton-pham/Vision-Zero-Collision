@@ -112,7 +112,7 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
         const green = pixels[index + 1] ?? 0
         const blue = pixels[index + 2] ?? 0
         const alpha = pixels[index + 3] ?? 0
-        return red < 100 && green > 90 && green < 180 && blue > 200 && alpha > 0
+        return red > 100 && red > green && green > blue && alpha > 0
       }),
       image: element.toDataURL(),
     }

@@ -77,7 +77,7 @@ test('theme persists and repaints the density canvas without losing the selected
   await expect(page).toHaveURL(/layer=kde/)
   await expect(page.getByText(/^Computing citywide analysis/)).toBeHidden()
   const highKey = page.getByText('>0.60–1.00').locator('i')
-  await expect(highKey).toHaveCSS('background-color', 'rgb(0, 127, 139)')
+  await expect(highKey).toHaveCSS('background-color', 'rgb(175, 47, 2)')
   for (const appearance of ['dark', 'light']) {
     await theme.selectOption(appearance)
     const result = await new AxeBuilder({ page }).analyze()

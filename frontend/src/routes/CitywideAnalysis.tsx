@@ -103,14 +103,14 @@ export function CitywideAnalysis() {
               <section className={styles.analysisCard}>
                 <h2 className={styles.cardLabel}>Downtown vs rest of Seattle</h2>
                 <div className={styles.seriesLegend} aria-hidden="true"><span><i className={styles.downtownSwatch}/>Downtown</span><span><i className={styles.outerSwatch}/>Rest of Seattle</span></div>
-                {downtown.data && (completeDowntownYears.length ? <div className={styles.chart} role="img" aria-label="Complete-year collision comparison. Amber line shows downtown collisions. Blue line shows outer Seattle collisions.">
+                {downtown.data && (completeDowntownYears.length ? <div className={styles.chart} role="img" aria-label="Complete-year collision comparison. Slate line shows downtown collisions. Gray line shows outer Seattle collisions.">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={completeDowntownYears} margin={{ top: 10, right: 4, bottom: 0, left: -22 }}>
-                      <XAxis dataKey="year" stroke="var(--text-secondary)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }}/>
-                      <YAxis stroke="var(--text-secondary)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} tickFormatter={(value: number) => value >= 1000 ? `${value / 1000}k` : String(value)}/>
-                      <Tooltip contentStyle={{ background: 'var(--panel-raised)', color: 'var(--text-primary)', border: '1px solid var(--border-strong)', borderRadius: 0 }}/>
-                      <Line dataKey="downtownCollisions" name="Downtown" stroke="var(--caution)" dot={false} isAnimationActive={false}/>
-                      <Line dataKey="outerCollisions" name="Rest of Seattle" stroke="var(--selection)" dot={false} isAnimationActive={false}/>
+                      <XAxis dataKey="year" stroke="var(--ink-2)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }}/>
+                      <YAxis stroke="var(--ink-2)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }} tickFormatter={(value: number) => value >= 1000 ? `${value / 1000}k` : String(value)}/>
+                      <Tooltip contentStyle={{ background: 'var(--surface)', color: 'var(--ink)', border: '1px solid var(--rule-strong)', borderRadius: 'var(--radius-control)', boxShadow: 'var(--shadow-float)' }}/>
+                      <Line dataKey="downtownCollisions" name="Downtown" stroke="var(--accent)" strokeWidth={2} dot={false} isAnimationActive={false}/>
+                      <Line dataKey="outerCollisions" name="Rest of Seattle" stroke="var(--ink-3)" strokeWidth={2} dot={false} isAnimationActive={false}/>
                     </LineChart>
                   </ResponsiveContainer>
                 </div> : <EmptyState title="No complete years in range" body="Choose a range with a complete year for the downtown comparison."/>)}

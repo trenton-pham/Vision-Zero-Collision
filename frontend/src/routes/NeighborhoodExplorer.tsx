@@ -258,8 +258,8 @@ export function NeighborhoodExplorer() {
           {activeQuery.data && <div className={styles.comparison}>
             {activeQuery.data.comparison.status === 'available' ? <>
               <span>{activeQuery.data.comparison.firstPeriod.years.join(', ')} vs {activeQuery.data.comparison.lastPeriod.years.join(', ')} · annual averages</span>
-              <strong data-statistic className={(activeQuery.data.comparison.collisionChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.collisionChangePercent)} collisions</strong>
-              <strong data-statistic className={(activeQuery.data.comparison.severityChangePercent ?? 0) > 0 ? styles.bad : ''}>{signedPercent(activeQuery.data.comparison.severityChangePercent)} burden</strong>
+              <strong data-statistic>{signedPercent(activeQuery.data.comparison.collisionChangePercent)} collisions</strong>
+              <strong data-statistic>{signedPercent(activeQuery.data.comparison.severityChangePercent)} burden</strong>
             </> : <><span>Trend comparison · {state.startYear}–{state.endYear}</span><strong>Insufficient complete years</strong></>}
           </div>}
         </div>

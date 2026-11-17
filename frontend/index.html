@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#06111c" />
+    <meta name="theme-color" content="#f8f7f3" />
     <script>
       (() => {
         let theme = 'system'
@@ -11,7 +11,7 @@
         const dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
         document.documentElement.dataset.theme = dark ? 'dark' : 'light'
         document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
-        document.querySelector('meta[name="theme-color"]').content = dark ? '#06111c' : '#f3f6f8'
+        document.querySelector('meta[name="theme-color"]').content = dark ? '#16120e' : '#f8f7f3'
       })()
     </script>
     <meta name="description" content="Explore observed Seattle collision patterns by neighborhood and year." />
