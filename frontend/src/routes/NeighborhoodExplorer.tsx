@@ -10,7 +10,6 @@ import { useDashboardParams } from '../lib/useUrlState'
 import { annualTrendFromMonths } from '../lib/trendRange'
 import { useDatasetMeta, useRelease } from '../lib/dataset'
 import { weeklyTrend } from '../lib/weeklyTrend'
-import { snapshotMotion, useContentEntrance, useGrainReveal, useRouteEntrance, useStatisticsFade, type MotionStamp, type StatisticsRetry } from '../lib/motion'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodMap } from '../components/NeighborhoodMap'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
@@ -32,7 +31,6 @@ export function NeighborhoodExplorer() {
   const { release, recoverRelease } = useRelease()
   const location = useLocation()
   const resolutionLocation = mapResolutionLocation(location)
-  const entrance = useRouteEntrance()
   const [announcement, setAnnouncement] = useState('')
   const [resolving, setResolving] = useState(false)
   const [selectionPulse, setSelectionPulse] = useState(0)
@@ -92,15 +90,15 @@ export function NeighborhoodExplorer() {
     const known = new Set(geo.data.features.map((feature) => feature.properties.id))
     const valid = neighborhoods.filter((id) => known.has(id))
     if (valid.length === neighborhoods.length) return
-    state.setNeighborhoods(valid, snapshotMotion(), { replace: true })
+    state.setNeighborhoods(valid, { replace: true })
     normalizationNotice.current = 'Unknown neighborhoods were removed from the selection. '
     setAnnouncement(normalizationNotice.current)
   }, [geo.data, neighborhoods, state.setNeighborhoods])
 
-  function select(id: string | null, name?: string | null, motion?: MotionStamp, search?: string) {
+  function select(id: string | null, name?: string | null, search?: string) {
     const removed = id !== null && neighborhoods.includes(id)
     const next = id === null ? [] : removed ? neighborhoods.filter((selected) => selected !== id) : [...neighborhoods, id]
-    state.setNeighborhoods(next, motion, { search })
+    state.setNeighborhoods(next, { search })
     setSelectionPulse((value) => value + 1)
     setAnnouncement(next.length === 0
       ? 'Neighborhood selection cleared. Loading Seattle citywide statistics.'
@@ -129,7 +127,6 @@ export function NeighborhoodExplorer() {
   }
 
   async function resolve(lat: number, lng: number) {
-    const motion = snapshotMotion()
     invalidateResolution()
     const requestLocation = currentSelection.current.resolutionLocation
     const matchesLocation = () => requestLocation === mapResolutionLocation(window.location)
@@ -145,7 +142,7 @@ export function NeighborhoodExplorer() {
     try {
       const result = await api.resolveNeighborhood(release, lat, lng, controller.signal)
       if (!isCurrent()) return
-      if (result.id) currentSelection.current.select(result.id, result.name, motion, window.location.search)
+      if (result.id) currentSelection.current.select(result.id, result.name, window.location.search)
       else setAnnouncement('That map location is outside the assigned Seattle neighborhood area.')
     } catch (error) {
       if (isCurrent()) {
@@ -167,13 +164,6 @@ export function NeighborhoodExplorer() {
   const narrowed = from !== state.trendBounds.from || through !== state.trendBounds.through
   const chartMonths = activeQuery.data?.monthly.filter(({ period }) => period >= from && period <= through)
   const statisticsIdentity = JSON.stringify([neighborhoods, state.startYear, state.endYear])
-  const statisticsRetry = useRef<StatisticsRetry | null>(null)
-  const statistics = useStatisticsFade({ identity: statisticsIdentity, revision: activeQuery.dataUpdatedAt, ready: activeQuery.isSuccess, failed: activeQuery.isError && !activeQuery.isFetching, retry: statisticsRetry.current })
-  const mapEntrance = useContentEntrance<HTMLElement>(!!geo.data && summary.isSuccess && !summary.isPlaceholderData, entrance)
-  const inspectorEntrance = useContentEntrance<HTMLDivElement>(activeQuery.isSuccess, entrance)
-  const trendReady = grain === 'weekly' ? weekly.isSuccess : activeQuery.isSuccess
-  const trendEntrance = useContentEntrance<HTMLDivElement>(trendReady, entrance)
-  const grainReveal = useGrainReveal(grain)
   const inspectorName = neighborhoods.length > 1 ? `${neighborhoods.length} neighborhoods combined`
     : neighborhood ? context.data?.neighborhood.name ?? geo.data?.features.find((feature) => feature.properties.id === neighborhood)?.properties.name ?? 'Selected neighborhood'
     : 'Seattle citywide'
@@ -191,7 +181,7 @@ export function NeighborhoodExplorer() {
   }
 
   return (
-    <div ref={statistics} className={styles.page}>
+    <div className={styles.page}>
       <div className="sr-only" aria-live="polite" aria-atomic="true">{announcement}</div>
       <section className={styles.command} aria-label="Neighborhood controls">
         <div>
@@ -213,7 +203,7 @@ export function NeighborhoodExplorer() {
       {initialError && <ErrorState error={initialError} onRetry={() => { void geo.refetch(); void summary.refetch() }}/>}
       {geo.data && summary.data && (
         <div className={styles.workspace}>
-          <section ref={mapEntrance} className={styles.mapPanel} aria-label="Neighborhood map">
+          <section className={styles.mapPanel} aria-label="Neighborhood map">
             <div className={styles.panelLabel}><span>{summary.isPlaceholderData ? 'Updating map for selected years…' : '94 Seattle neighborhoods'}</span><strong>{MAP_METRICS.find(([value]) => value === state.mapMetric)?.[1]}</strong></div>
             <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedIds={neighborhoods} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/>
           </section>
@@ -227,10 +217,9 @@ export function NeighborhoodExplorer() {
               <p>{state.startYear}—{state.endYear} · all severity levels</p>
             </div>
             {activeQuery.error && <ErrorState error={activeQuery.error} onRetry={() => {
-              statisticsRetry.current = { identity: statisticsIdentity, stamp: snapshotMotion(), afterRevision: activeQuery.dataUpdatedAt }
               void activeQuery.refetch()
             }}/>}
-            <div ref={inspectorEntrance}>
+            <div>
               <div className={styles.valuePanel}>
                 <div className={styles.primaryBurden}>
                   <span>Severity burden</span>
@@ -256,7 +245,7 @@ export function NeighborhoodExplorer() {
         </div>
       )}
 
-      <section data-motion-surface className={styles.trendSection} aria-label={`${trendScope} collision trend`}>
+      <section className={styles.trendSection} aria-label={`${trendScope} collision trend`}>
         <div className={styles.trendHead}>
           <div className={styles.trendTitle}>
             <div><h2>Collision trends</h2><p>{trendScope} · {grain} observations</p></div>
@@ -277,19 +266,19 @@ export function NeighborhoodExplorer() {
         {(grain !== 'weekly' || weekly.data?.monthPrecision) && <TrendRangeControl
           bounds={state.trendBounds} range={state.trendRange} onChange={state.setTrendRange}
         />}
-        <div ref={trendEntrance} className={styles.trendBody} aria-busy={grain === 'weekly' ? weekly.isFetching : activeQuery.isFetching}>
+        <div className={styles.trendBody} aria-busy={grain === 'weekly' ? weekly.isFetching : activeQuery.isFetching}>
           {grain === 'weekly' ? <>
             {!weeklyAvailable && <p className={styles.methodNote}>Weekly data is unavailable for this release. Select Annual or Monthly to view the trend.</p>}
             {weekly.isLoading && <LoadingState label={`Loading ${trendScope} weekly trend`}/>}
             {weeklyAvailable && weekly.error && <ErrorState error={weekly.error} onRetry={() => { void weekly.refetch() }}/>}
             {weekly.data && !weekly.error && <>
               {!weekly.data.monthPrecision && <p className={styles.methodNote}>Weekly uses the observed years on this release. For a month range, select Annual or Monthly.</p>}
-              <TrendChart chartRef={grainReveal} grain="weekly" weekly={weekly.data.points}/>
+              <TrendChart grain="weekly" weekly={weekly.data.points}/>
             </>}
           </> : <>
             {activeQuery.isLoading && <LoadingState label={`Loading ${trendScope} trend`}/>}
             {activeQuery.error && !activeQuery.data && <p className={styles.methodNote}>Trend unavailable. Retry the statistics request above to restore this chart.</p>}
-            {activeQuery.data && chartMonths && <TrendChart chartRef={grainReveal}
+            {activeQuery.data && chartMonths && <TrendChart
               annual={grain === 'annual' && narrowed ? annualTrendFromMonths(chartMonths) : activeQuery.data.annual}
               monthly={chartMonths} grain={grain}
             />}

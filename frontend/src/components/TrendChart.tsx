@@ -4,14 +4,13 @@ import { useDatasetMeta } from '../lib/dataset'
 import { receivedThrough } from '../lib/format'
 import { monthLabel as shortMonthLabel, type AnnualTrendPoint } from '../lib/trendRange'
 import { provisionalWeeks, type WeeklyMetric } from '../lib/weeklyTrend'
-import type { Ref } from 'react'
 import styles from './TrendChart.module.css'
 
-type Props = { chartRef?: Ref<HTMLDivElement> } & ({
+type Props = {
   annual: AnnualTrendPoint[]
   monthly: MonthlyMetric[]
   grain: 'annual' | 'monthly'
-} | { grain: 'weekly'; weekly: WeeklyMetric[] })
+} | { grain: 'weekly'; weekly: WeeklyMetric[] }
 type ChartRow = AnnualTrendPoint | MonthlyMetric | WeeklyMetric
 
 const weekDate = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })
@@ -58,7 +57,7 @@ function monthCoverage(row: MonthlyMetric, dataAsOf: string) {
 
 export function TrendChart(props: Props) {
   const meta = useDatasetMeta()
-  const { grain, chartRef } = props
+  const { grain } = props
   const data: ChartRow[] = props.grain === 'weekly' ? props.weekly : props.grain === 'monthly' ? props.monthly : props.annual
   const xKey = grain === 'weekly' ? 'weekStart' : grain === 'monthly' ? 'period' : 'year'
   const grainLabel = grain.charAt(0).toUpperCase() + grain.slice(1)
@@ -95,7 +94,7 @@ export function TrendChart(props: Props) {
     : hasProvisionalWeeks ? 'Provisional weeks may gain reports or be revised.' : ''
   return (
     <div>
-      <div ref={chartRef} className={styles.chart} role="img" aria-label={`${grainLabel} trend chart. Blue area shows collision count. Teal line shows total severity burden. ${coverageNote}`}>
+      <div className={styles.chart} role="img" aria-label={`${grainLabel} trend chart. Blue area shows collision count. Teal line shows total severity burden. ${coverageNote}`}>
         <div className={styles.legend} aria-hidden="true">
           <span><i className={styles.collisionSwatch}/>Collisions</span>
           <span><i className={styles.severitySwatch}/>Severity burden</span>

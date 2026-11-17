@@ -59,7 +59,7 @@ export function TrendRangeControl({ bounds, range, onChange }: Props) {
   }
 
   return (
-    <div className={styles.control} role="group" aria-label="Chart date range" data-motion-controls>
+    <div className={styles.control} role="group" aria-label="Chart date range">
       <div className={styles.header}>
         <div>Chart date range <strong>{monthLabel(monthAt(draftStart))} – {monthLabel(monthAt(draftEnd))}</strong></div>
         <div className={styles.actions}>
