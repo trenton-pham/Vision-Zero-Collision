@@ -92,7 +92,7 @@ export function TrendChart(props: Props) {
   const coverageNote = hasSlicedYear
     ? 'Hollow points mark partial years. The table shows the months included.'
     : partialYear
-    ? `The ${partialYear} observations are partial.${grain === 'annual' ? ' Hollow points mark incomplete annual observations.' : ''}`
+    ? `The ${partialYear} observations are partial.${grain === 'annual' ? ' Hollow points mark partial years.' : ''}`
     : hasProvisionalWeeks ? 'Provisional weeks may gain reports or be revised.' : ''
   return (
     <div>
@@ -146,8 +146,8 @@ export function TrendChart(props: Props) {
         </ResponsiveContainer>
       </div>
       {hasSlicedYear
-        ? <p className={styles.partialMarker}>Hollow points show partial years. View chart data for the months included.{annualByYear.has(Number(meta.dataAsOf.slice(0, 4))) && ` Latest incident in this snapshot: ${weekDate.format(new Date(meta.dataAsOf))}.`}</p>
-        : partialYear && <p className={styles.partialMarker}>{partialYear} partial · received through {receivedThroughDate}{grain === 'annual' ? '. The hollow point shows the incomplete year.' : '.'}</p>}
+        ? <p className={styles.partialMarker}>Hollow points mark partial years. View chart data for the months included.{annualByYear.has(Number(meta.dataAsOf.slice(0, 4))) && ` Latest incident in this snapshot: ${weekDate.format(new Date(meta.dataAsOf))}.`}</p>
+        : partialYear && <p className={styles.partialMarker}>{partialYear} partial · received through {receivedThroughDate}{grain === 'annual' ? '. The hollow point marks the partial year.' : '.'}</p>}
       {grain === 'weekly' && <p className={styles.partialMarker}>Latest incident in this snapshot: {weekDate.format(new Date(meta.dataAsOf))}.{hasProvisionalWeeks && ` Weeks that ended less than ${provisionalWeeks} weeks before the snapshot are provisional. Counts and severity can change as reports arrive or are revised.`}</p>}
       <details className={styles.dataTable}>
         <summary>View {grain} chart data</summary>

@@ -108,7 +108,7 @@ export function CitywideAnalysis() {
               <section className={styles.analysisCard}>
                 <h2 className={styles.cardLabel}>Downtown vs rest of Seattle</h2>
                 <div className={styles.seriesLegend} aria-hidden="true"><span><i className={styles.downtownSwatch}/>Downtown</span><span><i className={styles.outerSwatch}/>Rest of Seattle</span></div>
-                {downtown.data && (completeDowntownYears.length ? <div className={styles.chart} role="img" aria-label="Complete-year collision comparison. Slate line shows downtown collisions. Gray line shows outer Seattle collisions.">
+                {downtown.data && (completeDowntownYears.length ? <div className={styles.chart} role="img" aria-label="Complete-year collision comparison. Violet line shows downtown collisions. Gray line shows the rest of Seattle.">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={completeDowntownYears} margin={{ top: 10, right: 4, bottom: 0, left: -22 }}>
                       <XAxis dataKey="year" stroke="var(--ink-2)" tickLine={false} axisLine={false} tick={{ fontSize: 12 }}/>

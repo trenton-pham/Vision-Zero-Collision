@@ -24,7 +24,7 @@ export function CitywideStory() {
   })
   const error = citywide.error ?? explorer.error
   if (error) return <div className={styles.page}><ErrorState error={error} onRetry={() => { void citywide.refetch(); void explorer.refetch() }}/></div>
-  if (!citywide.data || !explorer.data) return <div className={styles.page}><LoadingState label="Drawing the collision record"/></div>
+  if (!citywide.data || !explorer.data) return <div className={styles.page}><LoadingState label="Loading collisions"/></div>
 
   const { metrics } = citywide.data.summary
   const range = `start=${startYear}&end=${endYear}`
@@ -41,7 +41,7 @@ export function CitywideStory() {
             <span className={styles.accentLine}>drawn where they concentrate.</span>
           </h1>
           <p className={styles.lede}>
-            Seattle Department of Transportation collision records{partial.length ? `, with ${partial.join(', ')} received through ${receivedThrough(meta.dataAsOf)}` : ''}. The ink lines trace where collisions concentrate; each neighborhood on the map is colored by its observed severity burden.
+            Seattle Department of Transportation collision records{partial.length ? `, with ${partial.join(', ')} received through ${receivedThrough(meta.dataAsOf)}` : ''}. Darker ink lines mark denser collisions.
           </p>
           <div className={styles.actions}>
             <Link className={styles.primary} to={`/neighborhoods?${range}`}>Explore neighborhoods <ArrowIcon className={styles.arrow}/></Link>
@@ -60,7 +60,7 @@ export function CitywideStory() {
             <div><dt>Serious injuries</dt><dd data-statistic>{integer.format(metrics.seriousInjuries)}</dd></div>
             <div><dt>Fatalities</dt><dd data-statistic>{integer.format(metrics.fatalities)}</dd></div>
           </dl>
-          {partial.length > 0 && <p>{partial.join(', ')} partial · left out of comparisons</p>}
+          {partial.length > 0 && <p>{partial.join(', ')} partial · excluded from comparisons</p>}
         </aside>
       </section>
       <section className={styles.observations} aria-labelledby="observations-title">

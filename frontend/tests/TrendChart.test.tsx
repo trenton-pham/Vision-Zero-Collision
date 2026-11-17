@@ -43,7 +43,7 @@ describe('TrendChart partial-year metadata', () => {
   it('marks incomplete annual observations and exposes their exact values', async () => {
     const user = userEvent.setup()
     render(<DatasetMetaProvider meta={meta}><TrendChart annual={annual} monthly={monthly} grain="annual"/></DatasetMetaProvider>)
-    expect(screen.getByRole('img')).toHaveAccessibleName(/Hollow points mark incomplete annual observations/)
+    expect(screen.getByRole('img')).toHaveAccessibleName(/Hollow points mark partial years/)
     await user.click(screen.getByText('View annual chart data'))
     expect(screen.getByRole('table')).toHaveAccessibleName('Annual collisions and weighted severity totals')
     expect(screen.getByRole('cell', { name: '10' })).toBeInTheDocument()
