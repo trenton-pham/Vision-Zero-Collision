@@ -29,7 +29,7 @@
   .shell { display: block; }
   .rail { display: none; }
   .header { padding: 8px 16px 12px; display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; }
-  .mobileBrand { display: flex; align-items: center; gap: 8px; color: var(--accent); font: 600 1.125rem/1.2 var(--font-display); }
+  .mobileBrand { display: flex; align-items: center; gap: 8px; color: var(--accent); font: 400 1.125rem/1.2 var(--font-display); }
   .mobileBrand svg { width: 24px; height: 24px; }
   .mobileNav { display: flex; align-items: stretch; min-height: 44px; }
   .mobileNav a { display: grid; place-items: center; padding: 0 12px; color: var(--ink-3); font-size: .8125rem; }

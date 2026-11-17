@@ -1,4 +1,4 @@
-import '@fontsource-variable/source-serif-4/wght.css'
+import '@fontsource-variable/jost/wght.css'
 import '@fontsource-variable/libre-franklin/wght.css'
 import './styles/tokens.css'
 import './styles/global.css'
