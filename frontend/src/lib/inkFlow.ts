@@ -6,6 +6,7 @@ export type InkFlow = { levels: InkLevel[]; bounds: { west: number; south: numbe
 
 const UPSAMPLE = 4
 const BLUR_RADIUS = 6
+const CONTOUR_FLOOR = 0.07
 
 function upsample(kde: KdeResponse) {
   const { rows, columns } = kde
@@ -25,8 +26,7 @@ function upsample(kde: KdeResponse) {
   return { grid, width, height }
 }
 
-// The 42-cell KDE grid shows its cells in raw contours; a separable Gaussian pass turns them into continuous strokes.
-function blur(source: Float64Array, width: number, height: number) {
+function gaussianSmooth(source: Float64Array, width: number, height: number) {
   const sigma = BLUR_RADIUS / 2
   const kernel = Array.from({ length: BLUR_RADIUS * 2 + 1 }, (_, index) => Math.exp(-((index - BLUR_RADIUS) ** 2) / (2 * sigma * sigma)))
   const total = kernel.reduce((sum, weight) => sum + weight, 0)
@@ -54,12 +54,11 @@ export function inkFlow(kde: KdeResponse, levelCount = 20): InkFlow {
   const bounds = { west, south, east, north }
   if (kde.rows < 2 || kde.columns < 2) return { levels: [], bounds }
   const { grid, width, height } = upsample(kde)
-  const smooth = blur(grid, width, height)
+  const smooth = gaussianSmooth(grid, width, height)
   let maximum = 0
   for (const value of smooth) maximum = Math.max(maximum, value)
   if (maximum <= 0) return { levels: [], bounds }
-  // The lowest ring starts at 7% of the peak so smoothing halos never spill past the city's edge onto water.
-  const thresholds = Array.from({ length: levelCount }, (_, index) => maximum * (0.07 + 0.93 * ((index + 1) / (levelCount + 1)) ** 1.25))
+  const thresholds = Array.from({ length: levelCount }, (_, index) => maximum * (CONTOUR_FLOOR + (1 - CONTOUR_FLOOR) * ((index + 1) / (levelCount + 1)) ** 1.25))
   const toLngLat = ([x, y]: number[]): [number, number] => [
     west + ((x ?? 0) - 0.5) / (width - 1) * (east - west),
     south + ((y ?? 0) - 0.5) / (height - 1) * (north - south),

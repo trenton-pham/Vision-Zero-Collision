@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import type { ExpressionSpecification, GeoJSONSource, LngLatBoundsLike } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { NeighborhoodFeatureCollection, NeighborhoodMetricSet } from '../lib/contracts'
-import { RAMP_STEPS, rampStep, rampStepFloor, type MapMetric } from '../lib/mapMetrics'
+import { RAMP_STEPS, sqrtRampStep, sqrtRampStepFloor, type MapMetric } from '../lib/mapMetrics'
 import { geometryBounds, rampFill } from '../lib/mapStyle'
 import { useMapLibre } from './useMapLibre'
 import styles from './NeighborhoodMap.module.css'
@@ -70,7 +70,7 @@ export function NeighborhoodMap({
     if (!map) return
     for (const feature of collection.features) {
       const id = feature.properties.id
-      map.setFeatureState({ source: SOURCE, id }, { step: rampStep(metricNumber(byId.get(id), metricKey), maximum), selected: selectedIds.includes(id) })
+      map.setFeatureState({ source: SOURCE, id }, { step: sqrtRampStep(metricNumber(byId.get(id), metricKey), maximum), selected: selectedIds.includes(id) })
     }
   }, [map, collection, geometryRevision, byId, metricKey, maximum, selectedIds])
 
@@ -93,7 +93,7 @@ export function NeighborhoodMap({
       {!failed && <button className={styles.reset} type="button" onClick={() => fit(cityBounds, 11, false)}>Reset map</button>}
       <div className={styles.legend} role="img" aria-label={`Neighborhood map scale from 0 to ${maximum.toLocaleString()}, in ${RAMP_STEPS} steps from pale yellow to dark red`}>
         <span>0</span>
-        <ol aria-hidden="true">{tokens.ramp.map((color, step) => <li key={step} style={{ background: color }} title={`${rampStepFloor(step, maximum).toLocaleString()}+`}/>)}</ol>
+        <ol aria-hidden="true">{tokens.ramp.map((color, step) => <li key={step} style={{ background: color }} title={`${sqrtRampStepFloor(step, maximum).toLocaleString()}+`}/>)}</ol>
         <span>{maximum.toLocaleString()} (highest)</span>
       </div>
       {!failed && <div className={styles.hint}>{busy ? 'Finding neighborhood…' : 'Click neighborhoods to add or remove them, or search by name'}</div>}

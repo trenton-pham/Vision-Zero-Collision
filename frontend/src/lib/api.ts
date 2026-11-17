@@ -87,3 +87,8 @@ export const api = {
     return resolveNeighborhood(bundle, lat, lng)
   },
 }
+
+export const citywideQuery = (release: ReleaseManifest, startYear: number, endYear: number, severities: CitywideSeverity[]) => ({
+  queryKey: ['citywide', release.releaseId, startYear, endYear, severities],
+  queryFn: ({ signal }: { signal: AbortSignal }) => api.citywide(release, startYear, endYear, severities, signal),
+})

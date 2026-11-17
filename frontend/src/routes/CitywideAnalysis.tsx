@@ -4,7 +4,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'rec
 import { CheckIcon } from '../components/Icons'
 import { MetricGrid } from '../components/MetricGrid'
 import { EmptyState, ErrorState, LoadingState } from '../components/States'
-import { api } from '../lib/api'
+import { citywideQuery } from '../lib/api'
 import { useRelease } from '../lib/dataset'
 import { integer, metricValue, yearSpan } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
@@ -19,8 +19,7 @@ export function CitywideAnalysis() {
   const [filtersOpen, setFiltersOpen] = useState(() => !window.matchMedia('(max-width: 600px)').matches)
   const { release } = useRelease()
   const bundle = useQuery({
-    queryKey: ['citywide', release.releaseId, state.startYear, state.endYear, state.severities],
-    queryFn: ({ signal }) => api.citywide(release, state.startYear, state.endYear, state.severities, signal),
+    ...citywideQuery(release, state.startYear, state.endYear, state.severities),
     placeholderData: (previous, query) => query?.queryKey[1] === release.releaseId ? previous : undefined,
     staleTime: Infinity,
   })

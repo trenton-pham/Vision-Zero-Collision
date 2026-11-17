@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Map as MapLibreMap, NavigationControl, setWorkerUrl, type LngLatBoundsLike } from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { basemapLayers, basemapStyle, readMapTokens, SEATTLE_BOUNDS } from '../lib/mapStyle'
-import { usePalette, useTheme } from '../lib/theme'
+import { useTheme } from '../lib/theme'
 
 // Vite does not follow MapLibre's relative worker URL, so hand it the emitted asset.
 setWorkerUrl(workerUrl)
@@ -14,7 +14,7 @@ export function useMapLibre(label: string, bounds: LngLatBoundsLike = SEATTLE_BO
   const [ready, setReady] = useState(false)
   const [idle, setIdle] = useState(false)
   const { resolvedTheme } = useTheme()
-  const tokens = usePalette(resolvedTheme, readMapTokens)
+  const tokens = useMemo(readMapTokens, [resolvedTheme])
 
   useEffect(() => {
     const container = containerRef.current

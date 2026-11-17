@@ -3,7 +3,6 @@ import { integer, signedPercent, yearSpan } from './format'
 
 export type Observation = { id: string; label: string; value: string; body: string; href: string; featured: boolean }
 
-// Observations restate pinned-release figures; they never explain causes or imply risk.
 export function storyObservations({ comparison, neighborhoods, shift, startYear, endYear }: {
   comparison: TrendComparison
   neighborhoods: NeighborhoodMetricSet[]

@@ -37,7 +37,6 @@ const MAP_ATTRIBUTION = '<a href="https://openfreemap.org" target="_blank" rel="
 
 const LABEL_FONT = ['Noto Sans Regular']
 
-// Basemap paint is a pure function of the tokens so a theme change repaints the same layer IDs in place.
 export function basemapLayers(tokens: MapTokens): StyleSpecification['layers'] {
   return [
     { id: 'background', type: 'background', paint: { 'background-color': tokens.paper } },

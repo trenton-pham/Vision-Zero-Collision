@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { api } from '../lib/api'
+import { api, citywideQuery } from '../lib/api'
 import { useDatasetMeta, useRelease } from '../lib/dataset'
 import { integer, receivedThrough } from '../lib/format'
 import { storyObservations } from '../lib/storyObservations'
@@ -14,10 +14,7 @@ export function CitywideStory() {
   const { release } = useRelease()
   const meta = useDatasetMeta()
   const { startYear, endYear, maximumYear } = useDashboardParams()
-  const citywide = useQuery({
-    queryKey: ['citywide', release.releaseId, startYear, endYear, []],
-    queryFn: ({ signal }) => api.citywide(release, startYear, endYear, [], signal),
-  })
+  const citywide = useQuery(citywideQuery(release, startYear, endYear, []))
   const explorer = useQuery({
     queryKey: ['explorer', release.releaseId, startYear, endYear],
     queryFn: ({ signal }) => api.explorer(release, startYear, endYear, signal),

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 
 export type Theme = 'system' | 'light' | 'dark'
 type ResolvedTheme = Exclude<Theme, 'system'>
@@ -31,10 +31,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => media.removeEventListener('change', update)
   }, [])
 
-  useLayoutEffect(() => {
+  if (document.documentElement.dataset.theme !== resolvedTheme || document.documentElement.style.colorScheme !== resolvedTheme) {
     document.documentElement.dataset.theme = resolvedTheme
     document.documentElement.style.colorScheme = resolvedTheme
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', resolvedTheme === 'dark' ? '#0a1222' : '#f5f6f9')
+  }
+
+  useEffect(() => {
     try {
       if (theme === 'system') localStorage.removeItem(storageKey)
       else localStorage.setItem(storageKey, theme)
@@ -46,11 +49,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme() {
   return useContext(ThemeContext)
-}
-
-// ThemeProvider writes data-theme in a layout effect after children render, so read CSS tokens once effects settle.
-export function usePalette<T>(resolvedTheme: ResolvedTheme, read: () => T) {
-  const [palette, setPalette] = useState(read)
-  useEffect(() => setPalette(read()), [resolvedTheme])
-  return palette
 }
