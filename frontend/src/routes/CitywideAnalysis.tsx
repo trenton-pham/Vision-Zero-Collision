@@ -73,7 +73,6 @@ export function CitywideAnalysis() {
       {summary.data && !summary.isLoading && (
         <>
           {summary.data.warnings.map((warning) => <div className={styles.warning} key={warning}>{warning} · excluded from spatial shift and downtown comparison</div>)}
-          <div data-statistics-summary aria-busy={summary.isFetching}><MetricGrid metrics={summary.data.metrics} compact variant="headline"/></div>
           <div className={styles.workspace} aria-busy={summary.isFetching || layerQuery.isFetching}>
             <section className={styles.mapColumn}>
               <div className={styles.panelBar}>
@@ -94,8 +93,12 @@ export function CitywideAnalysis() {
               </div>
               <p className={styles.mapNote}>{state.cityLayer === 'kde' ? 'KDE smooths nearby collision locations into relative density. Values describe concentration, not the probability of a future collision.' : 'Each circle summarizes collisions in a grid cell. Larger circles represent more records.'}</p>
             </section>
-            <aside className={styles.analysisRail}>
-              <section className={styles.analysisCard}>
+            <aside className={styles.readouts} aria-label="Citywide figures" data-statistics-summary aria-busy={summary.isFetching}>
+              <MetricGrid metrics={summary.data.metrics} variant="headline"/>
+            </aside>
+          </div>
+          <div className={styles.cardRow}>
+              <section className={`${styles.analysisCard} ${styles.featured}`}>
                 <h2 className={styles.cardLabel}>Complete-year spatial shift</h2>
                 <div><strong data-statistic={shift.data?.shiftMeters != null ? '' : undefined} className={styles.shiftValue}>{shift.data?.shiftMeters == null ? '—' : `${integer.format(shift.data.shiftMeters)} m`}</strong></div>
                 <p>{shift.data?.status === 'available' ? `${yearSpan(shift.data.before.years)} average collision location to ${yearSpan(shift.data.after.years)} average location.` : 'The selected range needs complete years on both sides of 2020.'}</p>
@@ -121,7 +124,6 @@ export function CitywideAnalysis() {
                 <h2 className={styles.cardLabel}>Downtown mean severity</h2>
                 <div className={styles.splitMetric}><strong data-statistic={latestCompleteDowntownYear?.downtownMeanSeverity != null ? '' : undefined}>{metricValue(latestCompleteDowntownYear?.downtownMeanSeverity ?? null, 'decimal')}</strong><span>{latestCompleteDowntownYear ? `${latestCompleteDowntownYear.year} · latest complete selected year` : downtown.data ? 'no complete year in range' : 'Loading comparison'}</span></div>
               </section>
-            </aside>
           </div>
           <details data-statistics-summary className={styles.secondaryMetrics}>
             <summary>More collision measures</summary>

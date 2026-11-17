@@ -13,7 +13,7 @@ export function AnalysisIcon(props: IconProps) {
 }
 
 export function SeattleMark(props: IconProps) {
-  return <svg {...base} viewBox="0 0 32 32" {...props}><path d="M16 2 4 9v14l12 7 12-7V9L16 2Z" stroke="currentColor" strokeWidth="1.5"/><path d="m10 19 4-9 3 6 2-4 3 7H10Z" fill="currentColor"/></svg>
+  return <svg {...base} viewBox="0 0 32 32" {...props}><circle cx="16" cy="16" r="14.5" stroke="currentColor" strokeWidth="1.5"/><path d="M5 18.5c4-.6 6.5-5.5 11-5.5s6.4 3.6 11 3" stroke="currentColor" strokeWidth="1.1" opacity=".55"/><path d="M7.5 23c3.8-1.6 6-4.6 9.5-4.6s5.2 2 8 1.6" stroke="currentColor" strokeWidth="1.1" opacity=".55"/><circle cx="19.5" cy="16.2" r="3.4" fill="currentColor"/></svg>
 }
 
 export function AlertIcon(props: IconProps) {

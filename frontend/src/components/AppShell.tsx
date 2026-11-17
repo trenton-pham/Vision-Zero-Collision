@@ -50,28 +50,33 @@ function YearRangeControl() {
   )
 }
 
-function ShellContent({ dataAsOf, children }: { dataAsOf?: string; children: ReactNode }) {
+function ShellContent({ dataAsOf, partialYears = [], children }: { dataAsOf?: string; partialYears?: number[]; children: ReactNode }) {
   const { theme, setTheme } = useTheme()
   return (
       <div className={styles.shell}>
         <aside className={styles.rail} aria-label="Primary navigation">
           <NavLink className={styles.brand} to="/neighborhoods" aria-label="Seattle Collision Dashboard">
             <SeattleMark />
-            <span>SCD</span>
+            <span>Seattle Collision</span>
           </NavLink>
           <nav className={styles.nav}>
             <NavLink aria-label="Neighborhood Explorer" title="Neighborhood Explorer" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/neighborhoods">
-              <MapIcon/><span>Neighborhoods</span>
+              <span className={styles.navIcon}><MapIcon/></span><span>Neighborhoods</span>
             </NavLink>
             <NavLink aria-label="Citywide Analysis" title="Citywide Analysis" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/citywide">
-              <AnalysisIcon/><span>Citywide</span>
+              <span className={styles.navIcon}><AnalysisIcon/></span><span>Citywide</span>
             </NavLink>
           </nav>
-          <div className={styles.dataStatus}>
-            <span className={styles.statusDot}/>
-            <span>Data as of</span>
-            <strong>{dataAsOf ?? 'Loading'}</strong>
-          </div>
+          <section className={styles.widget} aria-label="Dataset">
+            <span className="readout-label">Data as of</span>
+            <strong className={styles.widgetValue}>{dataAsOf ?? 'Loading'}</strong>
+            {partialYears.length > 0 && <span className={styles.widgetNote}>{partialYears.join(', ')} partial · excluded from comparisons</span>}
+          </section>
+          <section className={styles.widget} aria-label="Severity ramp, lower to higher burden">
+            <span className="readout-label">Severity ramp</span>
+            <ol className={styles.ramp} aria-hidden="true">{[1, 2, 3, 4, 5, 6].map((step) => <li key={step} style={{ background: `var(--ramp-${step})` }}/>)}</ol>
+            <div className={styles.rampEnds} aria-hidden="true"><span>Lower burden</span><span>Higher</span></div>
+          </section>
         </aside>
         <header className={styles.header}>
           <div className={styles.mobileBrand}><SeattleMark/><span>Seattle Collision</span></div>
@@ -116,7 +121,7 @@ export function AppShell() {
     if (event.type === 'updated' && event.action.type === 'error') recoverRelease(event.query.state.error)
   }), [queryClient, recoverRelease])
 
-  const content = <ShellContent dataAsOf={release.data?.meta.dataAsOf}>
+  const content = <ShellContent dataAsOf={release.data?.meta.dataAsOf} partialYears={release.data?.meta.partialYears}>
     {release.error && <ErrorState error={release.error} onRetry={() => void release.refetch()}/>}
     {release.data ? <Outlet/> : !release.error && <LoadingState label="Loading dataset metadata"/>}
   </ShellContent>

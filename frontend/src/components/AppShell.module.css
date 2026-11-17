@@ -1,14 +1,22 @@
-.shell { min-height: 100vh; display: grid; grid-template-columns: 118px minmax(0, 1fr); grid-template-rows: 84px minmax(0, 1fr); background: var(--paper); color: var(--ink); }
-.rail { grid-row: 1 / -1; border-right: 1px solid var(--rule); background: var(--surface); display: flex; flex-direction: column; z-index: 20; }
-.brand { height: 84px; color: var(--accent); border-bottom: 1px solid var(--rule); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 600 .8125rem/1 var(--font-ui); }
-.brand svg { width: 28px; height: 28px; }
-.nav { padding-top: 18px; display: grid; gap: 8px; }
-.navItem { min-height: 76px; border-left: 2px solid transparent; color: var(--ink-3); display: flex; flex-direction: column; gap: 8px; align-items: center; justify-content: center; font: 500 .75rem/1.3 var(--font-ui); }
-.navItem:hover, .navItem:focus-visible { color: var(--ink); background: var(--surface); }
-.navItem.active { color: var(--focus); border-left-color: var(--accent); background: var(--accent-soft); }
-.dataStatus { margin-top: auto; padding: 14px 8px 16px; border-top: 1px solid var(--rule); color: var(--ink-3); display: grid; justify-items: center; gap: 6px; text-align: center; font-size: .75rem; line-height: 1.4; }
-.dataStatus strong { color: var(--ink-2); font-size: .75rem; font-weight: 500; }
-.statusDot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.shell { min-height: 100vh; display: grid; grid-template-columns: 232px minmax(0, 1fr); grid-template-rows: 84px minmax(0, 1fr); background: var(--paper); color: var(--ink); }
+.rail { grid-row: 1 / -1; border-right: 1px solid var(--rule); background: var(--paper); display: flex; flex-direction: column; padding: 0 20px 24px; z-index: 20; }
+.brand { height: 84px; margin: 0 -20px; padding: 0 20px; color: var(--ink); border-bottom: 1px solid var(--rule); display: flex; align-items: center; gap: 12px; font: 400 1.0625rem/1.2 var(--font-display); }
+.brand svg { width: 34px; height: 34px; flex: 0 0 auto; }
+.nav { padding: 20px 0; display: grid; gap: 6px; border-bottom: 1px solid var(--rule); }
+.navItem { min-height: 48px; padding: 0 8px; border-radius: var(--radius-control); color: var(--ink-2); display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: center; font: 500 .875rem/1.3 var(--font-ui); }
+.navItem:hover, .navItem:focus-visible { color: var(--ink); background: var(--sunk); }
+.navIcon { width: 36px; height: 36px; border: 1px solid var(--rule-strong); border-radius: 50%; display: grid; place-items: center; }
+.navIcon svg { width: 18px; height: 18px; }
+.navItem.active { color: var(--ink); }
+.navItem.active .navIcon { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.widget { padding: 18px 0; border-bottom: 1px solid var(--rule); display: grid; gap: 6px; }
+.widgetValue { color: var(--ink); font: 600 1rem/1.3 var(--font-ui); }
+.widgetNote { color: var(--ink-2); font-size: .75rem; line-height: 1.4; }
+.ramp { display: flex; gap: 3px; margin: 4px 0 0; padding: 0; list-style: none; }
+.ramp li { flex: 1; height: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / .08); }
+.rampEnds { display: flex; justify-content: space-between; color: var(--ink-3); font-size: .6875rem; }
+
+
 .header { grid-column: 2; display: flex; align-items: center; justify-content: flex-end; gap: 24px; border-bottom: 1px solid var(--rule); background: var(--paper); padding: 8px 22px; z-index: 15; }
 .main { grid-column: 2; min-width: 0; min-height: 0; }
 .themeControl { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: .8125rem; }
@@ -25,6 +33,14 @@
 .partialThumb::after { border-style: dashed; }
 .partial { grid-column: 1 / -1; color: var(--ink-2); font-size: .75rem; line-height: 1.3; }
 .mobileNav, .mobileBrand { display: none; }
+@media (max-width: 1200px) {
+  .shell { grid-template-columns: 84px minmax(0, 1fr); }
+  .rail { padding: 0 12px 24px; }
+  .brand { margin: 0 -12px; justify-content: center; }
+  .brand span, .navItem > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .navItem { grid-template-columns: 36px; justify-content: center; padding: 0; }
+  .widget { display: none; }
+}
 @media (max-width: 900px) {
   .shell { display: block; }
   .rail { display: none; }
