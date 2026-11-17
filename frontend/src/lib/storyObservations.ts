@@ -21,7 +21,7 @@ export function storyObservations({ comparison, neighborhoods, shift, startYear,
   const top = [...neighborhoods].sort((a, b) => b.totalSeverity - a.totalSeverity || a.name.localeCompare(b.name))[0]
   if (top && top.totalSeverity > 0) observations.push({
     id: 'top-burden', label: 'Highest observed burden', value: top.name, featured: false, href: `/neighborhoods?neighborhood=${encodeURIComponent(top.id)}&${range}`,
-    body: `${integer.format(top.totalSeverity)} weighted severity burden from ${integer.format(top.collisionCount)} collisions, ${startYear}–${endYear}.`,
+    body: `${integer.format(top.totalSeverity)} weighted severity burden from ${integer.format(top.collisionCount)} collisions, ${startYear === endYear ? startYear : `${startYear}–${endYear}`}.`,
   })
   observations.push(shift.status === 'available'
     ? {

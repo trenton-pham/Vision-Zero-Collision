@@ -17,9 +17,11 @@ export const RAMP_STEPS = 6
 
 export function sqrtRampStep(value: number, maximum: number) {
   if (maximum <= 0 || value <= 0) return 0
-  return Math.min(RAMP_STEPS - 1, Math.floor(Math.sqrt(value / maximum) * RAMP_STEPS))
+  let step = 0
+  while (step < RAMP_STEPS - 1 && value * RAMP_STEPS ** 2 >= maximum * (step + 1) ** 2) step += 1
+  return step
 }
 
 export function sqrtRampStepFloor(step: number, maximum: number) {
-  return Math.ceil(maximum * (step / RAMP_STEPS) ** 2)
+  return Math.ceil(maximum * step ** 2 / RAMP_STEPS ** 2)
 }

@@ -15,10 +15,12 @@ describe('ramp step', () => {
   })
 
   it('agrees with its own legend floors at every boundary', () => {
-    for (let step = 1; step < RAMP_STEPS; step += 1) {
-      const floor = sqrtRampStepFloor(step, 3992)
-      expect(sqrtRampStep(floor, 3992)).toBe(step)
-      expect(sqrtRampStep(floor - 1, 3992)).toBe(step - 1)
+    for (let maximum = 1; maximum <= 2000; maximum += 1) {
+      for (let step = 1; step < RAMP_STEPS; step += 1) {
+        const floor = sqrtRampStepFloor(step, maximum)
+        expect(sqrtRampStep(floor, maximum)).toBeGreaterThanOrEqual(step)
+        expect(sqrtRampStep(floor - 1, maximum)).toBeLessThan(step)
+      }
     }
   })
 })

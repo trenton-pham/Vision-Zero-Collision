@@ -71,16 +71,6 @@ export function TrendChart(props: Props) {
   const highlightStart = provisional.at(0)?.weekStart ?? partialMonths.at(0)?.period
   const highlightEnd = provisional.at(-1)?.weekStart ?? partialMonths.at(-1)?.period
   const annual = props.grain === 'annual' ? props.annual : []
-  const completeYears = annual.filter((row) => !row.isPartial)
-  const firstComplete = completeYears[0]
-  const partialSegments: Array<(year: number) => boolean> = []
-  if (annual[0]?.isPartial && firstComplete) {
-    partialSegments.push((year) => year < firstComplete.year)
-  }
-  if (annual.at(-1)?.isPartial) {
-    const lastComplete = completeYears.at(-1)?.year ?? -Infinity
-    partialSegments.push((year) => year > lastComplete)
-  }
   const receivedThroughDate = receivedThrough(meta.dataAsOf)
   const monthlyTicks = monthly.filter((item, index) => index === 0 || item.month === 1).map((item) => item.period)
   const finalMonth = monthly.at(-1)?.period
@@ -96,7 +86,7 @@ export function TrendChart(props: Props) {
     : hasProvisionalWeeks ? 'Provisional weeks may gain reports or be revised.' : ''
   return (
     <div>
-      <div className={styles.chart} role="img" aria-label={`${grainLabel} trend chart. Gray area shows collision count. Red line shows total severity burden. Hatched bands mark partial or provisional periods. ${coverageNote}`}>
+      <div className={styles.chart} role="img" aria-label={`${grainLabel} trend chart. Gray area shows collision count. Red line shows total severity burden. ${highlightStart && highlightEnd ? (highlightStart === highlightEnd ? 'A dashed line marks the partial or provisional period. ' : 'Hatched bands mark partial or provisional periods. ') : ''}${coverageNote}`}>
         <div className={styles.legend} aria-hidden="true">
           <span><i className={styles.collisionSwatch}/>Collisions</span>
           <span><i className={styles.severitySwatch}/>Severity burden</span>
@@ -137,11 +127,9 @@ export function TrendChart(props: Props) {
               : <ReferenceArea x1={highlightStart} x2={highlightEnd} fill={`url(#${hatchId})`} fillOpacity={0.6} strokeOpacity={0}/>)}
             <Area type="linear" dataKey={(row: ChartRow) => grain === 'annual' && 'isPartial' in row && row.isPartial ? null : row.collisionCount} name="Collisions" stroke="var(--ink-3)" fill="var(--ink-3)" fillOpacity={0.12} isAnimationActive={false}/>
             <Line type="linear" dataKey={(row: ChartRow) => grain === 'annual' && 'isPartial' in row && row.isPartial ? null : row.totalSeverity} name="Severity burden" stroke="var(--ramp-5)" strokeWidth={2} dot={false} isAnimationActive={false}/>
-            {partialSegments.flatMap((includes, index) => [
-              <Line key={`count-${index}`} type="linear" dataKey={(row: AnnualTrendPoint) => includes(row.year) ? row.collisionCount : null} name="Collisions" stroke="var(--ink-3)" dot={{ r: 4, strokeWidth: 2, fill: 'var(--surface)' }} isAnimationActive={false}/>,
-              <Line key={`burden-${index}`} type="linear" dataKey={(row: AnnualTrendPoint) => includes(row.year) ? row.totalSeverity : null} name="Severity burden" stroke="var(--ramp-5)" dot={{ r: 4, strokeWidth: 2, fill: 'var(--surface)' }} isAnimationActive={false}/>,
-            ])}
-            {grain === 'annual' && annual.filter((row) => row.isPartial).map((row) => <ReferenceDot key={`partial-label-${row.year}`} x={row.year} y={row.collisionCount} r={0} ifOverflow="visible" label={{ value: row.coverage ? annualCoverage(row).replace('Partial year · ', '') : row.year === Number(meta.dataAsOf.slice(0, 4)) ? `Jan–${new Date(`${meta.dataAsOf}T00:00:00Z`).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })}` : 'Partial', position: 'left', offset: 10, fill: 'var(--ink-2)', fontSize: 11 }}/>)}
+            {grain === 'annual' && <Line type="linear" dataKey={(row: AnnualTrendPoint) => row.isPartial ? row.collisionCount : null} name="Collisions" stroke="none" dot={{ r: 4, strokeWidth: 2, stroke: 'var(--ink-3)', fill: 'var(--surface)' }} isAnimationActive={false}/>}
+            {grain === 'annual' && <Line type="linear" dataKey={(row: AnnualTrendPoint) => row.isPartial ? row.totalSeverity : null} name="Severity burden" stroke="none" dot={{ r: 4, strokeWidth: 2, stroke: 'var(--ramp-5)', fill: 'var(--surface)' }} isAnimationActive={false}/>}
+            {grain === 'annual' && annual.filter((row) => row.isPartial).map((row) => <ReferenceDot key={`partial-label-${row.year}`} x={row.year} y={row.collisionCount} r={0} ifOverflow="visible" label={{ value: row.coverage ? annualCoverage(row).replace('Partial year · ', '') : row.year === Number(meta.dataAsOf.slice(0, 4)) ? `Jan–${new Date(`${meta.dataAsOf}T00:00:00Z`).toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })}` : 'Partial', position: annual.length > 1 && row.year === annual[0]?.year ? 'right' : 'left', offset: 10, fill: 'var(--ink-2)', fontSize: 11 }}/>)}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

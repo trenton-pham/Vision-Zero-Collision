@@ -44,6 +44,7 @@ describe('TrendChart partial-year metadata', () => {
     const user = userEvent.setup()
     render(<DatasetMetaProvider meta={meta}><TrendChart annual={annual} monthly={monthly} grain="annual"/></DatasetMetaProvider>)
     expect(screen.getByRole('img')).toHaveAccessibleName(/Hollow points mark partial years/)
+    expect(screen.getByRole('img')).not.toHaveAccessibleName(/Hatched bands/)
     await user.click(screen.getByText('View annual chart data'))
     expect(screen.getByRole('table')).toHaveAccessibleName('Annual collisions and weighted severity totals')
     expect(screen.getByRole('cell', { name: '10' })).toBeInTheDocument()

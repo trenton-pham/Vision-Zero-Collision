@@ -32,6 +32,11 @@ describe('story observations', () => {
     expect(cards[1]?.href).toBe('/neighborhoods?neighborhood=b&start=2015&end=2026')
   })
 
+  it('names a single-year range once', () => {
+    const [, top] = storyObservations({ comparison: available, neighborhoods: [metrics('a', 'Alki', 40, 90)], shift, startYear: 2024, endYear: 2024 })
+    expect(top?.body).toMatch(/collisions, 2024\.$/)
+  })
+
   it('never uses causal or risk language', () => {
     const text = cards.map((card) => `${card.label} ${card.value} ${card.body}`).join(' ').toLowerCase()
     expect(text).not.toMatch(/caus|because|risk|danger|safe|predict|likely|due to/)
