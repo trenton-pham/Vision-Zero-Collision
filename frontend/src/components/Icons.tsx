@@ -36,9 +36,6 @@ export function SearchIcon(props: IconProps) {
   return <svg {...base} {...props}><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.5"/><path d="m15.5 15.5 5 5" stroke="currentColor" strokeWidth="1.5"/></svg>
 }
 
-export function ChevronIcon(props: IconProps) {
-  return <svg {...base} {...props}><path d="m8 10 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square"/></svg>
-}
 
 export function CheckIcon(props: IconProps) {
   return <svg {...base} {...props}><path d="m5 12.5 4.2 4.2L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"/></svg>

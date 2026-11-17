@@ -33,7 +33,7 @@ export function readMapTokens(): MapTokens {
 }
 
 export const SEATTLE_BOUNDS: LngLatBoundsLike = [[-122.436, 47.495], [-122.235, 47.735]]
-export const MAP_ATTRIBUTION = '<a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
+const MAP_ATTRIBUTION = '<a href="https://openfreemap.org" target="_blank" rel="noreferrer">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/" target="_blank" rel="noreferrer">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>'
 
 const LABEL_FONT = ['Noto Sans Regular']
 

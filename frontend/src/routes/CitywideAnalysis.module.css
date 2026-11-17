@@ -48,9 +48,6 @@
 .downtownSwatch { background: var(--accent); }
 .outerSwatch { background: var(--ink-3); }
 .chart { height: 180px; margin-top: 12px; }
-.splitMetric { margin-top: 16px; display: flex; align-items: end; justify-content: space-between; gap: 16px; }
-.splitMetric strong { color: var(--ink); font: 600 2rem/1 var(--font-ui); font-variant-numeric: tabular-nums; }
-.splitMetric span { color: var(--ink-2); font-size: .8125rem; line-height: 1.5; text-align: right; }
 .mapNote { margin: 0; padding: 16px; color: var(--ink-2); font-size: .8125rem; line-height: 1.6; }
 .secondaryMetrics { margin-top: 24px; border: 1px solid var(--rule); border-radius: var(--radius-card); overflow: hidden; background: var(--surface); }
 .secondaryMetrics > summary, .chartData > summary { min-height: 44px; padding: 14px 16px; cursor: pointer; color: var(--ink); font-size: .875rem; }

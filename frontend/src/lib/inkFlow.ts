@@ -1,7 +1,7 @@
 import { contours } from 'd3-contour'
 import type { KdeResponse } from './contracts'
 
-export type InkLevel = { fraction: number; rings: [number, number][][][] }
+type InkLevel = { fraction: number; rings: [number, number][][][] }
 export type InkFlow = { levels: InkLevel[]; bounds: { west: number; south: number; east: number; north: number } }
 
 const UPSAMPLE = 4
