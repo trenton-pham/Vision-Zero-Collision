@@ -8,6 +8,10 @@ export function MapIcon(props: IconProps) {
   return <svg {...base} {...props}><path d="m3 6 5-2 8 3 5-2v13l-5 2-8-3-5 2V6Z" stroke="currentColor" strokeWidth="1.5"/><path d="M8 4v13m8-10v13" stroke="currentColor" strokeWidth="1.5"/></svg>
 }
 
+export function OverviewIcon(props: IconProps) {
+  return <svg {...base} {...props}><path d="M3 15c3-.5 5-5 9-5s5 3 9 2.5" stroke="currentColor" strokeWidth="1.5"/><path d="M4 19c3-1.2 5-3.5 8-3.5s4.5 1.5 7.5 1.2" stroke="currentColor" strokeWidth="1.5" opacity=".6"/><circle cx="14" cy="8" r="2.6" fill="currentColor"/></svg>
+}
+
 export function AnalysisIcon(props: IconProps) {
   return <svg {...base} {...props}><path d="M4 19V9m6 10V4m6 15v-7m4 7H2" stroke="currentColor" strokeWidth="1.5"/><path d="m3 7 6-4 6 7 6-5" stroke="currentColor" strokeWidth="1.5"/></svg>
 }

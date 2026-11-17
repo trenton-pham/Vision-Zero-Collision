@@ -6,4 +6,4 @@
 .compact .cell { min-height: 72px; }
 .compact .cell dd { font-size: 1.375rem; }
 @media (max-width: 900px) { .compact { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
+@media (max-width: 600px) { .cell dt { letter-spacing: .06em; } .cell { min-height: 72px; padding: 12px 14px; } }

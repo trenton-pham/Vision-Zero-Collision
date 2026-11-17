@@ -8,7 +8,7 @@ import { useDashboardParams } from '../lib/useUrlState'
 import { receivedThrough } from '../lib/format'
 import { useTheme } from '../lib/theme'
 import { ErrorState, LoadingState } from './States'
-import { AnalysisIcon, MapIcon, SeattleMark } from './Icons'
+import { AnalysisIcon, MapIcon, OverviewIcon, SeattleMark } from './Icons'
 import styles from './AppShell.module.css'
 
 const CurrentFlow = lazy(() => import('./FlowViews').then((module) => ({ default: module.CurrentFlow })))
@@ -57,11 +57,14 @@ function ShellContent({ dataAsOf, partialYears = [], children }: { dataAsOf?: st
   return (
       <div className={styles.shell}>
         <aside className={styles.rail} aria-label="Primary navigation">
-          <NavLink className={styles.brand} to="/neighborhoods" aria-label="Seattle Collision Dashboard">
+          <NavLink className={styles.brand} to="/" aria-label="Seattle Collision Dashboard">
             <SeattleMark />
             <span>Seattle Collision</span>
           </NavLink>
           <nav className={styles.nav}>
+            <NavLink end aria-label="Overview" title="Overview" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/">
+              <span className={styles.navIcon}><OverviewIcon/></span><span>Overview</span>
+            </NavLink>
             <NavLink aria-label="Neighborhood Explorer" title="Neighborhood Explorer" className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`} to="/neighborhoods">
               <span className={styles.navIcon}><MapIcon/></span><span>Neighborhoods</span>
             </NavLink>
@@ -85,8 +88,9 @@ function ShellContent({ dataAsOf, partialYears = [], children }: { dataAsOf?: st
           </section>
         </aside>
         <header className={styles.header}>
-          <div className={styles.mobileBrand}><SeattleMark/><span>Seattle Collision</span></div>
+          <div className={styles.mobileBrand}><SeattleMark/><span className={styles.mobileBrandText}>Seattle Collision</span></div>
           <nav className={styles.mobileNav} aria-label="Mobile navigation">
+            <NavLink end to="/">Overview</NavLink>
             <NavLink to="/neighborhoods">Neighborhoods</NavLink>
             <NavLink to="/citywide">Citywide</NavLink>
           </nav>

@@ -23,6 +23,7 @@ Neighborhood assignment is deterministic, and every analytical rule is transpare
 
 ## Operating Context
 
+- The Overview at `/` is the citywide entry point. It shows the selected years' collision count, an ink-flow drawing of collision density built from the release's KDE grid, headline readouts, and rule-generated observations that link into the working views. Every figure comes from the pinned release, and the observations state observed records only.
 - Neighborhood Explorer is the main workspace. The map and the searchable selector share one selection state, which lives in the URL. A selection can be a single neighborhood or a combined set.
 - With no neighborhood selected, Neighborhood Explorer shows all-severity citywide statistics and trends. These include accepted collisions that have no neighborhood assignment. Selecting neighborhoods replaces the inspector with their release-scoped data.
 - Inspector metric grids leave out the Night and Weekend distribution shares. The API and Citywide Analysis still provide those measures.

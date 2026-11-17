@@ -6,17 +6,13 @@ import { MetricGrid } from '../components/MetricGrid'
 import { EmptyState, ErrorState, LoadingState } from '../components/States'
 import { api } from '../lib/api'
 import { useRelease } from '../lib/dataset'
-import { integer, metricValue } from '../lib/format'
+import { integer, metricValue, yearSpan } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
 import styles from './CitywideAnalysis.module.css'
 
 const CitywideMap = lazy(() => import('../components/CitywideMap').then((module) => ({ default: module.CitywideMap })))
 
-function yearSpan(years: number[] | undefined) {
-  if (!years?.length) return 'no complete years'
-  return years.length === 1 ? String(years[0]) : `${years[0]}–${years.at(-1)}`
-}
 
 export function CitywideAnalysis() {
   const state = useDashboardParams()

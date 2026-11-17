@@ -21,3 +21,8 @@ export function receivedThrough(dataAsOf: string): string {
     timeZone: 'UTC',
   }).format(new Date(`${dataAsOf}T00:00:00Z`)).toUpperCase()
 }
+
+export function yearSpan(years: number[] | undefined) {
+  if (!years?.length) return 'no complete years'
+  return years.length === 1 ? String(years[0]) : `${years[0]}–${years.at(-1)}`
+}

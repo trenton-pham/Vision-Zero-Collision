@@ -56,6 +56,9 @@
 @media (max-width: 540px) {
   .header { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding-inline: 16px; }
   .mobileBrand { font-size: 1rem; }
+  .mobileBrand { grid-column: 1; grid-row: 1; }
+  .mobileNav { grid-column: 1 / -1; grid-row: 1; justify-self: end; }
+  .mobileBrandText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .mobileNav a { padding: 0 7px; font-size: .75rem; }
   .themeControl { grid-column: 2; grid-row: 2 / 4; display: grid; align-self: start; }
   .themeControl select { width: 94px; }

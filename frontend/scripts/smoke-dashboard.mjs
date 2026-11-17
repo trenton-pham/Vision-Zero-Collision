@@ -20,6 +20,9 @@ try {
         await route.continue()
       }
     })
+    await page.goto(new URL('/', origin).href)
+    await page.getByRole('heading', { level: 1, name: /mapped by burden\.$/ }).waitFor()
+    await page.getByRole('img', { name: /^Collision density across Seattle/ }).waitFor()
     await page.goto(new URL('/neighborhoods', origin).href)
     await page.getByRole('heading', { name: 'Neighborhood Explorer', exact: true }).waitFor()
     const response = await page.request.get(new URL('/data/current.json', origin).href)
