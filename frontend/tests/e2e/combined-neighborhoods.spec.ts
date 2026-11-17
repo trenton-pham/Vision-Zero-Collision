@@ -2,7 +2,7 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { neighborhoodBundleSchema, releaseManifestSchema } from '../../src/lib/contracts'
 import { assignedResolver } from '../fixtures'
-import { mockReleaseUpdates } from './static-helpers'
+import { mapDiffers, mapMatches, mockReleaseUpdates, readMap, settledMap } from './static-helpers'
 
 test('combined totals and trends follow keyboard selection, removal, and history', async ({ page, request }) => {
   let seriesRequests = 0
@@ -45,8 +45,8 @@ test('map clicks add and remove neighborhoods from an existing selection', async
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.route('**/data/releases/*/resolver.json', async (route) => { await route.fulfill({ json: assignedResolver('fremont', 'Fremont') }) })
   await page.goto('/neighborhoods?start=2025&end=2025&neighborhood=ballard')
-  const map = page.locator('.leaflet-container')
   await expect(page.getByRole('heading', { name: 'Ballard', exact: true })).toBeVisible()
+  const map = await settledMap(page)
   await map.click({ position: { x: 100, y: 100 } })
   await expect(page.getByRole('heading', { name: '2 neighborhoods combined', exact: true })).toBeVisible()
   expect(new URL(page.url()).searchParams.getAll('neighborhood')).toEqual(['ballard', 'fremont'])
@@ -94,24 +94,24 @@ test('old releases explain unavailable combined data and retain singleton result
 test('changing trend interval or metric preserves a manually panned map', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto('/neighborhoods?neighborhood=ballard&neighborhood=fremont')
-  const map = page.locator('.leaflet-container')
   await expect(page.getByRole('complementary', { name: 'Selected neighborhood context' })).toHaveAttribute('aria-busy', 'false')
+  const map = await settledMap(page)
   await map.scrollIntoViewIfNeeded()
-  const pane = map.locator('.leaflet-map-pane')
-  const before = await pane.evaluate((element) => element.getAttribute('style'))
+  const before = (await readMap(page)).image
   const box = await map.boundingBox()
   if (!box) throw new Error('Map is not visible')
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
   await page.mouse.down()
   await page.mouse.move(box.x + box.width / 2 + 50, box.y + box.height / 2 + 40, { steps: 10 })
   await page.mouse.up()
-  await expect.poll(() => pane.getAttribute('style')).not.toBe(before)
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))))
-  await expect(pane).not.toHaveClass(/leaflet-pan-anim/)
-  const panned = await pane.getAttribute('style')
+  await expect.poll(() => mapDiffers(page, before)).toBe(true)
+  const panned = (await readMap(page)).image
   await page.getByRole('button', { name: 'Monthly', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Monthly', exact: true })).toHaveAttribute('aria-pressed', 'true')
-  await expect(pane).toHaveAttribute('style', panned ?? '')
-  await page.getByRole('combobox', { name: 'Map metric', exact: true }).selectOption('fatalities')
-  await expect(pane).toHaveAttribute('style', panned ?? '')
+  expect(await mapMatches(page, panned)).toBe(true)
+  const metric = page.getByRole('combobox', { name: 'Map metric', exact: true })
+  await metric.selectOption('fatalities')
+  await expect.poll(() => mapDiffers(page, panned)).toBe(true)
+  await metric.selectOption('collisionCount')
+  await expect.poll(() => mapMatches(page, panned)).toBe(true)
 })

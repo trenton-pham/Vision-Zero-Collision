@@ -1,5 +1,5 @@
 import { assignedResolver } from '../fixtures'
-import { mockReleaseUpdates } from './static-helpers'
+import { mockReleaseUpdates, readMap, settledMap } from './static-helpers'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { citywideBundleSchema, neighborhoodFeatureCollectionSchema } from '../../src/lib/contracts'
@@ -96,27 +96,11 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
   page.on('pageerror', (error) => pageErrors.push(error))
   await page.emulateMedia({ colorScheme: 'dark' })
   await page.goto('/citywide?start=2025&end=2025')
-  const map = page.locator('.leaflet-container')
-  const canvas = map.locator('.leaflet-overlay-pane canvas')
-  await expect(canvas).toBeVisible()
-  await expect(map.locator('.leaflet-overlay-pane svg')).toHaveCount(0)
-  const readCanvas = () => canvas.evaluate((element) => {
-    if (!(element instanceof HTMLCanvasElement)) throw new Error('Density overlay is not a canvas')
-    const context = element.getContext('2d')
-    if (!context) throw new Error('Density canvas has no 2D context')
-    const pixels = context.getImageData(0, 0, element.width, element.height).data
-    return {
-      painted: pixels.some((value, index) => index % 4 === 3 && value > 0),
-      densityPainted: pixels.some((red, index) => {
-        if (index % 4 !== 0) return false
-        const green = pixels[index + 1] ?? 0
-        const blue = pixels[index + 2] ?? 0
-        const alpha = pixels[index + 3] ?? 0
-        return red > 100 && red > green && green > blue && alpha > 0
-      }),
-      image: element.toDataURL(),
-    }
-  })
+  const map = await settledMap(page)
+  const readCanvas = async () => {
+    const { image, rampPixels } = await readMap(page)
+    return { image, painted: rampPixels > 0, densityPainted: rampPixels > 500 }
+  }
   await expect.poll(async () => (await readCanvas()).densityPainted).toBe(true)
   const heatmap = await readCanvas()
   await page.getByRole('tab', { name: 'KDE density' }).click()
@@ -146,7 +130,6 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
     const restored = await readCanvas()
     return restored.painted && restored.image !== zoomed.image
   }).toBe(true)
-  await expect(map.locator('.leaflet-zoom-anim')).toHaveCount(0)
   const beforeFilter = await readCanvas()
 
   const fatalResponse = page.waitForResponse((response) => {
@@ -184,13 +167,12 @@ test('citywide Canvas stays painted through layers, zoom, and data changes', asy
     const changed = await readCanvas()
     return changed.painted && changed.image !== beforeYearChange.image
   }).toBe(true)
-  await expect(map.locator('.leaflet-overlay-pane svg')).toHaveCount(0)
 
   const neighborhoodLink = page.getByRole('link', { name: 'Neighborhood Explorer', exact: true })
   if (await neighborhoodLink.isVisible()) await neighborhoodLink.click()
   else await page.getByRole('link', { name: 'Neighborhoods', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Neighborhood Explorer' })).toBeVisible()
-  await expect(page.locator('path.leaflet-interactive').first()).toBeVisible()
+  await settledMap(page)
   expect(pageErrors).toEqual([])
 })
 
@@ -230,8 +212,7 @@ test('a later map click wins when resolution replies arrive out of order', async
     if (firstLocation) firstFinished.release()
   })
   await page.goto('/neighborhoods?start=2025&end=2025')
-  const map = page.locator('.leaflet-container')
-  await expect(map).toBeVisible()
+  const map = await settledMap(page)
   await map.click({ position: { x: 100, y: 100 } })
   await expect.poll(() => firstRequests).toBeGreaterThanOrEqual(1)
   await map.click({ position: { x: 150, y: 150 } })
@@ -253,8 +234,7 @@ test('manual selection wins over a pending map resolution', async ({ page }) => 
     mapFinished.release()
   })
   await page.goto('/neighborhoods?start=2025&end=2025')
-  const map = page.locator('.leaflet-container')
-  await expect(map).toBeVisible()
+  const map = await settledMap(page)
   await map.click({ position: { x: 100, y: 100 } })
   await expect.poll(() => requests).toBeGreaterThanOrEqual(1)
   const picker = page.getByRole('combobox', { name: 'Neighborhood' })
@@ -290,7 +270,7 @@ for (const route of ['neighborhoods', 'citywide']) {
     const pageErrors: Error[] = []
     page.on('pageerror', (error) => pageErrors.push(error))
     await page.goto(`/${route}?start=2020&end=2025`)
-    await expect(page.locator('.leaflet-container')).toBeVisible()
+    await expect(page.locator('.maplibregl-map')).toBeVisible()
     if (route === 'citywide') {
       if (await page.locator('#severity-filters').getAttribute('open') === null) await page.locator('#severity-filters > summary').click()
       await page.getByText('Fatal', { exact: true }).click()
@@ -336,12 +316,12 @@ for (const navigation of ['years', 'grain', 'back', 'citywide']) {
       finished.release()
     })
     await page.goto('/neighborhoods?start=2021&end=2025')
-    await expect(page.locator('path.leaflet-interactive').first()).toBeVisible()
+    await settledMap(page)
     if (navigation === 'back') {
       await page.getByRole('button', { name: 'Monthly' }).click()
       await expect(page).toHaveURL(/grain=monthly/)
     }
-    await page.locator('.leaflet-container').click({ position: { x: 100, y: 100 } })
+    await page.locator('.maplibregl-map').click({ position: { x: 100, y: 100 } })
     await expect.poll(() => requests).toBe(1)
     if (navigation === 'years') {
       await page.getByRole('slider', { name: 'Start year' }).press('ArrowRight')
@@ -378,7 +358,7 @@ for (const navigation of ['years', 'grain']) {
       await route.fulfill({ json: assignedResolver('ballard', 'Ballard') })
     })
     await page.goto('/neighborhoods?start=2021&end=2025')
-    await expect(page.locator('path.leaflet-interactive').first()).toBeVisible()
+    await settledMap(page)
     if (navigation === 'years') {
       await page.getByRole('slider', { name: 'Start year' }).press('ArrowRight')
       await expect(page).toHaveURL(/start=2022(?:&|$)/)
@@ -390,20 +370,9 @@ for (const navigation of ['years', 'grain']) {
     }
     const expected = new URL(page.url()).searchParams
     await expect(page.getByRole('complementary', { name: 'Seattle citywide context' })).toContainText(`${expected.get('start')}—${expected.get('end')}`)
-    await expect(page.locator('path.leaflet-interactive')).toHaveCount(94)
-    await page.locator('.leaflet-container').scrollIntoViewIfNeeded()
-    const point = await page.evaluate(() => {
-      const bounds = document.querySelector('.leaflet-container')?.getBoundingClientRect()
-      if (!bounds) return null
-      for (let y = Math.max(0, bounds.top) + 10; y < Math.min(innerHeight, bounds.bottom) - 10; y += 10) {
-        for (let x = Math.max(0, bounds.left) + 10; x < Math.min(innerWidth, bounds.right) - 10; x += 10) {
-          if (document.elementFromPoint(x, y)?.matches('path.leaflet-interactive')) return { x, y }
-        }
-      }
-      return null
-    })
-    if (!point) throw new Error('No visible neighborhood polygon can receive a click')
-    await page.mouse.click(point.x, point.y)
+    const map = await settledMap(page)
+    await map.scrollIntoViewIfNeeded()
+    await map.click()
     await expect.poll(() => requests).toBe(1)
     await expect(page).toHaveURL(/neighborhood=ballard/)
     expect(requests).toBe(1)
@@ -414,7 +383,7 @@ for (const navigation of ['years', 'grain']) {
   })
 }
 
-test('a dataset refresh replaces same-sized polygon paths', async ({ page }) => {
+test('a dataset refresh repaints same-sized neighborhood geometry', async ({ page }) => {
   await page.clock.install()
   let metadataRequests = 0
   let geometryRequests = 0
@@ -441,11 +410,9 @@ test('a dataset refresh replaces same-sized polygon paths', async ({ page }) => 
     await route.fulfill({ json: collection })
   })
   await page.goto('/neighborhoods?start=2021&end=2025')
-  const paths = page.locator('path.leaflet-interactive')
-  await expect(paths.first()).toBeVisible()
-  const original = await paths.evaluateAll((elements) => elements.map((element) => element.getAttribute('d')))
+  const original = (await readMap(page)).image
   await page.clock.fastForward(300_001)
   await expect.poll(() => geometryRequests).toBe(2)
   await expect.poll(() => metadataRequests).toBe(2)
-  await expect.poll(async () => paths.evaluateAll((elements) => elements.map((element) => element.getAttribute('d')))).not.toEqual(original)
+  await expect.poll(async () => (await readMap(page)).image).not.toBe(original)
 })

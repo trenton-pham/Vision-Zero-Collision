@@ -54,8 +54,8 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 | --- | --- | --- |
 | Browser application | React and React DOM `^19.2.0`; TypeScript `^5.9.3`; HTML; JavaScript; CSS Modules | `main.tsx` mounts the component tree; `.tsx` components and module styles form the UI. |
 | Navigation and state | React Router DOM `^7.9.5`; TanStack React Query `^5.90.11`; React Context; URLSearchParams | Routes and URL filters live in React Router; Query caches remote results; Context distributes dataset metadata. |
-| Maps and charts | Leaflet `^1.9.4`; React Leaflet `^5.0.0`; Recharts `^3.3.0`; OpenStreetMap tiles | Leaflet draws polygons and density markers; Recharts draws trends. Tile images are fetched directly by the browser. |
-| Controls and fonts | Radix React Slider `^1.3.6`; Fontsource Barlow Condensed and IBM Plex Sans `^5.2.8` | The shell's year slider uses Radix. Fonts are imported into the frontend bundle. |
+| Maps and charts | MapLibre GL `^6.18.0`; Recharts `^3.3.0`; OpenFreeMap vector tiles | MapLibre draws the neighborhood choropleth and density layers over a basemap styled from the design tokens; Recharts draws trends. The browser fetches vector tiles and glyphs from OpenFreeMap, which needs no key and adds attribution automatically. |
+| Controls and fonts | Radix React Slider `^1.3.6`; Fontsource variable Source Serif 4 and Libre Franklin `^5.3` | The shell's year slider uses Radix. Fonts are imported into the frontend bundle. |
 | Declared compatibility package | `react-is ^19.2.0` | Declared in `package.json`; no direct import in project source was found. |
 | Python service | Python `>=3.11,<3.15`; FastAPI `>=0.116,<1`; Uvicorn standard `>=0.34,<1` | Docker and CI use Python 3.11. Uvicorn hosts the API and static application. |
 | Response contracts | Pydantic through FastAPI; Zod `^4.6.6` | `schemas.py` defines backend response models. `contracts.ts` defines Zod schemas and inferred TypeScript types. The client validates JSON before returning it to components. |
@@ -70,7 +70,7 @@ Versions below are manifest constraints or configured runtime versions, not a cl
 | Python verification | pytest `>=8.3,<9`; pytest-cov `>=6,<8`; HTTPX TestClient support; MongoDB 8.2 CI service | API, assignment, metrics, ingestion, publication, probe, and memory tests. pytest-cov is declared; default test options do not enable coverage output. |
 | Browser verification | Vitest `^4.0.10`; jsdom `^27.2.0`; Testing Library React `^16.3.0`, DOM `^10.4.1`, jest-dom `^6.9.1`, user-event `^14.6.1` | Component and API-client tests in a simulated browser environment. |
 | End to end verification | Playwright Test `^1.56.1`; axe-core Playwright `^4.11.0`; Chromium | Desktop and mobile browser scenarios, interaction races, URL restoration, and accessibility checks. |
-| Type definitions | `@types/react ^19.2.2`; `@types/react-dom ^19.2.2`; `@types/node ^24.10.0`; `@types/leaflet ^1.9.21`; `@types/geojson ^7946.0.16` | Compile-time definitions, not runtime application services. |
+| Type definitions | `@types/react ^19.2.2`; `@types/react-dom ^19.2.2`; `@types/node ^24.10.0`; `@types/geojson ^7946.0.16` | Compile-time definitions, not runtime application services. |
 | Notebook research | Jupyter notebook format; Matplotlib; Seaborn; Folium; scikit-learn; XGBoost; LightGBM; CatBoost | EDA, spatial plots, and historical regression. These packages are not fully declared by the app's `pyproject.toml`, and no notebook model is served by the app. |
 | Design workflow | Figma; Impeccable; Markdown design briefs and JSON design tokens | Documents and local design tooling guide the frontend; they are not runtime data sources. |
 | Development container | Dev Containers and Codespaces; Python 3.11; Node 22; VS Code Python, Pylance, and Jupyter | The container installs dependencies, generates artifacts, builds React, and starts Uvicorn on port 8000. Port 5173 is available for optional Vite development. |
@@ -283,7 +283,7 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 **`frontend/playwright.config.ts`** — End-to-end runner configuration, API/static server startup on port 4173, failure traces, and Chromium desktop/mobile profiles. Uses the repository virtual environment locally and system Python in CI.
 
-**`frontend/src/main.tsx`** — Browser bootstrap importing fonts, Leaflet CSS, tokens, and global styles. Mounts StrictMode, QueryClientProvider, BrowserRouter, and `App`.
+**`frontend/src/main.tsx`** — Browser bootstrap importing fonts, tokens, and global styles. The maps load MapLibre and its CSS lazily. Mounts StrictMode, QueryClientProvider, BrowserRouter, and `App`.
 
 **`frontend/src/App.tsx`** — Lazy workspace routes within `AppShell`; redirects the root and unknown paths to `/neighborhoods`. Uses Suspense with the shared loading state.
 
@@ -309,7 +309,7 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 **`frontend/src/components/AppShell.module.css`** — Shell rail, command header, year slider, partial-year styling, and responsive navigation layout. Defines visual structure for `AppShell`.
 
-**`frontend/src/components/NeighborhoodMap.tsx`** — Leaflet polygon map with metric-dependent shading, selection styling, click-to-resolve, fit-to-selection, and reduced-motion awareness. Uses external OpenStreetMap tiles and server-provided GeoJSON.
+**`frontend/src/components/NeighborhoodMap.tsx`** — MapLibre choropleth with severity-ramp steps held in feature state, outline-based selection, click-to-resolve, fit-to-selection, reduced-motion awareness, and a fallback note when WebGL is unavailable. Shares map setup with `CitywideMap` through `useMapLibre.ts`; the basemap style lives in `lib/mapStyle.ts`.
 
 **`frontend/src/components/NeighborhoodMap.module.css`** — Neighborhood map sizing, tile treatment, legend, resolving hint, and selected-polygon pulse styling.
 
@@ -325,7 +325,7 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 **`frontend/src/components/TrendChart.module.css`** — Trend plot sizing, series legend, partial-year marker, pulse animation, and mobile marker placement.
 
-**`frontend/src/components/CitywideMap.tsx`** — Leaflet density surface drawing weighted histogram circles or KDE circles, centroid displacement, and the downtown bounding rectangle. Receives already calculated responses rather than computing KDE in the browser.
+**`frontend/src/components/CitywideMap.tsx`** — MapLibre density surface drawing weighted histogram circles or KDE circles, centroid displacement, and the downtown bounding rectangle. Receives already calculated responses rather than computing KDE in the browser.
 
 **`frontend/src/components/CitywideMap.module.css`** — Citywide map frame, full-size map area, and tile appearance.
 

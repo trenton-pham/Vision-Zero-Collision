@@ -1,6 +1,5 @@
 import '@fontsource-variable/source-serif-4/wght.css'
 import '@fontsource-variable/libre-franklin/wght.css'
-import 'leaflet/dist/leaflet.css'
 import './styles/tokens.css'
 import './styles/global.css'
 import { StrictMode } from 'react'

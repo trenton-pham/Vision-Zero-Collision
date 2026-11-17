@@ -24,7 +24,7 @@ The research questions are:
 | EDA & Visualization | Matplotlib, Seaborn |
 | Spatial Analysis | GeoPandas, Shapely, SciPy (KDE), Folium in notebooks |
 | Modeling | Scikit-learn, XGBoost, LightGBM, CatBoost, PyTorch |
-| Dashboard | React, TypeScript, Vite, React-Leaflet, Recharts |
+| Dashboard | React, TypeScript, Vite, MapLibre GL, Recharts |
 | API & Data Storage | FastAPI, local Parquet artifacts, MongoDB Atlas |
 | Deployment & Refresh | Cloudflare Workers Static Assets, GitHub Actions |
 

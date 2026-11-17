@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { CitywideMap } from '../components/CitywideMap'
 import { CheckIcon } from '../components/Icons'
 import { MetricGrid } from '../components/MetricGrid'
 import { EmptyState, ErrorState, LoadingState } from '../components/States'
@@ -11,6 +10,8 @@ import { integer, metricValue } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
 import styles from './CitywideAnalysis.module.css'
+
+const CitywideMap = lazy(() => import('../components/CitywideMap').then((module) => ({ default: module.CitywideMap })))
 
 function yearSpan(years: number[] | undefined) {
   if (!years?.length) return 'no complete years'
@@ -89,7 +90,7 @@ export function CitywideAnalysis() {
                 </div>
               </div>
               <div id="density-panel" role="tabpanel" aria-labelledby={`${state.cityLayer}-tab`} tabIndex={0}>
-                {summary.data.metrics.collisionCount === 0 ? <EmptyState title="No collisions match" body="Broaden the year range or severity filters to restore the map."/> : <CitywideMap layer={state.cityLayer} heatmap={heatmap.data} kde={kde.data} shift={shift.data} downtown={downtown.data}/>}
+                {summary.data.metrics.collisionCount === 0 ? <EmptyState title="No collisions match" body="Broaden the year range or severity filters to restore the map."/> : <Suspense fallback={<LoadingState label="Loading map"/>}><CitywideMap layer={state.cityLayer} heatmap={heatmap.data} kde={kde.data} shift={shift.data} downtown={downtown.data}/></Suspense>}
               </div>
               <p className={styles.mapNote}>{state.cityLayer === 'kde' ? 'KDE smooths nearby collision locations into relative density. Values describe concentration, not the probability of a future collision.' : 'Each circle summarizes collisions in a grid cell. Larger circles represent more records.'}</p>
             </section>

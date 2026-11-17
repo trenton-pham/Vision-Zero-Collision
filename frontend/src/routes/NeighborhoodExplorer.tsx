@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { skipToken, useQuery } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { MAP_METRICS, parseMapMetric } from '../lib/mapMetrics'
@@ -11,12 +11,13 @@ import { annualTrendFromMonths } from '../lib/trendRange'
 import { useDatasetMeta, useRelease } from '../lib/dataset'
 import { weeklyTrend } from '../lib/weeklyTrend'
 import { MetricGrid } from '../components/MetricGrid'
-import { NeighborhoodMap } from '../components/NeighborhoodMap'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
 import { ErrorState, LoadingState } from '../components/States'
 import { TrendChart } from '../components/TrendChart'
 import { TrendRangeControl } from '../components/TrendRangeControl'
 import styles from './NeighborhoodExplorer.module.css'
+
+const NeighborhoodMap = lazy(() => import('../components/NeighborhoodMap').then((module) => ({ default: module.NeighborhoodMap })))
 
 function mapResolutionLocation({ pathname, search, hash }: Pick<Location, 'pathname' | 'search' | 'hash'>) {
   const params = new URLSearchParams(search)
@@ -205,7 +206,7 @@ export function NeighborhoodExplorer() {
         <div className={styles.workspace}>
           <section className={styles.mapPanel} aria-label="Neighborhood map">
             <div className={styles.panelLabel}><span>{summary.isPlaceholderData ? 'Updating map for selected years…' : '94 Seattle neighborhoods'}</span><strong>{MAP_METRICS.find(([value]) => value === state.mapMetric)?.[1]}</strong></div>
-            <NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedIds={neighborhoods} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/>
+            <Suspense fallback={<LoadingState label="Loading map"/>}><NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedIds={neighborhoods} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/></Suspense>
           </section>
           <aside
             className={styles.inspector}

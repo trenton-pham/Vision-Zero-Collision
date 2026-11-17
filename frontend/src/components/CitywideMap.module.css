@@ -1,11 +1,13 @@
 .frame { height: 570px; position: relative; background: var(--paper); overflow: hidden; }
 .map { height: 100%; background: var(--paper); }
-.frame :global(.leaflet-container) { font-family: var(--font-ui); }
-.frame :global(.leaflet-tile-pane) { filter: var(--map-tile-filter); }
-.frame :global(.leaflet-control-zoom a) { width: 44px; height: 44px; line-height: 44px; background: var(--surface); color: var(--ink); border-color: var(--rule); border-radius: var(--radius-control) !important; }
-.frame :global(.leaflet-control-attribution) { background: var(--overlay); color: var(--ink-3); font: 400 .75rem/1.4 var(--font-ui); }
-.frame :global(.leaflet-control-attribution a) { color: var(--accent); }
-.legend { position: absolute; border-radius: var(--radius-control); box-shadow: var(--shadow-float); z-index: 450; left: 14px; bottom: 32px; width: max-content; max-width: min(340px, calc(100% - 28px)); padding: 10px 12px; border: 1px solid var(--rule); background: var(--overlay); display: flex; flex-wrap: wrap; gap: 7px 16px; color: var(--ink-2); font: 500 .75rem/1.4 var(--font-ui); }
+.frame :global(.maplibregl-ctrl-group) { border-radius: var(--radius-control); background: var(--surface); box-shadow: var(--shadow-float); overflow: hidden; }
+.frame :global(.maplibregl-ctrl-group button) { width: 44px; height: 44px; }
+.frame :global(.maplibregl-ctrl-group button + button) { border-top-color: var(--rule); }
+.frame :global(.maplibregl-ctrl-icon) { filter: var(--map-icon-filter); }
+.frame :global(.maplibregl-ctrl-attrib) { background: var(--overlay); color: var(--ink-3); font: 400 .75rem/1.4 var(--font-ui); }
+.frame :global(.maplibregl-ctrl-attrib a) { color: var(--accent); }
+.unavailable { height: 100%; margin: 0; display: grid; place-items: center; padding: 24px; color: var(--ink-2); background: var(--sunk); text-align: center; font-size: var(--step--1); }
+.legend { position: absolute; border-radius: var(--radius-control); box-shadow: var(--shadow-float); z-index: 2; left: 14px; bottom: 32px; width: max-content; max-width: min(340px, calc(100% - 28px)); padding: 10px 12px; border: 1px solid var(--rule); background: var(--overlay); display: flex; flex-wrap: wrap; gap: 7px 16px; color: var(--ink-2); font: 500 .75rem/1.4 var(--font-ui); }
 .legend strong { flex-basis: 100%; font-weight: 600; }
 .legend span { display: flex; align-items: center; gap: 6px; }
 .legend i { width: 14px; height: 5px; flex-shrink: 0; display: block; }
