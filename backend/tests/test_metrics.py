@@ -107,3 +107,25 @@ def test_spatial_shift_excludes_partial_year(store: DataStore) -> None:
     shift = store.spatial_shift(2018, 2026, [])
     assert shift.excludedYears == [2026]
     assert 2026 not in shift.after.years
+
+
+def test_junction_breakdown_reconciles_with_summary(store: DataStore) -> None:
+    for severities in ([], ["fatal"], ["serious-injury", "fatal"]):
+        breakdown = store.junction_breakdown(2018, 2025, severities)
+        summary = store.citywide_summary(2018, 2025, severities).metrics
+        assert breakdown.collisionCount == summary.collisionCount
+        assert sum(c.collisionCount for c in breakdown.categories) == summary.collisionCount
+        assert sum(c.totalSeverity for c in breakdown.categories) == summary.totalSeverity
+        keys = [c.key for c in breakdown.categories]
+        assert keys == ["intersection", "midblock", "midblock-near", "intersection-unrelated", "driveway", "other", "unknown"]
+        assert all((c.meanSeverity is None) == (c.collisionCount < 30) for c in breakdown.categories)
+
+
+def test_junction_breakdown_unseen_raw_values_fold_into_other(store: DataStore, monkeypatch) -> None:
+    frame = store.collisions.copy()
+    frame["JUNCTIONTYPE"] = "Roundabout (new label)"
+    monkeypatch.setattr(store, "collisions", frame)
+    breakdown = store.junction_breakdown(2018, 2025, [])
+    by_key = {c.key: c for c in breakdown.categories}
+    assert by_key["other"].collisionCount == breakdown.collisionCount > 0
+    assert all(c.collisionCount == 0 for k, c in by_key.items() if k != "other")

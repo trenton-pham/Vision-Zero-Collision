@@ -194,3 +194,16 @@ class DowntownAnnual(ApiModel):
 class DowntownComparisonResponse(ApiModel):
     bbox: dict[str, float]
     annual: list[DowntownAnnual]
+
+
+class JunctionCategory(ApiModel):
+    key: str
+    label: str
+    collisionCount: int
+    totalSeverity: int
+    meanSeverity: float | None
+
+
+class JunctionBreakdownResponse(ApiModel):
+    collisionCount: int
+    categories: list[JunctionCategory]
