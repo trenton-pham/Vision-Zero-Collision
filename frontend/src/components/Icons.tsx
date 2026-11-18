@@ -40,3 +40,11 @@ export function SearchIcon(props: IconProps) {
 export function CheckIcon(props: IconProps) {
   return <svg {...base} {...props}><path d="m5 12.5 4.2 4.2L19 7" stroke="currentColor" strokeWidth="2" strokeLinecap="square" strokeLinejoin="miter"/></svg>
 }
+
+export function PauseIcon(props: IconProps) {
+  return <svg {...base} {...props}><path d="M9 6v12m6-12v12" stroke="currentColor" strokeWidth="2"/></svg>
+}
+
+export function PlayIcon(props: IconProps) {
+  return <svg {...base} {...props}><path d="M8 5.5v13l10.5-6.5L8 5.5Z" fill="currentColor"/></svg>
+}

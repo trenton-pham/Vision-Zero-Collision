@@ -26,6 +26,10 @@
   --step--1: .8125rem;
   --ease-out: cubic-bezier(.23, 1, .32, 1);
   --dur-press: 150ms;
+  --dur-enter: 700ms;
+  --dur-route: 220ms;
+  --dur-fade: 150ms;
+  --dur-crossfade: 1200ms;
   --map-icon-filter: none;
 }
 

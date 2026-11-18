@@ -66,3 +66,6 @@
   .yearMeta { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
   .yearMeta strong { font-size: .9375rem; }
 }
+.route, .routeStill { min-height: 100%; display: grid; grid-template-columns: minmax(0, 1fr); }
+.route { --rise: 6px; animation: global(rise) var(--dur-route) var(--ease-out) backwards; }
+@media (prefers-reduced-motion: reduce) { .route { animation-name: global(fade); animation-duration: var(--dur-fade); } }

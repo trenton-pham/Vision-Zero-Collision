@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as Slider from '@radix-ui/react-slider'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api, ReleaseUnavailableError } from '../lib/api'
 import { ReleaseProvider, useDatasetMeta } from '../lib/dataset'
 import { useDashboardParams } from '../lib/useUrlState'
@@ -112,6 +112,14 @@ function ShellContent({ dataAsOf, partialYears = [], children }: { dataAsOf?: st
   )
 }
 
+function RouteEntry() {
+  const { pathname } = useLocation()
+  const first = useRef(pathname)
+  const navigatedInApp = useRef(false)
+  navigatedInApp.current ||= pathname !== first.current
+  return <div key={pathname} className={navigatedInApp.current ? styles.route : styles.routeStill}><Outlet/></div>
+}
+
 export function AppShell() {
   const queryClient = useQueryClient()
   const recoveredRelease = useRef<string | null>(null)
@@ -133,7 +141,7 @@ export function AppShell() {
 
   const content = <ShellContent dataAsOf={release.data?.meta.dataAsOf} partialYears={release.data?.meta.partialYears}>
     {release.error && <ErrorState error={release.error} onRetry={() => void release.refetch()}/>}
-    {release.data ? <Outlet/> : !release.error && <LoadingState label="Loading dataset metadata"/>}
+    {release.data ? <RouteEntry/> : !release.error && <LoadingState label="Loading dataset metadata"/>}
   </ShellContent>
   return release.data ? <ReleaseProvider release={release.data} recoverRelease={recoverRelease}>{content}</ReleaseProvider> : content
 }
