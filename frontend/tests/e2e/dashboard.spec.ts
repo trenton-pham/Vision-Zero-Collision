@@ -91,6 +91,13 @@ test('citywide analysis exposes independent severity controls', async ({ page })
   await expect(page).toHaveURL(/severity=fatal(?:&|$)/)
 })
 
+test('junction breakdown shows the empty state when no collision matches', async ({ page }) => {
+  await page.goto('/citywide?start=2015&end=2015&severity=unknown')
+  const card = page.locator('section', { has: page.getByRole('heading', { name: 'Where collisions happen' }) })
+  await expect(card.getByText('Broaden the year range or severity filters to see junction types.')).toBeVisible()
+  await expect(card.getByRole('table')).toHaveCount(0)
+})
+
 test('junction breakdown follows severity filters with fixed rows and a hidden low-n mean', async ({ page }) => {
   await page.goto('/citywide?start=2021&end=2025')
   const table = page.getByRole('table', { name: 'Collisions and mean severity by junction type' })

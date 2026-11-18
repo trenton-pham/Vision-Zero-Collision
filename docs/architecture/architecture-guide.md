@@ -342,7 +342,7 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 **`frontend/src/routes/NeighborhoodExplorer.module.css`** — Explorer control row, map/inspector split, burden display, warnings, trend section, grain controls, selection pulse, and mobile stacking.
 
-**`frontend/src/routes/CitywideAnalysis.tsx`** — Severity-filtered analytical workspace. Queries summary, the active density layer, centroid shift, downtown comparison, and junction breakdown; renders map layers, complete-year comparisons, and the latest complete-year downtown severity.
+**`frontend/src/routes/CitywideAnalysis.tsx`** — Severity-filtered analytical workspace. Queries summary, the active density layer, centroid shift, downtown comparison, and junction breakdown; renders map layers, complete-year comparisons, the latest complete-year downtown severity, and the junction table.
 
 **`frontend/src/routes/CitywideAnalysis.module.css`** — Severity controls, density tabs, map and analytical rail, comparison chart, warning treatment, and responsive citywide layout.
 

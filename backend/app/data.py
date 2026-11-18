@@ -52,7 +52,7 @@ from .schemas import (
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ARTIFACT_DIR = ROOT / "data/dashboard"
 DOWNTOWN_BBOX = {"yMin": 47.595, "yMax": 47.620, "xMin": -122.345, "xMax": -122.320}
-# Raw ArcGIS JUNCTIONTYPE label -> (key, short label). Dict order is the display order; "other" and "unknown" stay last.
+# Raw ArcGIS JUNCTIONTYPE label -> (key, short label). Dict order is the display order.
 JUNCTION_CATEGORIES = {
     "At Intersection (intersection related)": ("intersection", "At intersection"),
     "Mid-Block (not related to intersection)": ("midblock", "Mid-block"),
@@ -657,20 +657,16 @@ class DataStore:
     def junction_breakdown(self, start_year: int, end_year: int, severities: list[str]) -> JunctionBreakdownResponse:
         frame = self._filter_citywide(start_year, end_year, severities)
         keys = frame["JUNCTIONTYPE"].astype(object).map(lambda raw: JUNCTION_CATEGORIES.get(raw, JUNCTION_OTHER)[0])
-        grouped = frame["severity_score"].groupby(keys).agg(["size", "sum"])
-        merged: dict[str, tuple[str, int, int]] = {}
-        for key, label in dict.fromkeys(JUNCTION_CATEGORIES.values()):
-            count, total = (int(grouped.loc[key, "size"]), int(grouped.loc[key, "sum"])) if key in grouped.index else (0, 0)
-            merged[key] = (label, count, total)
-        order = [k for k in merged if k not in ("other", "unknown")] + ["other", "unknown"]
+        categories = dict.fromkeys(JUNCTION_CATEGORIES.values())
+        grouped = frame["severity_score"].groupby(keys).agg(["size", "sum"]).reindex([key for key, _ in categories], fill_value=0)
         return JunctionBreakdownResponse(
             collisionCount=len(frame),
             categories=[
                 JunctionCategory(
-                    key=key, label=merged[key][0], collisionCount=merged[key][1], totalSeverity=merged[key][2],
-                    meanSeverity=round(merged[key][2] / merged[key][1], 3) if merged[key][1] >= JUNCTION_MIN_MEAN_N else None,
+                    key=key, label=label, collisionCount=int(count), totalSeverity=int(total),
+                    meanSeverity=round(total / count, 3) if count >= JUNCTION_MIN_MEAN_N else None,
                 )
-                for key in order
+                for (key, label), (count, total) in zip(categories, grouped.itertuples(index=False))
             ],
         )
 

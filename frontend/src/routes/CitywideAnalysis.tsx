@@ -42,7 +42,7 @@ export function CitywideAnalysis() {
   const junctionMaxMean = Math.max(0, ...(junction.data?.categories.filter((item) => !isMutedJunction(item.key)).map((item) => item.meanSeverity ?? 0) ?? []))
   const junctionMaxCount = Math.max(0, ...(junction.data?.categories.map((item) => item.collisionCount) ?? []))
   const layerQuery = state.cityLayer === 'heatmap' ? heatmap : kde
-  const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error ?? junction.error
+  const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error
   const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
   const latestCompleteDowntownYear = completeDowntownYears.at(-1)
 
@@ -69,7 +69,7 @@ export function CitywideAnalysis() {
       </section>
 
       {summary.isLoading && <LoadingState label="Computing citywide analysis"/>}
-      <p className={styles.updating} role="status">{!summary.isLoading && (summary.isFetching || layerQuery.isFetching || shift.isFetching || downtown.isFetching || junction.isFetching) ? 'Computing citywide analysis…' : ''}</p>
+      <p className={styles.updating} role="status">{!summary.isLoading && (summary.isFetching || layerQuery.isFetching || shift.isFetching || downtown.isFetching) ? 'Computing citywide analysis…' : ''}</p>
       {firstError && <ErrorState error={firstError} onRetry={() => {
         void bundle.refetch()
       }}/>}
@@ -138,12 +138,12 @@ export function CitywideAnalysis() {
                 const muted = isMutedJunction(row.key)
                 return <tr key={row.key} data-muted={muted ? '' : undefined}>
                   <th scope="row">{row.label}</th>
-                  <td><div className={styles.junctionCell}><span className={styles.junctionBar} aria-hidden="true"><i style={{ width: `${junctionMaxCount ? (row.collisionCount / junctionMaxCount) * 100 : 0}%` }}/></span><span>{integer.format(row.collisionCount)} <small>({shareLabel(row.collisionCount, junctionTotal)})</small></span></div></td>
+                  <td><div className={styles.junctionCell}><span className={styles.junctionBar} aria-hidden="true">{row.collisionCount > 0 && <i style={{ width: `${(row.collisionCount / junctionMaxCount) * 100}%` }}/>}</span><span>{integer.format(row.collisionCount)} <small>({shareLabel(row.collisionCount, junctionTotal)})</small></span></div></td>
                   <td><div className={styles.junctionCell}><span className={`${styles.junctionBar} ${styles.meanBar}`} aria-hidden="true">{row.meanSeverity != null && !muted && <i style={{ width: `${junctionMaxMean ? (row.meanSeverity / junctionMaxMean) * 100 : 0}%` }}/>}</span><span>{row.meanSeverity == null ? '—' : metricValue(row.meanSeverity, 'decimal')}</span></div></td>
                 </tr>
               })}</tbody>
             </table>)}
-            <p>Counts describe observed collisions, not risk. Mean severity = burden ÷ collisions. Hidden (—) below 30 collisions.</p>
+            <p>Counts describe observed collisions, not risk. Mean severity = burden ÷ collisions. A dash marks a type with fewer than 30 collisions.</p>
           </section>
           <details data-statistics-summary className={styles.secondaryMetrics}>
             <summary>More collision measures</summary>
