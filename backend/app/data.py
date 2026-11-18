@@ -29,6 +29,8 @@ from .schemas import (
     DatasetMeta,
     DowntownAnnual,
     DowntownComparisonResponse,
+    JunctionBreakdownResponse,
+    JunctionCategory,
     HeatmapPoint,
     HeatmapResponse,
     KdeCell,
@@ -50,6 +52,19 @@ from .schemas import (
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ARTIFACT_DIR = ROOT / "data/dashboard"
 DOWNTOWN_BBOX = {"yMin": 47.595, "yMax": 47.620, "xMin": -122.345, "xMax": -122.320}
+# Raw ArcGIS JUNCTIONTYPE label -> (key, short label). Dict order is the display order.
+JUNCTION_CATEGORIES = {
+    "At Intersection (intersection related)": ("intersection", "At intersection"),
+    "Mid-Block (not related to intersection)": ("midblock", "Mid-block"),
+    "Mid-Block (but intersection related)": ("midblock-near", "Mid-block, near intersection"),
+    "At Intersection (but not related to intersection)": ("intersection-unrelated", "At intersection, unrelated"),
+    "Driveway Junction": ("driveway", "Driveway"),
+    "Ramp Junction": ("other", "Other"),
+    "Unknown": ("unknown", "Unknown"),
+}
+JUNCTION_OTHER = ("other", "Other")
+# Below this many collisions a category's mean severity is too noisy to show.
+JUNCTION_MIN_MEAN_N = 30
 SEVERITY_KEYS = {
     "property-damage": "Property Damage Only Collision",
     "injury": "Injury Collision",
@@ -638,6 +653,22 @@ class DataStore:
                 isPartial=year in self.partial_years,
             ))
         return DowntownComparisonResponse(bbox=DOWNTOWN_BBOX, annual=result)
+
+    def junction_breakdown(self, start_year: int, end_year: int, severities: list[str]) -> JunctionBreakdownResponse:
+        frame = self._filter_citywide(start_year, end_year, severities)
+        keys = frame["JUNCTIONTYPE"].astype(object).map(lambda raw: JUNCTION_CATEGORIES.get(raw, JUNCTION_OTHER)[0])
+        categories = dict.fromkeys(JUNCTION_CATEGORIES.values())
+        grouped = frame["severity_score"].groupby(keys).agg(["size", "sum"]).reindex([key for key, _ in categories], fill_value=0)
+        return JunctionBreakdownResponse(
+            collisionCount=len(frame),
+            categories=[
+                JunctionCategory(
+                    key=key, label=label, collisionCount=int(count), totalSeverity=int(total),
+                    meanSeverity=round(total / count, 3) if count >= JUNCTION_MIN_MEAN_N else None,
+                )
+                for (key, label), (count, total) in zip(categories, grouped.itertuples(index=False))
+            ],
+        )
 
 
 class DataStoreManager:

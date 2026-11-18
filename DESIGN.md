@@ -353,6 +353,12 @@ Gently rounded on a two-step scale: 6 px for controls, buttons, chips, notes, li
 - **Segmented controls and tabs:** one bordered group split by hairlines, 44–48 px; active takes Violet Wash, ink text and a 6 px-offset underline.
 - **Year slider:** a 2 px Rule Strong track with a violet range and two 44 px hit-area thumbs; a partial end year draws its thumb ring dashed.
 
+### Junction breakdown
+- **Shape:** a full-width analysis card, "Where collisions happen", holding a real `<table>`: junction type, an Ink 3 count bar with count and share, and mean severity. Rows keep a fixed registry order so they stay still as filters change; Unknown is last.
+- **Color:** count bars are Ink 3 because they are counts. Mean severity is a Rust (`--ramp-5`) bar with a tabular numeral, the same burden color as the trend chart, scaled to the largest named category. Other and Unknown rows take an Ink 2 label, a hatched Rule Strong count bar and a numeral without a severity bar.
+- **Phones:** below 480 px the count bars drop and the share stacks under the count; the severity bars stay.
+- **Low n:** mean severity shows "—" below 30 collisions, so a category with fewer than 30 collisions never gets a bar. No animation on filter change.
+
 ### Map Frame
 - **Engine:** MapLibre GL with OpenFreeMap vector tiles. The basemap is five token-painted layers: paper land, sunk parks, rule water, rule minor roads from zoom 12, rule-strong major roads at 55%, and Ink 3 place labels with a paper halo.
 - **Choropleth (Explorer):** ramp fill at 78% under the labels, 0.8 px paper edges; selection is a 3 px violet line over a 6 px paper casing.

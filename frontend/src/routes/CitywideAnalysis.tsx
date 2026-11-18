@@ -11,6 +11,9 @@ import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
 import styles from './CitywideAnalysis.module.css'
 
+const share = new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const shareLabel = (count: number, total: number) => count > 0 && count / total < 0.0005 ? '<0.1%' : share.format(count / total)
+
 const CitywideMap = lazy(() => import('../components/CitywideMap').then((module) => ({ default: module.CitywideMap })))
 
 
@@ -33,6 +36,11 @@ export function CitywideAnalysis() {
   const kde = { ...currentBundle, data: currentBundle.data?.kde }
   const shift = { ...currentBundle, data: currentBundle.data?.spatialShift }
   const downtown = { ...currentBundle, data: currentBundle.data?.downtownComparison }
+  const junction = { ...currentBundle, data: currentBundle.data?.junctionBreakdown }
+  const junctionTotal = junction.data?.collisionCount ?? 0
+  const isMutedJunction = (key: string) => key === 'other' || key === 'unknown'
+  const junctionMaxMean = Math.max(0, ...(junction.data?.categories.filter((item) => !isMutedJunction(item.key)).map((item) => item.meanSeverity ?? 0) ?? []))
+  const junctionMaxCount = Math.max(0, ...(junction.data?.categories.map((item) => item.collisionCount) ?? []))
   const layerQuery = state.cityLayer === 'heatmap' ? heatmap : kde
   const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error
   const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
@@ -121,6 +129,22 @@ export function CitywideAnalysis() {
                 {completeDowntownYears.length > 0 && <details className={styles.chartData}><summary>View comparison data</summary><div><table><caption>Complete-year collision counts</caption><thead><tr><th scope="col">Year</th><th scope="col">Downtown</th><th scope="col">Rest of Seattle</th></tr></thead><tbody>{completeDowntownYears.map((row) => <tr key={row.year}><th scope="row">{row.year}</th><td>{integer.format(row.downtownCollisions)}</td><td>{integer.format(row.outerCollisions)}</td></tr>)}</tbody></table></div></details>}
               </section>
           </div>
+          <section className={`${styles.analysisCard} ${styles.junctionCard}`}>
+            <h2 className={styles.cardLabel}>Where collisions happen</h2>
+            {junction.data && (junction.data.collisionCount === 0 ? <EmptyState title="No collisions match" body="Broaden the year range or severity filters to see junction types."/> : <table className={styles.junctionTable}>
+              <caption className="sr-only">Collisions and mean severity by junction type</caption>
+              <thead><tr><th scope="col">Junction type</th><th scope="col">Collisions (share)</th><th scope="col">Mean severity</th></tr></thead>
+              <tbody>{junction.data.categories.map((row) => {
+                const muted = isMutedJunction(row.key)
+                return <tr key={row.key} data-muted={muted ? '' : undefined}>
+                  <th scope="row">{row.label}</th>
+                  <td><div className={styles.junctionCell}><span className={styles.junctionBar} aria-hidden="true">{row.collisionCount > 0 && <i style={{ width: `${(row.collisionCount / junctionMaxCount) * 100}%` }}/>}</span><span>{integer.format(row.collisionCount)} <small>({shareLabel(row.collisionCount, junctionTotal)})</small></span></div></td>
+                  <td><div className={styles.junctionCell}><span className={`${styles.junctionBar} ${styles.meanBar}`} aria-hidden="true">{row.meanSeverity != null && !muted && <i style={{ width: `${junctionMaxMean ? (row.meanSeverity / junctionMaxMean) * 100 : 0}%` }}/>}</span><span>{row.meanSeverity == null ? '—' : metricValue(row.meanSeverity, 'decimal')}</span></div></td>
+                </tr>
+              })}</tbody>
+            </table>)}
+            <p>Counts describe observed collisions, not risk. Mean severity = burden ÷ collisions. A dash marks a type with fewer than 30 collisions.</p>
+          </section>
           <details data-statistics-summary className={styles.secondaryMetrics}>
             <summary>More collision measures</summary>
             <MetricGrid metrics={summary.data.metrics} variant="secondary"/>

@@ -17,6 +17,7 @@ from .schemas import (
     CitywideTrendContext,
     DatasetMeta,
     DowntownComparisonResponse,
+    JunctionBreakdownResponse,
     HeatmapResponse,
     HealthResponse,
     KdeResponse,
@@ -179,6 +180,11 @@ def citywide_spatial_shift(start_year: int, end_year: int, store: Store, severit
 @app.get("/api/citywide/downtown-comparison", response_model=DowntownComparisonResponse, tags=["citywide"])
 def citywide_downtown(start_year: int, end_year: int, store: Store, severity: SeverityQuery = None) -> DowntownComparisonResponse:
     return safe_year_call(store.downtown_comparison, start_year, end_year, severity or [])
+
+
+@app.get("/api/citywide/junction-breakdown", response_model=JunctionBreakdownResponse, tags=["citywide"])
+def citywide_junction(start_year: int, end_year: int, store: Store, severity: SeverityQuery = None) -> JunctionBreakdownResponse:
+    return safe_year_call(store.junction_breakdown, start_year, end_year, severity or [])
 
 
 @app.head("/", include_in_schema=False)

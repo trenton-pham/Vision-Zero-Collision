@@ -48,6 +48,23 @@
 .downtownSwatch { background: var(--accent); }
 .outerSwatch { background: var(--ink-3); }
 .chart { height: 180px; margin-top: 12px; }
+.junctionCard { margin-top: 24px; border: 1px solid var(--rule); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-rest); }
+.junctionTable { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.junctionTable th, .junctionTable td { padding: 10px 8px; border-bottom: 1px solid var(--rule); text-align: left; font-weight: 400; vertical-align: middle; }
+.junctionTable thead th { color: var(--ink-2); font-size: .75rem; }
+.junctionTable tbody th { color: var(--ink); width: 28%; }
+.junctionTable thead th:last-child { width: 30%; }
+.junctionCell { display: flex; align-items: center; gap: 12px; }
+.junctionCell > span:last-child { min-width: 9.5ch; flex: none; color: var(--ink); text-align: right; }
+.junctionTable small { color: var(--ink-2); font-size: inherit; }
+.junctionBar { flex: 1; min-width: 40px; height: 10px; }
+.junctionBar i { display: block; height: 100%; border-radius: 2px; background: var(--ink-3); }
+.junctionTable tr[data-muted] th { color: var(--ink-2); }
+.junctionTable tr[data-muted] .junctionBar i { background: repeating-linear-gradient(135deg, var(--rule-strong) 0 3px, transparent 3px 6px); border: 1px solid var(--rule-strong); }
+.meanBar i { background: var(--ramp-5); }
+.junctionTable td:last-child .junctionCell > span:last-child { min-width: 4ch; }
+@media (max-width: 480px) { .junctionCell > .junctionBar:not(.meanBar) { display: none; } .junctionTable small { display: block; } }
+@media (max-width: 600px) { .junctionTable tbody th { width: 34%; } .junctionTable th, .junctionTable td { padding: 10px 4px; } .junctionBar { min-width: 24px; } }
 .mapNote { margin: 0; padding: 16px; color: var(--ink-2); font-size: .8125rem; line-height: 1.6; }
 .secondaryMetrics { margin-top: 24px; border: 1px solid var(--rule); border-radius: var(--radius-card); overflow: hidden; background: var(--surface); }
 .secondaryMetrics > summary, .chartData > summary { min-height: 44px; padding: 14px 16px; cursor: pointer; color: var(--ink); font-size: .875rem; }
