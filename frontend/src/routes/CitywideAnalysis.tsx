@@ -6,11 +6,13 @@ import { MetricGrid } from '../components/MetricGrid'
 import { EmptyState, ErrorState, LoadingState } from '../components/States'
 import { citywideQuery } from '../lib/api'
 import { useRelease } from '../lib/dataset'
-import { sqrtRampStep } from '../lib/mapMetrics'
-import { integer, metricValue, percent, yearSpan } from '../lib/format'
+import { integer, metricValue, yearSpan } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
 import styles from './CitywideAnalysis.module.css'
+
+const share = new Intl.NumberFormat('en-US', { style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const shareLabel = (count: number, total: number) => count > 0 && count / total < 0.0005 ? '<0.1%' : share.format(count / total)
 
 const CitywideMap = lazy(() => import('../components/CitywideMap').then((module) => ({ default: module.CitywideMap })))
 
@@ -36,7 +38,8 @@ export function CitywideAnalysis() {
   const downtown = { ...currentBundle, data: currentBundle.data?.downtownComparison }
   const junction = { ...currentBundle, data: currentBundle.data?.junctionBreakdown }
   const junctionTotal = junction.data?.collisionCount ?? 0
-  const junctionMaxMean = Math.max(0, ...(junction.data?.categories.map((item) => item.meanSeverity ?? 0) ?? []))
+  const isMutedJunction = (key: string) => key === 'other' || key === 'unknown'
+  const junctionMaxMean = Math.max(0, ...(junction.data?.categories.filter((item) => !isMutedJunction(item.key)).map((item) => item.meanSeverity ?? 0) ?? []))
   const junctionMaxCount = Math.max(0, ...(junction.data?.categories.map((item) => item.collisionCount) ?? []))
   const layerQuery = state.cityLayer === 'heatmap' ? heatmap : kde
   const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error ?? junction.error
@@ -132,11 +135,11 @@ export function CitywideAnalysis() {
               <caption className="sr-only">Collisions and mean severity by junction type</caption>
               <thead><tr><th scope="col">Junction type</th><th scope="col">Collisions (share)</th><th scope="col">Mean severity</th></tr></thead>
               <tbody>{junction.data.categories.map((row) => {
-                const muted = row.key === 'other' || row.key === 'unknown'
+                const muted = isMutedJunction(row.key)
                 return <tr key={row.key} data-muted={muted ? '' : undefined}>
                   <th scope="row">{row.label}</th>
-                  <td><div className={styles.junctionCell}><span className={styles.junctionBar} aria-hidden="true"><i style={{ width: `${junctionMaxCount ? (row.collisionCount / junctionMaxCount) * 100 : 0}%` }}/></span><span>{integer.format(row.collisionCount)} <small>({percent.format(row.collisionCount / junctionTotal)})</small></span></div></td>
-                  <td>{row.meanSeverity == null ? <span title="Fewer than 30 collisions">—</span> : <span className={styles.junctionMean}><i aria-hidden="true" style={{ background: `var(--ramp-${sqrtRampStep(row.meanSeverity, junctionMaxMean) + 1})` }}/>{metricValue(row.meanSeverity, 'decimal')}</span>}</td>
+                  <td><div className={styles.junctionCell}><span className={styles.junctionBar} aria-hidden="true"><i style={{ width: `${junctionMaxCount ? (row.collisionCount / junctionMaxCount) * 100 : 0}%` }}/></span><span>{integer.format(row.collisionCount)} <small>({shareLabel(row.collisionCount, junctionTotal)})</small></span></div></td>
+                  <td><div className={styles.junctionCell}><span className={`${styles.junctionBar} ${styles.meanBar}`} aria-hidden="true">{row.meanSeverity != null && !muted && <i style={{ width: `${junctionMaxMean ? (row.meanSeverity / junctionMaxMean) * 100 : 0}%` }}/>}</span><span>{row.meanSeverity == null ? '—' : metricValue(row.meanSeverity, 'decimal')}</span></div></td>
                 </tr>
               })}</tbody>
             </table>)}
