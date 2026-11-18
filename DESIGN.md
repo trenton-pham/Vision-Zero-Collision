@@ -203,14 +203,21 @@ The dashboard reads like a quiet instrument studio for Seattle's collision recor
 
 **Surfaces and modes.** The Overview at `/` is a reading surface: generous measure, one headline, one drawing, four readouts, three observation cards. Neighborhood Explorer and Citywide Analysis are working surfaces: dense, with stable control positions, joined map-and-readout cards and hairline structure.
 
-**Material.** Paper, ink and hairlines. Cards are white sheets on cool paper with a whisper of neutral shadow; everything else separates by 1 px rules. The indigo-night dark theme keeps the same structure with lighter ink on deep navy. Nothing glows and nothing is glass.
+**Material.** Paper, ink and hairlines. Cards are white sheets on cool paper with a whisper of neutral shadow; everything else separates by 1 px rules. The indigo-night dark theme keeps the same structure with lighter ink on deep navy. Nothing is glass.
 
-**Imagery.** The data is the imagery: the ink-flow, the choropleth and the trend chart. Icons are thin 1.5 px line drawings in circles; the brand is an ink-drop mark (a filled drop over two contour strokes inside a ring).
+**Imagery.** The data is the imagery: the ink-flow, the choropleth and the trend chart. The photographs are atmosphere, not content (below). Icons are thin 1.5 px line drawings in circles; the brand is an ink-drop mark (a filled drop over two contour strokes inside a ring).
 
-**Motion grammar.** One ease-out register (`cubic-bezier(.23, 1, .32, 1)`), no bounce or overshoot.
-- **Shipped.** The Overview's ink field draws in over 900 ms, each contour level staggered 35 ms, low rings first, the core filling last. Buttons press to 98% on `:active` (100 ms). Hover color and border shifts run 150 ms. Disclosure chevrons rotate 90° in 150 ms. Picker results enter from 4 px above over 160 ms. The map flies to a selection and jumps instantly under reduced motion. Reduced motion shows the finished ink at once, removes press transforms and stops the loader's spin.
+**Motion grammar.** One ease-out register (`cubic-bezier(.23, 1, .32, 1)`), no bounce or overshoot. Tokens: `--dur-press` 150 ms, `--dur-route` 220 ms, `--dur-enter` 700 ms, `--dur-fade` 150 ms, `--dur-crossfade` 1200 ms; shared `rise` and `fade` keyframes in `global.css`, applied with `[data-enter]` and `--delay`.
+- **Overview entrance, once per page load.** The atmosphere fades in over 1200 ms. Headline lines, lede, actions and readouts rise 10 px (readouts 8 px) over 700 ms at 80, 150, 240, 310 and 380 + 50·i ms. The headline count ticks up from zero over 900 ms (quartic ease-out) while the `<h1>`'s `aria-label` carries the final figure. The ink starts drawing at 120 ms: 900 ms per level, staggered 35 ms, low rings first. Year changes remount the page without any of this; only the ink redraws, because its shape changes with the years.
+- **Observation cards.** The cards reveal once, when 15% of the row is visible. Each rises 12 px and fades in over 600 ms, 70 ms after the one before. After the first entrance they appear without the reveal.
+- **Route entry.** In-app navigation to any route rises 6 px over 220 ms. A hard load gets no route entry.
+- **Controls.** Buttons press to 98% on `:active` (100 ms). Hover color and border shifts run 150 ms. Disclosure chevrons rotate 90° in 150 ms. Picker results enter from 4 px above over 160 ms. The map flies to a selection.
+- **Atmosphere photos.** Each photo holds for 5 s, then the next eases in over 1200 ms on top of it; the outgoing photo stays at full opacity until it is covered, so paper never shows through mid-change. The app fetches and decodes the next photo halfway through the hold, and the switch waits for it. Auto-advance stops while the tab is hidden and when the viewer pauses it; the pause/play button and six dots sit at the bottom right of the ink figure.
+- **Reduced motion.** The atmosphere photos start paused (play still works, with 150 ms fades). Every entrance becomes a 150 ms opacity fade with no movement; the count shows its final value; the ink appears finished; press transforms, map flights and the loader spin stop.
 - **Planned, not shipped.** Year playback (a scrubber that steps the whole surface year by year), chart morphs between grains and ranges, and the ⌘K Ask drawer. Charts animate nothing today (`isAnimationActive` is off).
-- **Always.** Animate transform, opacity, color and stroke offset only. No scroll-triggered reveals, parallax or scroll-jacking.
+- **Always.** Animate transform, opacity and stroke offset only (color on hover). Nothing loops except the atmosphere photos, which have a pause control. No parallax or scroll-jacking; the only scroll-triggered motion is the Overview's one-shot card reveal.
+
+**Atmosphere.** The Overview hero sits on an `aria-hidden` backdrop behind the content: six blurred Seattle traffic photographs in rotation, and an 8-level copy of the ink field in violet at 22% opacity, blurred 8 px. In light the photos are inverted, tinted indigo and multiplied at 45%, so the light trails read as faint ink. In dark they are tinted and screened at 50%, so the city glows. A mask keeps the copy column and readouts on bare paper, with worst-case text contrast at 4.60:1 across all six. Below 760 px it fades top to bottom behind the ink figure. Each asset is a 960 × 540 grayscale WebP in `frontend/src/assets/atmosphere/` (about 130 KB for all six), tone-matched to the first so no photo dominates; only the first loads with the page. Photos, all Unsplash License: I-5 at blue hour, Chad Peltola (unsplash.com/photos/_AwXMMw-qOI); I-5 express lanes, Josh Hild (jnKmU80sa0I); I-5 below the skyline, Casey Horner (UNUZ5JdrDBw); downtown at night, Jesse Collins (CKD2uFQOPWc); Fourth Avenue from above, Josh Hild (jXCU5vkbTCI); rainy crosswalk, Josh Hild (sDQHl4AeDzM). Explorer and Citywide have no atmosphere, so nothing sits behind their maps, charts and controls.
 
 **Signature: the ink-flow.** The selected years redraw the collision field everywhere it appears (Overview hero, rail thumbnail, citywide density layer), because every instance is computed from the same release KDE for those years.
 
@@ -380,7 +387,7 @@ Gently rounded on a two-step scale: 6 px for controls, buttons, chips, notes, li
 - **Don't** draw density as a heat blob or gradient; density is indigo contour lines.
 - **Don't** set tracked caps anywhere but readout labels, and don't put kickers or eyebrows above headings.
 - **Don't** bold Jost headings or swap in a serif display face.
-- **Don't** add glows, glass, gradient fills, scroll-triggered fades, parallax or scroll-jacking.
-- **Don't** let motion bounce or overshoot; every future looping or auto-advancing motion (year playback) needs a pause control.
+- **Don't** add glows, glass or gradient fills to components, parallax or scroll-jacking. Photography stays in the Overview atmosphere, and the only scroll-triggered motion is its one-shot card reveal.
+- **Don't** let motion bounce or overshoot; every looping or auto-advancing motion (the atmosphere photos, future year playback) needs a pause control.
 - **Don't** show model predictions, risk rates or causal claims in observations, tooltips or future Ask answers.
 - **Don't** document or build year playback, chart morphs or the ⌘K drawer as shipped; they are planned.

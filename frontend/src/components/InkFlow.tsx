@@ -5,7 +5,7 @@ import styles from './InkFlow.module.css'
 
 const VIEW_WIDTH = 1000
 
-export function InkFlow({ kde, label, className, levels = 20, weight = 1, draw = false }: { kde: KdeResponse; label?: string; className?: string; levels?: number; weight?: number; draw?: boolean }) {
+export function InkFlow({ kde, label, className, levels = 20, weight = 1, draw = false, delay = 0 }: { kde: KdeResponse; label?: string; className?: string; levels?: number; weight?: number; draw?: boolean; delay?: number }) {
   const { paths, height } = useMemo(() => {
     const flow = inkFlow(kde, levels)
     const { west, south, east, north } = flow.bounds
@@ -23,7 +23,7 @@ export function InkFlow({ kde, label, className, levels = 20, weight = 1, draw =
   return (
     <svg className={`${className ?? ''} ${draw ? styles.draw : ''}`} viewBox={`0 0 ${VIEW_WIDTH} ${height}`} preserveAspectRatio="xMidYMid meet" role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
       {paths.map(({ key, top, d, width, opacity }) => (
-        <path key={key} d={d} pathLength={1} style={draw ? { animationDelay: `${key * 35}ms` } : undefined} fill={top ? 'currentColor' : 'none'} fillOpacity={top ? 0.9 : 0} stroke="currentColor" strokeWidth={width * 2 * weight} strokeOpacity={opacity} strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+        <path key={key} d={d} pathLength={1} style={draw ? { animationDelay: `${delay + key * 35}ms` } : undefined} fill={top ? 'currentColor' : 'none'} fillOpacity={top ? 0.9 : 0} stroke="currentColor" strokeWidth={width * 2 * weight} strokeOpacity={opacity} strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
       ))}
     </svg>
   )
