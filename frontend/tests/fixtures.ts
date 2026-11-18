@@ -74,6 +74,7 @@ export const citywideBundle = {
   kde: { cells: [], rows: 0, columns: 0, bounds: [0, 0, 0, 0], collisionCount: 0 },
   spatialShift: { status: 'insufficient_periods', before: { label: 'before', years: [], collisionCount: 0, centroidLat: null, centroidLng: null }, after: { label: 'after', years: [], collisionCount: 0, centroidLat: null, centroidLng: null }, shiftMeters: null, excludedYears: [] },
   downtownComparison: { bbox: { xMin: 0, xMax: 0, yMin: 0, yMax: 0 }, annual: [] },
+  junctionBreakdown: { collisionCount: 0, categories: [] },
 }
 
 export function assignedResolver(id: string, name: string): ResolverBundle {

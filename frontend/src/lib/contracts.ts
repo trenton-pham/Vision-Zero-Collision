@@ -227,6 +227,18 @@ export const downtownComparisonResponseSchema = z.object({
 })
 export type DowntownComparisonResponse = z.infer<typeof downtownComparisonResponseSchema>
 
+export const junctionBreakdownResponseSchema = z.object({
+  collisionCount: z.number().int().nonnegative(),
+  categories: z.array(z.object({
+    key: z.string(),
+    label: z.string(),
+    collisionCount: z.number().int().nonnegative(),
+    totalSeverity: z.number().int().nonnegative(),
+    meanSeverity: nullableNumber,
+  })),
+}).refine((value) => value.categories.reduce((sum, item) => sum + item.collisionCount, 0) === value.collisionCount, 'category counts must sum to collisionCount')
+export type JunctionBreakdownResponse = z.infer<typeof junctionBreakdownResponseSchema>
+
 const digestSchema = z.string().regex(/^[a-f0-9]{64}$/)
 const releasePathSchema = z.string().regex(/^(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_.-]+$/).refine((path) => !path.split('/').includes('..'))
 export const releaseManifestSchema = z.object({
@@ -251,6 +263,7 @@ export const citywideBundleSchema = z.object({
   kde: kdeResponseSchema,
   spatialShift: spatialShiftResponseSchema,
   downtownComparison: downtownComparisonResponseSchema,
+  junctionBreakdown: junctionBreakdownResponseSchema,
 })
 const resolverGeometrySchema = neighborhoodGeometrySchema.refine((geometry) => {
   const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates

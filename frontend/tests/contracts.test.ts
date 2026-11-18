@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   datasetMetaSchema,
   downtownComparisonResponseSchema,
+  junctionBreakdownResponseSchema,
   neighborhoodFeatureCollectionSchema,
   neighborhoodMetricSetSchema,
   resolveResponseSchema,
@@ -104,5 +105,16 @@ describe('geometry contracts', () => {
   it('requires all four named downtown bounds', () => {
     expect(downtownComparisonResponseSchema.safeParse({ bbox: { xMin: 0, xMax: 1, yMin: 0 }, annual: [] }).success).toBe(false)
     expect(downtownComparisonResponseSchema.parse({ bbox: { xMin: 0, xMax: 1, yMin: 0, yMax: 1 }, annual: [] }).bbox.yMax).toBe(1)
+  })
+})
+
+describe('junction breakdown contract', () => {
+  const category = { key: 'intersection', label: 'At intersection', collisionCount: 40, totalSeverity: 80, meanSeverity: 2 }
+  it('requires category counts to sum to the collision count', () => {
+    expect(junctionBreakdownResponseSchema.safeParse({ collisionCount: 40, categories: [category] }).success).toBe(true)
+    expect(junctionBreakdownResponseSchema.safeParse({ collisionCount: 41, categories: [category] }).success).toBe(false)
+  })
+  it('allows a hidden mean severity', () => {
+    expect(junctionBreakdownResponseSchema.parse({ collisionCount: 5, categories: [{ ...category, collisionCount: 5, meanSeverity: null }] }).categories[0]?.meanSeverity).toBeNull()
   })
 })

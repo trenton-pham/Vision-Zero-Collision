@@ -6,7 +6,8 @@ import { MetricGrid } from '../components/MetricGrid'
 import { EmptyState, ErrorState, LoadingState } from '../components/States'
 import { citywideQuery } from '../lib/api'
 import { useRelease } from '../lib/dataset'
-import { integer, metricValue, yearSpan } from '../lib/format'
+import { sqrtRampStep } from '../lib/mapMetrics'
+import { integer, metricValue, percent, yearSpan } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
 import { CITYWIDE_SEVERITIES, type CitywideSeverity } from '../lib/severity'
 import styles from './CitywideAnalysis.module.css'
@@ -33,8 +34,12 @@ export function CitywideAnalysis() {
   const kde = { ...currentBundle, data: currentBundle.data?.kde }
   const shift = { ...currentBundle, data: currentBundle.data?.spatialShift }
   const downtown = { ...currentBundle, data: currentBundle.data?.downtownComparison }
+  const junction = { ...currentBundle, data: currentBundle.data?.junctionBreakdown }
+  const junctionTotal = junction.data?.collisionCount ?? 0
+  const junctionMaxMean = Math.max(0, ...(junction.data?.categories.map((item) => item.meanSeverity ?? 0) ?? []))
+  const junctionMaxCount = Math.max(0, ...(junction.data?.categories.map((item) => item.collisionCount) ?? []))
   const layerQuery = state.cityLayer === 'heatmap' ? heatmap : kde
-  const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error
+  const firstError = summary.error ?? layerQuery.error ?? shift.error ?? downtown.error ?? junction.error
   const completeDowntownYears = downtown.data?.annual.filter((item) => !item.isPartial) ?? []
   const latestCompleteDowntownYear = completeDowntownYears.at(-1)
 
@@ -61,7 +66,7 @@ export function CitywideAnalysis() {
       </section>
 
       {summary.isLoading && <LoadingState label="Computing citywide analysis"/>}
-      <p className={styles.updating} role="status">{!summary.isLoading && (summary.isFetching || layerQuery.isFetching || shift.isFetching || downtown.isFetching) ? 'Computing citywide analysis…' : ''}</p>
+      <p className={styles.updating} role="status">{!summary.isLoading && (summary.isFetching || layerQuery.isFetching || shift.isFetching || downtown.isFetching || junction.isFetching) ? 'Computing citywide analysis…' : ''}</p>
       {firstError && <ErrorState error={firstError} onRetry={() => {
         void bundle.refetch()
       }}/>}
@@ -121,6 +126,22 @@ export function CitywideAnalysis() {
                 {completeDowntownYears.length > 0 && <details className={styles.chartData}><summary>View comparison data</summary><div><table><caption>Complete-year collision counts</caption><thead><tr><th scope="col">Year</th><th scope="col">Downtown</th><th scope="col">Rest of Seattle</th></tr></thead><tbody>{completeDowntownYears.map((row) => <tr key={row.year}><th scope="row">{row.year}</th><td>{integer.format(row.downtownCollisions)}</td><td>{integer.format(row.outerCollisions)}</td></tr>)}</tbody></table></div></details>}
               </section>
           </div>
+          <section className={`${styles.analysisCard} ${styles.junctionCard}`}>
+            <h2 className={styles.cardLabel}>Where collisions happen</h2>
+            {junction.data && (junction.data.collisionCount === 0 ? <EmptyState title="No collisions match" body="Broaden the year range or severity filters to see junction types."/> : <table className={styles.junctionTable}>
+              <caption className="sr-only">Collisions and mean severity by junction type</caption>
+              <thead><tr><th scope="col">Junction type</th><th scope="col">Collisions (share)</th><th scope="col">Mean severity</th></tr></thead>
+              <tbody>{junction.data.categories.map((row) => {
+                const muted = row.key === 'other' || row.key === 'unknown'
+                return <tr key={row.key} data-muted={muted ? '' : undefined}>
+                  <th scope="row">{row.label}</th>
+                  <td><div className={styles.junctionCell}><span className={styles.junctionBar} aria-hidden="true"><i style={{ width: `${junctionMaxCount ? (row.collisionCount / junctionMaxCount) * 100 : 0}%` }}/></span><span>{integer.format(row.collisionCount)} <small>({percent.format(row.collisionCount / junctionTotal)})</small></span></div></td>
+                  <td>{row.meanSeverity == null ? <span title="Fewer than 30 collisions">—</span> : <span className={styles.junctionMean}><i aria-hidden="true" style={{ background: `var(--ramp-${sqrtRampStep(row.meanSeverity, junctionMaxMean) + 1})` }}/>{metricValue(row.meanSeverity, 'decimal')}</span>}</td>
+                </tr>
+              })}</tbody>
+            </table>)}
+            <p>Counts describe observed collisions, not risk. Mean severity = burden ÷ collisions. Hidden (—) below 30 collisions.</p>
+          </section>
           <details data-statistics-summary className={styles.secondaryMetrics}>
             <summary>More collision measures</summary>
             <MetricGrid metrics={summary.data.metrics} variant="secondary"/>
