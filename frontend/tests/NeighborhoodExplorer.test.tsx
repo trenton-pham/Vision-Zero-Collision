@@ -210,7 +210,7 @@ const combinedRelease: ReleaseManifest = { ...releaseManifest, files: { ...relea
 
 describe('combined selection', () => {
   it('loads combined data only for multiple neighborhoods, reuses it across years, and removes individually', async () => {
-    const request = vi.spyOn(api, 'neighborhoodSeries').mockResolvedValue({ neighborhoods: { ballard: { monthly: [month] }, fremont: { monthly: [{ ...month, totalSeverity: 3 }] } } })
+    const request = vi.spyOn(api, 'neighborhoodSeries').mockResolvedValue({ junctionCategories: [], neighborhoods: { ballard: { junction: [], monthly: [month] }, fremont: { junction: [], monthly: [{ ...month, totalSeverity: 3 }] } } })
     const { user } = setup(combinedRelease)
     const picker = await screen.findByRole('combobox', { name: 'Neighborhood' })
     await user.type(picker, 'Ball')
@@ -260,7 +260,7 @@ describe('combined selection', () => {
 
   it('shows a retryable combined-data failure and never displays singleton totals', async () => {
     window.history.replaceState(null, '', '/neighborhoods?neighborhood=ballard&neighborhood=fremont')
-    const request = vi.spyOn(api, 'neighborhoodSeries').mockRejectedValueOnce(new Error('Combined data unavailable')).mockResolvedValue({ neighborhoods: { ballard: { monthly: [month] }, fremont: { monthly: [month] } } })
+    const request = vi.spyOn(api, 'neighborhoodSeries').mockRejectedValueOnce(new Error('Combined data unavailable')).mockResolvedValue({ junctionCategories: [], neighborhoods: { ballard: { junction: [], monthly: [month] }, fremont: { junction: [], monthly: [month] } } })
     const { user } = setup(combinedRelease)
     expect(await screen.findByText('Combined data unavailable')).toBeInTheDocument()
     expect(screen.getByText('Statistics unavailable')).toBeInTheDocument()

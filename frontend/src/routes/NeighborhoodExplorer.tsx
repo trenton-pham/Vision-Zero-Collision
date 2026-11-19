@@ -13,6 +13,7 @@ import { weeklyTrend } from '../lib/weeklyTrend'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
 import { ErrorState, LoadingState } from '../components/States'
+import { JunctionBreakdown } from '../components/JunctionBreakdown'
 import { TrendChart } from '../components/TrendChart'
 import { TrendRangeControl } from '../components/TrendRangeControl'
 import styles from './NeighborhoodExplorer.module.css'
@@ -245,6 +246,12 @@ export function NeighborhoodExplorer() {
           </aside>
         </div>
       )}
+
+      <JunctionBreakdown
+        breakdown={activeQuery.data?.junctionBreakdown} scope={inspectorName}
+        years={state.startYear === state.endYear ? String(state.startYear) : `${state.startYear}–${state.endYear}`}
+        loading={activeQuery.isLoading} failed={Boolean(activeQuery.error)}
+      />
 
       <section className={styles.trendSection} aria-label={`${trendScope} collision trend`}>
         <div className={styles.trendHead}>

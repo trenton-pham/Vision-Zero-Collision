@@ -81,6 +81,6 @@ def test_citywide_neighborhood_trend_contract_and_range_validation() -> None:
 
 def test_all_citywide_routes() -> None:
     base = "start_year=2024&end_year=2026&severity=serious-injury&severity=fatal"
-    for path in ["summary", "heatmap", "kde", "spatial-shift", "downtown-comparison", "junction-breakdown"]:
+    for path in ["summary", "heatmap", "kde", "spatial-shift", "downtown-comparison"]:
         response = client.get(f"/api/citywide/{path}?{base}")
         assert response.status_code == 200, response.text

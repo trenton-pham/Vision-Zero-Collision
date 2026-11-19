@@ -106,6 +106,19 @@ class TrendComparison(ApiModel):
     message: str
 
 
+class JunctionCategory(ApiModel):
+    key: str
+    label: str
+    collisionCount: int
+    totalSeverity: int
+    meanSeverity: float | None
+
+
+class JunctionBreakdownResponse(ApiModel):
+    collisionCount: int
+    categories: list[JunctionCategory]
+
+
 class NeighborhoodContext(ApiModel):
     neighborhood: dict[str, str]
     selectedYears: list[int]
@@ -114,6 +127,7 @@ class NeighborhoodContext(ApiModel):
     monthly: list[MonthlyMetric]
     comparison: TrendComparison
     warnings: list[str]
+    junctionBreakdown: JunctionBreakdownResponse
 
 
 class CitywideTrendContext(ApiModel):
@@ -124,6 +138,7 @@ class CitywideTrendContext(ApiModel):
     monthly: list[MonthlyMetric]
     comparison: TrendComparison
     warnings: list[str]
+    junctionBreakdown: JunctionBreakdownResponse
 
 
 class ResolveResponse(ApiModel):
@@ -195,15 +210,3 @@ class DowntownComparisonResponse(ApiModel):
     bbox: dict[str, float]
     annual: list[DowntownAnnual]
 
-
-class JunctionCategory(ApiModel):
-    key: str
-    label: str
-    collisionCount: int
-    totalSeverity: int
-    meanSeverity: float | None
-
-
-class JunctionBreakdownResponse(ApiModel):
-    collisionCount: int
-    categories: list[JunctionCategory]

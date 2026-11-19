@@ -156,8 +156,8 @@ The dashboard has two views:
 
 | View | Description |
 | --- | --- |
-| Neighborhood Explorer | Map and searchable neighborhood selection, all-severity collision/injury context, and annual, monthly, or weekly trends |
-| Citywide Analysis | Independent year/severity filters, collision heatmap, KDE density, pre/post-2020 centroid shift, downtown vs. outer-area comparisons, and a junction-type breakdown |
+| Neighborhood Explorer | Map and searchable neighborhood selection, all-severity collision/injury context, a junction-type breakdown, and annual, monthly, or weekly trends |
+| Citywide Analysis | Independent year/severity filters, collision heatmap, KDE density, pre/post-2020 centroid shift, and downtown vs. outer-area comparisons |
 
 [Open the dashboard](https://vision-zero-collision.trentonpham.workers.dev). The [static hosting guide](./docs/deployment/static-hosting.md) covers local setup, weekly publication, verification, and recovery.
 
@@ -171,7 +171,7 @@ The dashboard has two views:
 - Annual trend is the default. `grain=monthly` shows zero-filled monthly observations from January 2015 through the latest received month.
 - Collision trends can narrow the selected years to an inclusive month range. Use the chart slider, month selectors, or Last 12 months. The chart range is shareable in `trendFrom` and `trendThrough` URL parameters. The map, inspector, and annual comparison use Observed years.
 - `grain=weekly` shows Monday–Sunday collision counts and severity burden through the latest accepted incident. Weeks clipped by the selected years or snapshot coverage are marked partial. Weeks ending fewer than 36 weeks before the snapshot date are provisional because reports can arrive late or be revised.
-- The junction breakdown groups `JUNCTIONTYPE` by the registry `JUNCTION_CATEGORIES` in `backend/app/data.py`. Ramp Junction and unseen labels fold into Other, and Unknown stays in the denominator. Counts are collision-grain observations, not risk. Mean severity is total burden divided by collisions and is hidden below 30 collisions in the current filter. `intersectionShare` keeps its separate definition.
+- The junction breakdown groups `JUNCTIONTYPE` by the registry `JUNCTION_CATEGORIES` in `backend/app/data.py`. Ramp Junction and unseen labels fold into Other, and Unknown stays in the denominator. It follows the Explorer selection (citywide, one neighborhood, or a combined set) and the selected years, across all severity levels. Shares divide by every collision in that selection. Counts are collision-grain observations, not risk. Mean severity is total burden divided by collisions and is hidden below 30 collisions in the selection. `intersectionShare` keeps its separate definition.
 - Partial years are labeled with the latest received incident date and excluded from trend and spatial-shift comparisons.
 - Trend comparisons use non-overlapping first and last three-year averages only when at least six complete years are present.
 - The dashboard is public and read-only. Publication and rollback use a separate ingestion identity with database write access.

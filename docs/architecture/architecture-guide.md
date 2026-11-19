@@ -126,14 +126,13 @@ All listed data endpoints use GET and return JSON. The root application also acc
 | `/api/neighborhoods/geojson` | None | Stable neighborhood polygon IDs and display names. |
 | `/api/neighborhoods/summary` | `start_year`, `end_year` | Metric set for every neighborhood, used for map shading. |
 | `/api/neighborhoods/resolve` | `lat`, `lng` | Neighborhood ID, assignment method, and distance where available. |
-| `/api/neighborhoods/citywide-trend` | `start_year`, `end_year` | All-record Seattle metrics, annual and monthly series, comparison, and warnings. |
-| `/api/neighborhoods/{id}/context` | ID and year range | Selected neighborhood metrics, annual and monthly series, comparison, and warnings. |
+| `/api/neighborhoods/citywide-trend` | `start_year`, `end_year` | All-record Seattle metrics, annual and monthly series, comparison, warnings, and junction breakdown. |
+| `/api/neighborhoods/{id}/context` | ID and year range | Selected neighborhood metrics, annual and monthly series, comparison, warnings, and junction breakdown (collision count, severity total and mean per junction type from a fixed registry, zero-filled; mean is null below 30 collisions). |
 | `/api/citywide/summary` | Year range, optional repeated `severity` | Filtered citywide totals. |
 | `/api/citywide/heatmap` | Same citywide filters | Nonempty bins from a 55 by 55 histogram, with counts and maximum weight. |
 | `/api/citywide/kde` | Same citywide filters | Normalized density on a 42 by 42 grid, using at most 12,000 sampled records. |
 | `/api/citywide/spatial-shift` | Same citywide filters | Pre-2020 and 2020-onward complete-year centroids and displacement in metres. |
 | `/api/citywide/downtown-comparison` | Same citywide filters | Annual downtown and outer-area counts and mean severity, including partial-year flags. |
-| `/api/citywide/junction-breakdown` | Same citywide filters | Collision count, severity total and mean per junction type from a fixed registry, zero-filled. Mean severity is null below 30 collisions. |
 
 Invalid year ranges and unknown citywide severity keys become HTTP 422. Unknown neighborhood IDs become HTTP 404. Valid severity keys are `property-damage`, `injury`, `serious-injury`, `fatal`, and `unknown`. Neighborhood endpoints accept no severity parameter in their declared signatures or frontend client methods.
 
@@ -338,11 +337,11 @@ Each entry describes a file's responsibility and its connections. Paths are rela
 
 ### Frontend workspaces and theme
 
-**`frontend/src/routes/NeighborhoodExplorer.tsx`** — Main planner workspace. Coordinates polygon and summary queries, neighborhood/citywide inspector context, annual/monthly trends, URL selection, accessible announcements, and protection against out-of-order resolver replies.
+**`frontend/src/routes/NeighborhoodExplorer.tsx`** — Main planner workspace. Coordinates polygon and summary queries, neighborhood/citywide inspector context, the junction breakdown, annual/monthly trends, URL selection, accessible announcements, and protection against out-of-order resolver replies.
 
 **`frontend/src/routes/NeighborhoodExplorer.module.css`** — Explorer control row, map/inspector split, burden display, warnings, trend section, grain controls, selection pulse, and mobile stacking.
 
-**`frontend/src/routes/CitywideAnalysis.tsx`** — Severity-filtered analytical workspace. Queries summary, the active density layer, centroid shift, downtown comparison, and junction breakdown; renders map layers, complete-year comparisons, the latest complete-year downtown severity, and the junction table.
+**`frontend/src/routes/CitywideAnalysis.tsx`** — Severity-filtered analytical workspace. Queries summary, the active density layer, centroid shift, and downtown comparison; renders map layers, complete-year comparisons, and the latest complete-year downtown severity.
 
 **`frontend/src/routes/CitywideAnalysis.module.css`** — Severity controls, density tabs, map and analytical rail, comparison chart, warning treatment, and responsive citywide layout.
 

@@ -11,7 +11,7 @@ from typing import Iterator
 
 from shapely.geometry import mapping
 
-from .data import DataStore, SEVERITY_KEYS
+from .data import DataStore, JUNCTION_ORDER, SEVERITY_KEYS, junction_keys
 
 
 SCHEMA_VERSION = 1
@@ -76,11 +76,18 @@ def neighborhood_series(store: DataStore) -> dict:
         "intersectionCollisions": "intersection_collisions", "nightCollisions": "night_collisions",
         "weekendCollisions": "weekend_collisions",
     }
+    collisions = store.collisions
+    junction = collisions["severity_score"].groupby(
+        [collisions["neighborhood_id"], collisions["YEAR"], junction_keys(collisions["JUNCTIONTYPE"])], observed=True,
+    ).agg(["size", "sum"])
     neighborhoods = {}
     for neighborhood, rows in store.monthly.groupby("neighborhood_id", observed=True):
         if neighborhood not in store.name_by_id:
             continue
-        neighborhoods[str(neighborhood)] = {"monthly": [
+        neighborhoods[str(neighborhood)] = {"junction": [
+            {"year": int(year), "key": key, "collisionCount": int(count), "totalSeverity": int(total)}
+            for (year, key), (count, total) in junction.xs(neighborhood, level=0).iterrows()
+        ], "monthly": [
             {
                 "period": str(row.period),
                 **{key: int(getattr(row, column)) for key, column in columns.items()},
@@ -89,7 +96,10 @@ def neighborhood_series(store: DataStore) -> dict:
             }
             for row in rows.sort_values(["YEAR", "MONTH"]).itertuples(index=False)
         ]}
-    return {"neighborhoods": neighborhoods}
+    return {
+        "junctionCategories": [{"key": key, "label": label} for key, label in JUNCTION_ORDER],
+        "neighborhoods": neighborhoods,
+    }
 
 
 def partition(items: list, index: int, count: int) -> list:
@@ -123,7 +133,6 @@ def analytical_files(store: DataStore, shard_index: int = 0, shard_count: int = 
                 "kde": store.kde(start, end, severities).model_dump(mode="json"),
                 "spatialShift": store.spatial_shift(start, end, severities).model_dump(mode="json"),
                 "downtownComparison": store.downtown_comparison(start, end, severities).model_dump(mode="json"),
-                "junctionBreakdown": store.junction_breakdown(start, end, severities).model_dump(mode="json"),
             }
     for neighborhood in partition(sorted(store.name_by_id), shard_index, shard_count):
         yield f"neighborhoods/{neighborhood}.json", {
@@ -245,7 +254,6 @@ def verify_analytical_outputs(
         endpoints = {
             "summary": "summary", "heatmap": "heatmap", "kde": "kde",
             "spatialShift": "spatial-shift", "downtownComparison": "downtown-comparison",
-            "junctionBreakdown": "junction-breakdown",
         }
         for start, end in assigned_ranges(ranges, shard_index or 0, shard_count):
             years = [("start_year", str(start)), ("end_year", str(end))]

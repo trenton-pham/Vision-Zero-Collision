@@ -91,28 +91,13 @@ test('citywide analysis exposes independent severity controls', async ({ page })
   await expect(page).toHaveURL(/severity=fatal(?:&|$)/)
 })
 
-test('junction breakdown shows the empty state when no collision matches', async ({ page }) => {
-  await page.goto('/citywide?start=2015&end=2015&severity=unknown')
-  const card = page.locator('section', { has: page.getByRole('heading', { name: 'Where collisions happen' }) })
-  await expect(card.getByText('Broaden the year range or severity filters to see junction types.')).toBeVisible()
-  await expect(card.getByRole('table')).toHaveCount(0)
-})
-
-test('junction breakdown follows severity filters with fixed rows and a hidden low-n mean', async ({ page }) => {
+test('citywide analysis no longer shows the junction breakdown', async ({ page }) => {
+  const pageErrors: Error[] = []
+  page.on('pageerror', (error) => pageErrors.push(error))
   await page.goto('/citywide?start=2021&end=2025')
-  const table = page.getByRole('table', { name: 'Collisions and mean severity by junction type' })
-  const labels = () => table.locator('tbody th').allTextContents()
-  await expect(table).toBeVisible()
-  const rows = await labels()
-  expect(rows).toHaveLength(7)
-  expect(rows.at(-1)).toBe('Unknown')
-  const all = await table.locator('tbody tr').first().textContent()
-  expect(all).toMatch(/\d\.\d\d$/)
-  if (await page.locator('#severity-filters').getAttribute('open') === null) await page.locator('#severity-filters > summary').click()
-  await page.getByText('Fatal', { exact: true }).click()
-  await expect(table.locator('tbody tr').first()).not.toHaveText(all ?? '')
-  expect(await labels()).toEqual(rows)
-  await expect(table.locator('tbody tr', { hasText: 'Unknown' }).locator('td').last()).toHaveText('—')
+  await expect(page.getByText('Collision map', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Where collisions happen' })).toHaveCount(0)
+  expect(pageErrors).toEqual([])
 })
 
 test('citywide Canvas stays painted through layers, zoom, and data changes', async ({ page }) => {

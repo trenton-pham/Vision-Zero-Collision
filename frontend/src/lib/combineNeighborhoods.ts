@@ -1,6 +1,8 @@
-import type { AnnualMetric, DatasetMeta, MonthlyMetric, NeighborhoodMonth, NeighborhoodSeries, NeighborhoodMetricSet, TrendComparison } from './contracts'
+import type { AnnualMetric, DatasetMeta, JunctionBreakdownResponse, MonthlyMetric, NeighborhoodMonth, NeighborhoodSeries, NeighborhoodMetricSet, TrendComparison } from './contracts'
 
 type Counts = Omit<NeighborhoodMonth, 'period'>
+// Matches JUNCTION_MIN_MEAN_N in backend/app/data.py.
+export const JUNCTION_MIN_MEAN_N = 30
 const countKeys = ['collisionCount', 'injuries', 'seriousInjuries', 'fatalities', 'totalSeverity', 'pedestrianCollisions', 'intersectionCollisions', 'nightCollisions', 'weekendCollisions'] as const
 
 function emptyCounts(): Counts {
@@ -54,9 +56,17 @@ function comparison(annual: AnnualMetric[]): TrendComparison {
 
 export function combineNeighborhoods(series: NeighborhoodSeries, ids: string[], startYear: number, endYear: number, meta: DatasetMeta) {
   const months = new Map<string, Counts>()
+  const junction = new Map(series.junctionCategories.map(({ key }) => [key, { collisionCount: 0, totalSeverity: 0 }]))
   for (const id of new Set(ids)) {
     const neighborhood = series.neighborhoods[id]
     if (!neighborhood) throw new Error('Statistics are unavailable for a selected neighborhood.')
+    for (const row of neighborhood.junction) {
+      if (row.year < startYear || row.year > endYear) continue
+      const counts = junction.get(row.key)
+      if (!counts) throw new Error('Junction statistics are unavailable for a selected neighborhood.')
+      counts.collisionCount += row.collisionCount
+      counts.totalSeverity += row.totalSeverity
+    }
     for (const row of neighborhood.monthly) {
       const year = Number(row.period.slice(0, 4))
       if (year < startYear || year > endYear) continue
@@ -87,5 +97,12 @@ export function combineNeighborhoods(series: NeighborhoodSeries, ids: string[], 
   const month = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(received)
   const warnings = meta.partialYears.some((year) => year >= startYear && year <= endYear)
     ? [`${received.getUTCFullYear()} partial · records received through ${month} ${received.getUTCDate()}, ${received.getUTCFullYear()}`] : []
-  return { selectedYears: [startYear, endYear], metrics, annual, monthly, comparison: comparison(annual), warnings }
+  const junctionBreakdown: JunctionBreakdownResponse = {
+    collisionCount: totals.collisionCount,
+    categories: series.junctionCategories.map(({ key, label }) => {
+      const { collisionCount, totalSeverity } = junction.get(key) ?? { collisionCount: 0, totalSeverity: 0 }
+      return { key, label, collisionCount, totalSeverity, meanSeverity: collisionCount >= JUNCTION_MIN_MEAN_N ? ratio(totalSeverity, collisionCount, 3) : null }
+    }),
+  }
+  return { selectedYears: [startYear, endYear], metrics, annual, monthly, comparison: comparison(annual), warnings, junctionBreakdown }
 }

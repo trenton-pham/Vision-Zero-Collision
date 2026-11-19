@@ -65,6 +65,13 @@ JUNCTION_CATEGORIES = {
 JUNCTION_OTHER = ("other", "Other")
 # Below this many collisions a category's mean severity is too noisy to show.
 JUNCTION_MIN_MEAN_N = 30
+JUNCTION_ORDER = list(dict.fromkeys(JUNCTION_CATEGORIES.values()))
+
+
+def junction_keys(raw: pd.Series) -> pd.Series:
+    return raw.astype(object).map(lambda value: JUNCTION_CATEGORIES.get(value, JUNCTION_OTHER)[0])
+
+
 SEVERITY_KEYS = {
     "property-damage": "Property Damage Only Collision",
     "injury": "Injury Collision",
@@ -406,6 +413,10 @@ class DataStore:
             monthly=self._monthly_metrics(monthly_rows),
             comparison=self._trend(rows),
             warnings=self._warnings(start_year, end_year),
+            junctionBreakdown=self._junction_breakdown(self.collisions[
+                (self.collisions["neighborhood_id"] == neighborhood_id)
+                & self.collisions["YEAR"].between(start_year, end_year)
+            ]),
         )
 
     def citywide_trend(self, start_year: int, end_year: int) -> CitywideTrendContext:
@@ -427,6 +438,7 @@ class DataStore:
             monthly=self._monthly_metrics(monthly_rows),
             comparison=self._trend(annual_rows),
             warnings=self._warnings(start_year, end_year),
+            junctionBreakdown=self._junction_breakdown(self._filter_citywide(start_year, end_year, [])),
         )
 
     def weekly_series(self) -> WeeklySeries:
@@ -654,11 +666,11 @@ class DataStore:
             ))
         return DowntownComparisonResponse(bbox=DOWNTOWN_BBOX, annual=result)
 
-    def junction_breakdown(self, start_year: int, end_year: int, severities: list[str]) -> JunctionBreakdownResponse:
-        frame = self._filter_citywide(start_year, end_year, severities)
-        keys = frame["JUNCTIONTYPE"].astype(object).map(lambda raw: JUNCTION_CATEGORIES.get(raw, JUNCTION_OTHER)[0])
-        categories = dict.fromkeys(JUNCTION_CATEGORIES.values())
-        grouped = frame["severity_score"].groupby(keys).agg(["size", "sum"]).reindex([key for key, _ in categories], fill_value=0)
+    @staticmethod
+    def _junction_breakdown(frame: pd.DataFrame) -> JunctionBreakdownResponse:
+        grouped = frame["severity_score"].groupby(junction_keys(frame["JUNCTIONTYPE"])).agg(["size", "sum"]).reindex(
+            [key for key, _ in JUNCTION_ORDER], fill_value=0,
+        )
         return JunctionBreakdownResponse(
             collisionCount=len(frame),
             categories=[
@@ -666,7 +678,7 @@ class DataStore:
                     key=key, label=label, collisionCount=int(count), totalSeverity=int(total),
                     meanSeverity=round(total / count, 3) if count >= JUNCTION_MIN_MEAN_N else None,
                 )
-                for (key, label), (count, total) in zip(categories, grouped.itertuples(index=False))
+                for (key, label), (count, total) in zip(JUNCTION_ORDER, grouped.itertuples(index=False))
             ],
         )
 
