@@ -48,10 +48,21 @@ def test_every_exported_selection_matches_python(single_year_store: DataStore, r
     for mask in range(32):
         value = json.loads((directory / f"citywide/2025-2025/{mask}.json").read_bytes())
         assert value["summary"]["severities"] == severity_selection(mask)
+        junction = value["junctionBreakdown"]
+        assert junction["collisionCount"] == value["summary"]["metrics"]["collisionCount"]
+        assert sum(category["collisionCount"] for category in junction["categories"]) == junction["collisionCount"]
+        assert sum(category["totalSeverity"] for category in junction["categories"]) == value["summary"]["metrics"]["totalSeverity"]
     assert severity_selection(0) == []
     assert len(severity_selection(31)) == 5
     assert "citywide/2025-2025/0.json" in manifest["files"]
     assert "citywide/2025-2025/31.json" in manifest["files"]
+
+
+def test_citywide_bundles_keep_every_key_open_pre_explorer_tabs_require(release) -> None:
+    directory, manifest = release
+    required = {"summary", "heatmap", "kde", "spatialShift", "downtownComparison", "junctionBreakdown"}
+    for relative in (key for key in manifest["files"] if key.startswith("citywide/")):
+        assert required <= set(json.loads((directory / relative).read_bytes())), relative
 
 
 def test_export_includes_geometry_and_reproducible_content_identity(release) -> None:
@@ -136,6 +147,9 @@ def test_neighborhood_series_reconciles_with_raw_collision_unions(store: DataSto
         assert sum(row["totalSeverity"] for row in rows) == int(raw["severity_score"].sum())
         assert sum(row["intersectionCollisions"] for row in rows) == int(raw["intersection"].sum())
         assert sum(row["weekendCollisions"] for row in rows) == int(raw["weekend"].sum())
+        junction = [row for id in ids for row in series["neighborhoods"][id]["junction"]]
+        assert sum(row["collisionCount"] for row in junction) == len(raw)
+        assert sum(row["totalSeverity"] for row in junction) == int(raw["severity_score"].sum())
         if store.has_known_time_night_share:
             assert sum(row["knownTimeCollisions"] for row in rows) == int(raw["HOUR"].notna().sum())
         else:
@@ -147,6 +161,21 @@ def test_neighborhood_series_reconciles_with_raw_collision_unions(store: DataSto
         for exported, expected in zip(rows, context.monthly, strict=True):
             assert exported["collisionCount"] == expected.collisionCount
             assert exported["totalSeverity"] == expected.totalSeverity
+        for category in context.junctionBreakdown.categories:
+            exported = [row for row in series["neighborhoods"][id]["junction"] if row["key"] == category.key]
+            assert sum(row["collisionCount"] for row in exported) == category.collisionCount
+            assert sum(row["totalSeverity"] for row in exported) == category.totalSeverity
+    assert [category["key"] for category in series["junctionCategories"]] == [
+        category.key for category in store.citywide_trend(2018, 2025).junctionBreakdown.categories
+    ]
+
+
+def test_neighborhood_series_exports_empty_junction_rows_for_a_neighborhood_without_collisions(store: DataStore, monkeypatch) -> None:
+    from backend.app.static_export import neighborhood_series
+    monkeypatch.setattr(store, "collisions", store.collisions[store.collisions["neighborhood_id"] != "ballard"])
+    ballard = neighborhood_series(store)["neighborhoods"]["ballard"]
+    assert ballard["junction"] == []
+    assert ballard["monthly"]
 
 
 def test_neighborhood_series_uses_known_time_denominator(store: DataStore, monkeypatch) -> None:

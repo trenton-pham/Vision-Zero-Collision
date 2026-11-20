@@ -3,7 +3,7 @@ import { skipToken, useQuery } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { MAP_METRICS, parseMapMetric } from '../lib/mapMetrics'
 import { api, weeklySeriesFile } from '../lib/api'
-import { combineNeighborhoods } from '../lib/combineNeighborhoods'
+import { combineNeighborhoods, partialYearWarnings } from '../lib/combineNeighborhoods'
 import type { TrendGrain } from '../lib/contracts'
 import { metricValue, signedPercent } from '../lib/format'
 import { useDashboardParams } from '../lib/useUrlState'
@@ -13,6 +13,7 @@ import { weeklyTrend } from '../lib/weeklyTrend'
 import { MetricGrid } from '../components/MetricGrid'
 import { NeighborhoodPicker } from '../components/NeighborhoodPicker'
 import { ErrorState, LoadingState } from '../components/States'
+import { JunctionBreakdown } from '../components/JunctionBreakdown'
 import { TrendChart } from '../components/TrendChart'
 import { TrendRangeControl } from '../components/TrendRangeControl'
 import styles from './NeighborhoodExplorer.module.css'
@@ -160,7 +161,14 @@ export function NeighborhoodExplorer() {
 
   const initialLoading = geo.isLoading || summary.isLoading
   const initialError = geo.error ?? summary.error
+  const panelReady = Boolean(geo.data && summary.data)
   const activeQuery = neighborhoods.length > 1 ? combined : neighborhood ? context : citywideTrend
+  const junctionState = (panelReady && activeQuery.data?.junctionBreakdown)
+    || (initialError ? 'failed'
+      : neighborhoods.length > 1 && !Object.hasOwn(release.files, 'neighborhood-series.json') ? 'unavailable'
+      : activeQuery.error && panelReady ? 'failed'
+      : panelReady && activeQuery.data ? 'unavailable'
+      : 'loading')
   const { from, through } = state.trendRange
   const narrowed = from !== state.trendBounds.from || through !== state.trendBounds.through
   const chartMonths = activeQuery.data?.monthly.filter(({ period }) => period >= from && period <= through)
@@ -200,13 +208,14 @@ export function NeighborhoodExplorer() {
         </label>
       </section>
 
-      {initialLoading && <LoadingState/>}
-      {initialError && <ErrorState error={initialError} onRetry={() => { void geo.refetch(); void summary.refetch() }}/>}
+      {(initialLoading || initialError) && <div className={styles.workspacePending}>
+        {initialError ? <ErrorState error={initialError} onRetry={() => { void geo.refetch(); void summary.refetch() }}/> : <LoadingState/>}
+      </div>}
       {geo.data && summary.data && (
         <div className={styles.workspace}>
           <section className={styles.mapPanel} aria-label="Neighborhood map">
             <div className={styles.panelLabel}><span>{summary.isPlaceholderData ? 'Updating map for selected years…' : '94 Seattle neighborhoods'}</span><strong>{MAP_METRICS.find(([value]) => value === state.mapMetric)?.[1]}</strong></div>
-            <Suspense fallback={<LoadingState label="Loading map"/>}><NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedIds={neighborhoods} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/></Suspense>
+            <Suspense fallback={<div className={styles.mapFallback}><LoadingState label="Loading map"/></div>}><NeighborhoodMap collection={geo.data} metrics={summary.data} metricKey={state.mapMetric} selectedIds={neighborhoods} pulseKey={selectionPulse} geometryRevision={geo.dataUpdatedAt} onResolve={resolve} busy={resolving || summary.isFetching}/></Suspense>
           </section>
           <aside
             className={styles.inspector}
@@ -263,6 +272,9 @@ export function NeighborhoodExplorer() {
               <strong data-statistic>{signedPercent(activeQuery.data.comparison.severityChangePercent)} burden</strong>
             </> : <><span>Trend comparison · {state.startYear}–{state.endYear}</span><strong>Insufficient complete years</strong></>}
           </div>}
+          {activeQuery.isLoading && <div className={styles.comparison} aria-busy="true">
+            <span>Loading trend comparison</span><strong>— collisions</strong><strong>— burden</strong>
+          </div>}
         </div>
         {(grain !== 'weekly' || weekly.data?.monthPrecision) && <TrendRangeControl
           bounds={state.trendBounds} range={state.trendRange} onChange={state.setTrendRange}
@@ -286,6 +298,12 @@ export function NeighborhoodExplorer() {
           </>}
         </div>
       </section>
+
+      <JunctionBreakdown
+        breakdown={junctionState}
+        warnings={partialYearWarnings(meta, state.startYear, state.endYear)} scope={inspectorName}
+        years={state.startYear === state.endYear ? String(state.startYear) : `${state.startYear}–${state.endYear}`}
+      />
     </div>
   )
 }

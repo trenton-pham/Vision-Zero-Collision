@@ -109,13 +109,13 @@ def test_spatial_shift_excludes_partial_year(store: DataStore) -> None:
     assert 2026 not in shift.after.years
 
 
-def test_junction_breakdown_reconciles_with_summary(store: DataStore) -> None:
-    for severities in ([], ["fatal"], ["serious-injury", "fatal"]):
-        breakdown = store.junction_breakdown(2018, 2025, severities)
-        summary = store.citywide_summary(2018, 2025, severities).metrics
-        assert breakdown.collisionCount == summary.collisionCount
-        assert sum(c.collisionCount for c in breakdown.categories) == summary.collisionCount
-        assert sum(c.totalSeverity for c in breakdown.categories) == summary.totalSeverity
+def test_junction_breakdown_reconciles_with_neighborhood_and_citywide_metrics(store: DataStore) -> None:
+    contexts = [store.neighborhood_context(id, 2018, 2025) for id in ("ballard", "central-business-district")]
+    for context in [*contexts, store.citywide_trend(2018, 2025)]:
+        breakdown, metrics = context.junctionBreakdown, context.metrics
+        assert breakdown.collisionCount == metrics.collisionCount > 0
+        assert sum(c.collisionCount for c in breakdown.categories) == metrics.collisionCount
+        assert sum(c.totalSeverity for c in breakdown.categories) == metrics.totalSeverity
         keys = [c.key for c in breakdown.categories]
         assert keys == ["intersection", "midblock", "midblock-near", "intersection-unrelated", "driveway", "other", "unknown"]
         assert all((c.meanSeverity is None) == (c.collisionCount < 30) for c in breakdown.categories)
@@ -125,7 +125,7 @@ def test_junction_breakdown_unseen_raw_values_fold_into_other(store: DataStore, 
     frame = store.collisions.copy()
     frame["JUNCTIONTYPE"] = "Roundabout (new label)"
     monkeypatch.setattr(store, "collisions", frame)
-    breakdown = store.junction_breakdown(2018, 2025, [])
+    breakdown = store.neighborhood_context("ballard", 2018, 2025).junctionBreakdown
     by_key = {c.key: c for c in breakdown.categories}
     assert by_key["other"].collisionCount == breakdown.collisionCount > 0
     assert all(c.collisionCount == 0 for k, c in by_key.items() if k != "other")

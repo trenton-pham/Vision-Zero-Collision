@@ -1,14 +1,16 @@
-.page { min-height: 100%; padding: 24px; }
+.page { --workspace-min-height: 640px; min-height: 100%; padding: 24px; }
 .command { display: grid; grid-template-columns: minmax(250px, 1fr) minmax(240px, 360px) 190px; gap: 20px; align-items: end; margin-bottom: 24px; }
 .command h1, .trendHead h2 { margin: 0; font: 300 2.5rem/1.1 var(--font-display); letter-spacing: -.005em; text-wrap: balance; }
 .command p, .trendTitle p { margin: 8px 0 0; color: var(--ink-2); font-size: .875rem; line-height: 1.5; }
 .metricSelect { color: var(--ink-2); font: 500 .8125rem/1.4 var(--font-ui); }
 .metricSelect select { width: 100%; height: 46px; margin-top: 8px; padding: 0 10px; border: 1px solid var(--rule-strong); border-radius: var(--radius-control); background: var(--surface); color: var(--ink); font: 400 .875rem/1.4 var(--font-ui); }
+.workspacePending { min-height: var(--workspace-min-height); }
+.mapFallback { min-height: 560px; }
 .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 350px; align-items: stretch; }
 .mapPanel { min-width: 0; display: grid; border: 1px solid var(--rule); border-radius: var(--radius-card) 0 0 var(--radius-card); overflow: hidden; background: var(--surface); grid-template-rows: 44px minmax(0, 1fr); }
 .panelLabel { border-bottom: 1px solid var(--rule); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 14px; color: var(--ink-2); font-size: .75rem; }
 .panelLabel strong { color: var(--ink); font-weight: 500; }
-.inspector { border: 1px solid var(--rule); border-left: 0; border-radius: 0 var(--radius-card) var(--radius-card) 0; overflow: hidden; background: var(--surface); box-shadow: var(--shadow-rest); min-height: 640px; }
+.inspector { border: 1px solid var(--rule); border-left: 0; border-radius: 0 var(--radius-card) var(--radius-card) 0; overflow: hidden; background: var(--surface); box-shadow: var(--shadow-rest); min-height: var(--workspace-min-height); }
 .inspectorHead { padding: 20px; }
 .inspectorHead h2 { margin: 0; font: 300 2.125rem/1.1 var(--font-display); text-wrap: balance; overflow-wrap: anywhere; }
 .inspectorHead p { margin: 8px 0 0; color: var(--ink-2); font-size: .875rem; line-height: 1.4; }
@@ -38,6 +40,7 @@ details.methodNote > summary { min-height: 44px; padding: 12px 0; cursor: pointe
 @media (max-width: 1200px) { .command { grid-template-columns: 1fr 1fr; } .metricSelect { grid-column: 2; } }
 @media (max-width: 960px) {
   .workspace { display: flex; flex-direction: column; gap: 20px; }
+  .workspacePending { min-height: 819px; }
   .inspector { order: -1; min-height: 0; border-left: 1px solid var(--rule); border-radius: var(--radius-card); display: grid; grid-template-columns: 1fr 1fr; }
   .mapPanel { border-radius: var(--radius-card); }
   .inspectorHead { padding: 16px; }
@@ -49,9 +52,12 @@ details.methodNote > summary { min-height: 44px; padding: 12px 0; cursor: pointe
   .inspectorDetails { grid-column: 1 / -1; border-top: 1px solid var(--rule); }
   .inspector > :global([role="alert"]) { grid-column: 1 / -1; }
   .trendHead { flex-wrap: wrap; }
+  .trendTitle { width: 100%; }
   .comparison { text-align: left; }
 }
+@media (max-width: 760px) { .workspacePending { min-height: 649px; } .mapFallback { min-height: 390px; } }
 @media (max-width: 600px) {
+  .workspacePending { min-height: 667px; }
   .inspector { grid-template-columns: minmax(0, 1fr); }
   .primaryBurden { min-height: 0; grid-template-columns: 1fr auto; padding: 12px 16px; border-left: 0; border-top: 1px solid var(--rule); }
   .page { padding: 16px; }
@@ -60,7 +66,6 @@ details.methodNote > summary { min-height: 44px; padding: 12px 0; cursor: pointe
   .metricSelect { grid-column: auto; }
   .mapPanel { grid-template-rows: auto minmax(0, 1fr); }
   .trendHead { padding: 16px; }
-  .trendTitle { width: 100%; }
   .grainControl { width: 100%; }
   .grainControl button { flex: 1; }
   .comparison { grid-template-columns: 1fr; }

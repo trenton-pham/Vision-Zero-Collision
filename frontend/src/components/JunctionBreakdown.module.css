@@ -1,0 +1,23 @@
+.section { margin-top: 24px; border: 1px solid var(--rule); border-radius: var(--radius-card); overflow: hidden; background: var(--surface); box-shadow: var(--shadow-rest); }
+.head { padding: 20px; border-bottom: 1px solid var(--rule); }
+.head h2 { margin: 0; font: 300 1.75rem/1.1 var(--font-display); letter-spacing: -.005em; text-wrap: balance; }
+.head p { margin: 8px 0 0; color: var(--ink-2); font-size: .875rem; line-height: 1.5; }
+.warning { margin: 0; padding: 12px 20px; border-bottom: 1px solid var(--rule); background: var(--sunk); color: var(--ink-2); font-size: .8125rem; line-height: 1.5; }
+.body { padding: 4px 20px 0; }
+.note { max-width: 75ch; margin: 0; padding: 16px 0 20px; color: var(--ink-2); font-size: .8125rem; line-height: 1.6; }
+.table { width: 100%; border-collapse: collapse; font-size: .8125rem; font-variant-numeric: tabular-nums; }
+.table th, .table td { padding: 10px 8px; border-bottom: 1px solid var(--rule); text-align: left; font-weight: 400; vertical-align: middle; }
+.table thead th { color: var(--ink-2); font-size: .75rem; }
+.table tbody th { color: var(--ink); width: 28%; }
+.table thead th:last-child { width: 30%; }
+.cell { display: flex; align-items: center; gap: 12px; }
+.cell > span:last-child { min-width: 9.5ch; flex: none; color: var(--ink); text-align: right; }
+.table small { color: var(--ink-2); font-size: inherit; }
+.bar { flex: 1; min-width: 40px; height: 10px; }
+.bar i { display: block; height: 100%; border-radius: 2px; background: var(--ink-3); }
+.table tr[data-muted] th { color: var(--ink-2); }
+.table tr[data-muted] .bar i { background: repeating-linear-gradient(135deg, var(--rule-strong) 0 3px, transparent 3px 6px); border: 1px solid var(--rule-strong); }
+.meanBar i { background: var(--ramp-5); }
+.table td:last-child .cell > span:last-child { min-width: 4ch; }
+@media (max-width: 600px) { .head, .warning { padding-inline: 16px; } .head { padding-block: 16px; } .body { padding: 0 12px; } .table tbody th { width: 34%; } .table th, .table td { padding: 10px 4px; } .bar { min-width: 24px; } }
+@media (max-width: 480px) { .cell > .bar:not(.meanBar) { display: none; } .table small { display: block; } }

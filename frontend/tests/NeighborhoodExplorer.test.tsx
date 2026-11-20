@@ -52,6 +52,36 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 
+it('withholds junction results until the side panel that shares their denominator recovers', async () => {
+  vi.spyOn(api, 'neighborhoods').mockRejectedValueOnce(new Error('Geometry unavailable')).mockResolvedValue(neighborhoods)
+  const { user } = setup()
+  const retry = await screen.findByRole('button', { name: 'Retry request' })
+  expect(screen.getByRole('heading', { name: 'Where collisions happen' })).toBeInTheDocument()
+  expect(screen.getByText('Junction types unavailable. Retry the statistics request above to restore this table.')).toBeInTheDocument()
+  expect(screen.queryByText(/^No collisions in Seattle citywide/)).not.toBeInTheDocument()
+  await user.click(retry)
+  expect(await screen.findByRole('complementary', { name: 'Seattle citywide context' })).toBeInTheDocument()
+  expect(await screen.findByText(/^No collisions in Seattle citywide/)).toBeInTheDocument()
+  expect(screen.queryByText(/^Junction types unavailable/)).not.toBeInTheDocument()
+})
+
+it('keeps the explorer working on a release built before junction breakdowns', async () => {
+  const { junctionBreakdown: _omitted, ...legacyTrend } = citywideTrendContext
+  vi.spyOn(api, 'explorer').mockResolvedValue({ summary: [metrics], citywideTrend: legacyTrend })
+  setup()
+  expect(await screen.findByText('Junction types are not included in this dataset release.')).toBeInTheDocument()
+  expect(screen.getByRole('complementary', { name: 'Seattle citywide context' })).toBeInTheDocument()
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+})
+
+it('reports a geometry failure in the junction section ahead of missing combined data', async () => {
+  window.history.replaceState(null, '', '/neighborhoods?neighborhood=ballard&neighborhood=fremont')
+  vi.spyOn(api, 'neighborhoods').mockRejectedValue(new Error('Geometry unavailable'))
+  setup()
+  expect(await screen.findByText('Junction types unavailable. Retry the statistics request above to restore this table.')).toBeInTheDocument()
+  expect(screen.queryByText('Junction types are not included in this dataset release.')).not.toBeInTheDocument()
+})
+
 it('commits chart months with the keyboard and restores them on Back without refetching year data', async () => {
   const { user } = setup()
   await user.click(await screen.findByRole('button', { name: 'Last 12 months' }))
@@ -210,7 +240,7 @@ const combinedRelease: ReleaseManifest = { ...releaseManifest, files: { ...relea
 
 describe('combined selection', () => {
   it('loads combined data only for multiple neighborhoods, reuses it across years, and removes individually', async () => {
-    const request = vi.spyOn(api, 'neighborhoodSeries').mockResolvedValue({ neighborhoods: { ballard: { monthly: [month] }, fremont: { monthly: [{ ...month, totalSeverity: 3 }] } } })
+    const request = vi.spyOn(api, 'neighborhoodSeries').mockResolvedValue({ junctionCategories: [], neighborhoods: { ballard: { junction: [], monthly: [month] }, fremont: { junction: [], monthly: [{ ...month, totalSeverity: 3 }] } } })
     const { user } = setup(combinedRelease)
     const picker = await screen.findByRole('combobox', { name: 'Neighborhood' })
     await user.type(picker, 'Ball')
@@ -244,6 +274,7 @@ describe('combined selection', () => {
     setup()
     expect(await screen.findByText(/Combined neighborhood statistics require a newer dataset release/)).toBeInTheDocument()
     expect(screen.getByText('Statistics unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Junction types are not included in this dataset release.')).toBeInTheDocument()
     expect(request).not.toHaveBeenCalled()
   })
 
@@ -260,7 +291,7 @@ describe('combined selection', () => {
 
   it('shows a retryable combined-data failure and never displays singleton totals', async () => {
     window.history.replaceState(null, '', '/neighborhoods?neighborhood=ballard&neighborhood=fremont')
-    const request = vi.spyOn(api, 'neighborhoodSeries').mockRejectedValueOnce(new Error('Combined data unavailable')).mockResolvedValue({ neighborhoods: { ballard: { monthly: [month] }, fremont: { monthly: [month] } } })
+    const request = vi.spyOn(api, 'neighborhoodSeries').mockRejectedValueOnce(new Error('Combined data unavailable')).mockResolvedValue({ junctionCategories: [], neighborhoods: { ballard: { junction: [], monthly: [month] }, fremont: { junction: [], monthly: [month] } } })
     const { user } = setup(combinedRelease)
     expect(await screen.findByText('Combined data unavailable')).toBeInTheDocument()
     expect(screen.getByText('Statistics unavailable')).toBeInTheDocument()

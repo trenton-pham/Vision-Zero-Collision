@@ -19,7 +19,7 @@ Release-relative paths:
 
 - `meta.json`: unchanged DatasetMeta.
 - `neighborhoods.geojson`: unchanged FeatureCollection.
-- `citywide/START-END/MASK.json`: `{summary, heatmap, kde, spatialShift, downtownComparison, junctionBreakdown}`, each the unchanged corresponding Python response.
+- `citywide/START-END/MASK.json`: `{summary, heatmap, kde, spatialShift, downtownComparison, junctionBreakdown}`, each the unchanged corresponding Python response. `junctionBreakdown` stays for tabs opened on an earlier frontend.
 - `explorer/START-END.json`: `{summary, citywideTrend}` for all severities.
 - `neighborhoods/ID.json`: `{contexts: {"START-END": NeighborhoodContext}}`.
 - `resolver.json`: `{projection, features: [{id, name, area, geometry, projectedGeometry}]}`. Geometry is GeoJSON Polygon or MultiPolygon; projectedGeometry is EPSG:26910; projection is its WKT1_GDAL definition. Areas are Python-computed square metres.
