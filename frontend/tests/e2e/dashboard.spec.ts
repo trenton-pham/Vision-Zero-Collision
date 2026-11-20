@@ -22,7 +22,7 @@ test('map and keyboard selector share URL-backed neighborhood state', async ({ p
   const details = page.locator('#neighborhood-details')
   if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click()
   await expect(page.getByRole('heading', { name: 'Ballard', exact: true })).toBeVisible()
-  await expect(page.getByText('2026 partial · records received through August 31, 2026')).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Selected neighborhood context' }).getByText('2026 partial · records received through August 31, 2026')).toBeVisible()
 })
 
 test('empty selection shows citywide context and supports URL-backed monthly grain', async ({ page }) => {

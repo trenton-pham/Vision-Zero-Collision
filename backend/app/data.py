@@ -666,6 +666,9 @@ class DataStore:
             ))
         return DowntownComparisonResponse(bbox=DOWNTOWN_BBOX, annual=result)
 
+    def junction_breakdown(self, start_year: int, end_year: int, severities: list[str]) -> JunctionBreakdownResponse:
+        return self._junction_breakdown(self._filter_citywide(start_year, end_year, severities))
+
     @staticmethod
     def _junction_breakdown(frame: pd.DataFrame) -> JunctionBreakdownResponse:
         grouped = frame["severity_score"].groupby(junction_keys(frame["JUNCTIONTYPE"])).agg(["size", "sum"]).reindex(

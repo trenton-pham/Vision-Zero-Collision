@@ -122,7 +122,7 @@ const trendContextSchema = z.object({
   monthly: z.array(monthlyMetricSchema),
   comparison: trendComparisonSchema,
   warnings: z.array(z.string()),
-  junctionBreakdown: junctionBreakdownResponseSchema,
+  junctionBreakdown: junctionBreakdownResponseSchema.optional(),
 })
 export const neighborhoodContextSchema = trendContextSchema.extend({
   neighborhood: z.object({ id: z.string(), name: z.string() }),
@@ -300,9 +300,9 @@ export const neighborhoodMonthSchema = z.object({
   knownTimeCollisions: additiveCount.nullable(),
 })
 export const neighborhoodSeriesSchema = z.object({
-  junctionCategories: z.array(z.object({ key: z.string(), label: z.string() })),
+  junctionCategories: z.array(z.object({ key: z.string(), label: z.string() })).optional(),
   neighborhoods: z.record(z.string(), z.object({
-    junction: z.array(z.object({ year: z.number().int(), key: z.string(), collisionCount: additiveCount, totalSeverity: additiveCount })),
+    junction: z.array(z.object({ year: z.number().int(), key: z.string(), collisionCount: additiveCount, totalSeverity: additiveCount })).optional(),
     monthly: z.array(neighborhoodMonthSchema),
   })),
 })

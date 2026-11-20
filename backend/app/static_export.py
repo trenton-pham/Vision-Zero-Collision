@@ -80,14 +80,18 @@ def neighborhood_series(store: DataStore) -> dict:
     junction = collisions["severity_score"].groupby(
         [collisions["neighborhood_id"], collisions["YEAR"], junction_keys(collisions["JUNCTIONTYPE"])], observed=True,
     ).agg(["size", "sum"])
+    junction_rows = {
+        neighborhood: [
+            {"year": int(year), "key": key, "collisionCount": int(count), "totalSeverity": int(total)}
+            for (_, year, key), (count, total) in rows.iterrows()
+        ]
+        for neighborhood, rows in junction.groupby(level=0, observed=True)
+    }
     neighborhoods = {}
     for neighborhood, rows in store.monthly.groupby("neighborhood_id", observed=True):
         if neighborhood not in store.name_by_id:
             continue
-        neighborhoods[str(neighborhood)] = {"junction": [
-            {"year": int(year), "key": key, "collisionCount": int(count), "totalSeverity": int(total)}
-            for (year, key), (count, total) in junction.xs(neighborhood, level=0).iterrows()
-        ], "monthly": [
+        neighborhoods[str(neighborhood)] = {"junction": junction_rows.get(neighborhood, []), "monthly": [
             {
                 "period": str(row.period),
                 **{key: int(getattr(row, column)) for key, column in columns.items()},
@@ -133,6 +137,7 @@ def analytical_files(store: DataStore, shard_index: int = 0, shard_count: int = 
                 "kde": store.kde(start, end, severities).model_dump(mode="json"),
                 "spatialShift": store.spatial_shift(start, end, severities).model_dump(mode="json"),
                 "downtownComparison": store.downtown_comparison(start, end, severities).model_dump(mode="json"),
+                "junctionBreakdown": store.junction_breakdown(start, end, severities).model_dump(mode="json"),
             }
     for neighborhood in partition(sorted(store.name_by_id), shard_index, shard_count):
         yield f"neighborhoods/{neighborhood}.json", {
@@ -264,7 +269,8 @@ def verify_analytical_outputs(
             for mask in range(32):
                 filters = years + [("severity", label) for bit, label in enumerate(labels) if mask & (1 << bit)]
                 compare(f"citywide/{start}-{end}/{mask}.json", {
-                    key: response(f"/api/citywide/{endpoint}", filters) for key, endpoint in endpoints.items()
+                    **{key: response(f"/api/citywide/{endpoint}", filters) for key, endpoint in endpoints.items()},
+                    "junctionBreakdown": store.junction_breakdown(start, end, severity_selection(mask)).model_dump(mode="json"),
                 })
         for neighborhood in partition(sorted(store.name_by_id), shard_index or 0, shard_count):
             compare(f"neighborhoods/{neighborhood}.json", {"contexts": {

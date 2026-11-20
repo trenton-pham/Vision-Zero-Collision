@@ -1,7 +1,7 @@
 import type { AnnualMetric, DatasetMeta, JunctionBreakdownResponse, MonthlyMetric, NeighborhoodMonth, NeighborhoodSeries, NeighborhoodMetricSet, TrendComparison } from './contracts'
+import { junctionBreakdownResponseSchema } from './contracts'
 
 type Counts = Omit<NeighborhoodMonth, 'period'>
-// Matches JUNCTION_MIN_MEAN_N in backend/app/data.py.
 export const JUNCTION_MIN_MEAN_N = 30
 const countKeys = ['collisionCount', 'injuries', 'seriousInjuries', 'fatalities', 'totalSeverity', 'pedestrianCollisions', 'intersectionCollisions', 'nightCollisions', 'weekendCollisions'] as const
 
@@ -54,16 +54,24 @@ function comparison(annual: AnnualMetric[]): TrendComparison {
   return { status: 'available', firstPeriod: period(first), lastPeriod: period(last), collisionChangePercent: change('collisionCount'), severityChangePercent: change('totalSeverity'), message: 'Compares non-overlapping first and last three-year averages, excluding partial years.' }
 }
 
+export function partialYearWarnings(meta: DatasetMeta, startYear: number, endYear: number) {
+  const received = new Date(`${meta.dataAsOf}T00:00:00Z`)
+  const month = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(received)
+  return meta.partialYears.some((year) => year >= startYear && year <= endYear)
+    ? [`${received.getUTCFullYear()} partial · records received through ${month} ${received.getUTCDate()}, ${received.getUTCFullYear()}`] : []
+}
+
 export function combineNeighborhoods(series: NeighborhoodSeries, ids: string[], startYear: number, endYear: number, meta: DatasetMeta) {
   const months = new Map<string, Counts>()
-  const junction = new Map(series.junctionCategories.map(({ key }) => [key, { collisionCount: 0, totalSeverity: 0 }]))
+  const junction = new Map((series.junctionCategories ?? []).map(({ key }) => [key, { collisionCount: 0, totalSeverity: 0 }]))
+  let unknownJunctionKey = false
   for (const id of new Set(ids)) {
     const neighborhood = series.neighborhoods[id]
     if (!neighborhood) throw new Error('Statistics are unavailable for a selected neighborhood.')
-    for (const row of neighborhood.junction) {
+    for (const row of neighborhood.junction ?? []) {
       if (row.year < startYear || row.year > endYear) continue
       const counts = junction.get(row.key)
-      if (!counts) throw new Error('Junction statistics are unavailable for a selected neighborhood.')
+      if (!counts) { unknownJunctionKey = true; continue }
       counts.collisionCount += row.collisionCount
       counts.totalSeverity += row.totalSeverity
     }
@@ -93,16 +101,14 @@ export function combineNeighborhoods(series: NeighborhoodSeries, ids: string[], 
     nightShare: totals.knownTimeCollisions === null ? null : ratio(totals.nightCollisions, totals.knownTimeCollisions, 4),
     weekendShare: ratio(totals.weekendCollisions, totals.collisionCount, 4),
   }
-  const received = new Date(`${meta.dataAsOf}T00:00:00Z`)
-  const month = new Intl.DateTimeFormat('en-US', { month: 'long', timeZone: 'UTC' }).format(received)
-  const warnings = meta.partialYears.some((year) => year >= startYear && year <= endYear)
-    ? [`${received.getUTCFullYear()} partial · records received through ${month} ${received.getUTCDate()}, ${received.getUTCFullYear()}`] : []
-  const junctionBreakdown: JunctionBreakdownResponse = {
+  const warnings = partialYearWarnings(meta, startYear, endYear)
+  const junctionTotals: JunctionBreakdownResponse | undefined = series.junctionCategories && {
     collisionCount: totals.collisionCount,
     categories: series.junctionCategories.map(({ key, label }) => {
       const { collisionCount, totalSeverity } = junction.get(key) ?? { collisionCount: 0, totalSeverity: 0 }
       return { key, label, collisionCount, totalSeverity, meanSeverity: collisionCount >= JUNCTION_MIN_MEAN_N ? ratio(totalSeverity, collisionCount, 3) : null }
     }),
   }
+  const junctionBreakdown = !unknownJunctionKey && junctionBreakdownResponseSchema.safeParse(junctionTotals).success ? junctionTotals : undefined
   return { selectedYears: [startYear, endYear], metrics, annual, monthly, comparison: comparison(annual), warnings, junctionBreakdown }
 }

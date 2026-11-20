@@ -57,7 +57,22 @@ describe('combined neighborhood statistics', () => {
       { key: 'intersection', label: 'At intersection', collisionCount: 30, totalSeverity: 11, meanSeverity: 0.367 },
       { key: 'unknown', label: 'Unknown', collisionCount: 2, totalSeverity: 0, meanSeverity: null },
     ] })
-    expect(combineNeighborhoods(junctionSeries, ['a'], 2025, 2025, datasetMeta).junctionBreakdown.categories[0]).toMatchObject({ collisionCount: 10, meanSeverity: null })
+    expect(combineNeighborhoods(junctionSeries, ['a'], 2025, 2025, datasetMeta).junctionBreakdown?.categories[0]).toMatchObject({ collisionCount: 10, meanSeverity: null })
+  })
+
+  it('drops a combined junction breakdown whose categories do not cover every collision', () => {
+    const partial = { junctionCategories: [{ key: 'intersection', label: 'At intersection' }], neighborhoods: {
+      a: { junction: [{ year: 2025, key: 'intersection', collisionCount: 50, totalSeverity: 10 }], monthly: [{ ...zero, period: '2025-01', collisionCount: 50, totalSeverity: 10 }] },
+      b: { monthly: [{ ...zero, period: '2025-01', collisionCount: 50, totalSeverity: 10 }] },
+    } }
+    expect(combineNeighborhoods(partial, ['a', 'b'], 2025, 2025, datasetMeta).junctionBreakdown).toBeUndefined()
+    expect(combineNeighborhoods(partial, ['a'], 2025, 2025, datasetMeta).junctionBreakdown?.collisionCount).toBe(50)
+    const unknownKey = { ...partial, neighborhoods: { a: { ...partial.neighborhoods.a, junction: [{ year: 2025, key: 'intersection', collisionCount: 40, totalSeverity: 8 }, { year: 2025, key: 'roundabout', collisionCount: 10, totalSeverity: 2 }] } } }
+    const result = combineNeighborhoods(unknownKey, ['a'], 2025, 2025, datasetMeta)
+    expect(result.metrics.collisionCount).toBe(50)
+    expect(result.junctionBreakdown).toBeUndefined()
+    const extraRow = { ...partial, neighborhoods: { a: { ...partial.neighborhoods.a, junction: [...partial.neighborhoods.a.junction, { year: 2025, key: 'roundabout', collisionCount: 1, totalSeverity: 0 }] } } }
+    expect(combineNeighborhoods(extraRow, ['a'], 2025, 2025, datasetMeta).junctionBreakdown).toBeUndefined()
   })
 
   it('keeps zero-baseline changes unavailable and rejects missing neighborhoods', () => {
